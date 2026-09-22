@@ -156,20 +156,21 @@ sudo systemctl status pyfarm
 
 ---
 
-## 7. Nginx Reverse Proxy (mit WebSocket-Support)
+## 7. Nginx Reverse Proxy & SSL (`/etc/nginx/conf.d/mff.conf`)
+
+Die Nginx-Konfiguration wird direkt unter `/etc/nginx/conf.d/mff.conf` gepflegt. Eine zusätzliche Datei in `sites-available` bzw. `sites-enabled` ist **nicht erforderlich** (und sollte entfernt werden, um Konflikte durch doppelte `server_name`-Direktiven zu vermeiden).
 
 Da das pyFarm-Dashboard Echtzeit-Zustands-Updates über WebSockets (`/api/v1/ws`) bezieht, müssen die Upgrade-Header korrekt konfiguriert werden.
 
-Erstellen Sie `/etc/nginx/sites-available/mff.miessl.net`:
+### 7.1 Konfigurationsdatei anpassen
 
 ```bash
-sudo nano /etc/nginx/sites-available/mff.miessl.net
+sudo nano /etc/nginx/conf.d/mff.conf
 ```
 
-Inhalt:
+Inhalt (inklusive bestehender Let's Encrypt / Certbot SSL-Zertifikate):
 ```nginx
 server {
-    listen 80;
     server_name mff.miessl.net;
 
     client_max_body_size 20M;
@@ -178,7 +179,7 @@ server {
         proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
 
-        # WebSocket Upgrade-Header (essentiell für /api/v1/ws Live-Dashboard)
+        # WebSocket Upgrade-Header (essentiell für das Live-Dashboard /api/v1/ws)
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
 
@@ -188,34 +189,47 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
+        # Timeouts für langlebige WebSocket-Verbindungen
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
     }
+
+    # Certbot SSL-Konfiguration
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/mff.miessl.net/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/mff.miessl.net/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}
+
+server {
+    if ($host = mff.miessl.net) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    listen      80;
+    server_name mff.miessl.net;
+    return 404; # managed by Certbot
 }
 ```
 
-Site aktivieren, Syntax testen und Nginx neu laden:
+### 7.2 Bereinigung & Nginx neu laden
+
+Falls zuvor Dateien in `sites-available` / `sites-enabled` angelegt wurden, diese entfernen:
 ```bash
-sudo ln -s /etc/nginx/sites-available/mff.miessl.net /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/mff.miessl.net
+sudo rm -f /etc/nginx/sites-available/mff.miessl.net
+```
+
+Konfiguration testen und Nginx neu laden:
+```bash
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
 ---
 
-## 8. SSL-Zertifikat via Let's Encrypt (Certbot)
-
-Sobald der DNS A-Record für `mff.miessl.net` auf die IP-Adresse des Servers auflöst:
-
-```bash
-sudo certbot --nginx -d mff.miessl.net
-```
-
-Certbot erweitert die Nginx-Konfiguration automatisch um HTTPS (Port 443), richtet Weiterleitungen von Port 80 ein und konfiguriert einen automatischen Cron/Timer für Zertifikats-Erneuerungen.
-
----
-
-## 9. Wartung & Betriebsführung
+## 8. Wartung & Betriebsführung
 
 ### Live-Logs einsehen
 ```bash
