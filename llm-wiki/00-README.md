@@ -39,6 +39,7 @@ Es dient Entwicklern und KI-Agenten als strukturierte Wissensbasis zur Dokumenta
 | **[19-python-factories-module.md](19-python-factories-module.md)** | `module` | Veredelungsfabriken (Ölpresse, Käserei, Spinnerei, Strickerei, Marmeladenküche mit Quest-Vorrang). |
 | **[20-module-spicehouse.md](20-module-spicehouse.md)** | `module` | Gewürzhaus & Gewürzmühlen (Farm 10, Trockenofen, kontinuierliche Mühlen, Kunden & Streuer-Währung). |
 | **[21-module-season-events.md](21-module-season-events.md)** | `module` | Saisonevents & Saisonale Reise (Liefertouren, Kalender, Eventgarten, Oktoberfest-Solver & Seasonpass). |
+| **[22-linux-deployment-guide.md](22-linux-deployment-guide.md)** | `architecture` | Linux Server Deployment Leitfaden (Ubuntu 22.04 LTS, uv/Python 3.12, Systemd, Nginx mit WebSocket, SSL). |
 
 ---
 
