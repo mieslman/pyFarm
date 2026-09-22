@@ -3,13 +3,15 @@ title: Linux Server Deployment Guide (Ubuntu 22.04 LTS, Nginx, Systemd, SSL)
 author: System
 date: 2026-09-22
 type: architecture
-description: Schritt-für-Schritt Deployment-Leitfaden für pyFarm auf Ubuntu 22.04 LTS mit uv (Python 3.12), Systemd Daemon, Nginx Reverse Proxy mit WebSocket-Unterstützung und Let's Encrypt SSL unter mff.miessl.net.
+description: Schritt-für-Schritt Deployment-Leitfaden für pyFarm auf Ubuntu 22.04 LTS mit uv (Python 3.12), Systemd Daemon, Nginx Reverse Proxy mit WebSocket-Unterstützung und Let's Encrypt SSL unter mff.miessl.net (Benutzer manfred, Pfad /home/manfred/pyFarm).
 tags: [deployment, ubuntu, nginx, systemd, ssl, uv, python, production]
 ---
 
 # Linux Server Deployment Guide (Ubuntu 22.04 LTS)
 
-Dieses Dokument beschreibt das vollständige, produktionsreife Deployment von **pyFarm** auf einem Linux-Server mit **Ubuntu 22.04 LTS** unter Verwendung des modernen Paket- und Python-Managers **`uv`**, **Systemd** als Prozess-Supervisor, **Nginx** als Reverse Proxy (inklusive WebSocket-Unterstützung für das Live-Dashboard) und automatischem **Let's Encrypt SSL-Zertifikat**.
+Dieses Dokument beschreibt das vollständige, produktionsreife Deployment von **pyFarm** auf einem Linux-Server mit **Ubuntu 22.04 LTS** für den Benutzer **`manfred`** im Pfad **`/home/manfred/pyFarm`**.
+
+Es verwendet den modernen Paket- und Python-Manager **`uv`**, **Systemd** als Prozess-Supervisor, **Nginx** als Reverse Proxy (inklusive WebSocket-Unterstützung für das Live-Dashboard) und automatisches **Let's Encrypt SSL-Zertifikat**.
 
 ---
 
@@ -24,7 +26,7 @@ Dieses Dokument beschreibt das vollständige, produktionsreife Deployment von **
          ▼
 [ Uvicorn ASGI Server ]
          │
-[ pyFarm Engine (FastAPI + WorkerScheduler) ]
+[ pyFarm Engine (/home/manfred/pyFarm) ]
          │
          ├── .env (Zugangsdaten & Secrets)
          └── data/user_config.json (Farm-Automations-Konfiguration)
@@ -37,6 +39,7 @@ Dieses Dokument beschreibt das vollständige, produktionsreife Deployment von **
 Ubuntu 22.04 liefert standardmäßig Python 3.10 aus. Da `pyFarm` mindestens **Python 3.11+** voraussetzt, nutzen wir **`uv`** von Astral. `uv` lädt bei Bedarf eigenständig eine isolierte, optimierte Python 3.12-Laufzeitumgebung herunter, ohne Systembibliotheken zu berühren.
 
 ### 2.1 Pakete installieren
+Als Benutzer `manfred` per SSH auf dem Server:
 ```bash
 sudo apt update && sudo apt install -y git curl nginx certbot python3-certbot-nginx
 ```
@@ -49,44 +52,40 @@ source ~/.cargo/env
 
 ---
 
-## 3. Quellcode klonen & Berechtigungen
+## 3. Quellcode klonen
 
-Empfohlenes Installationsverzeichnis ist `/opt/pyfarm`:
+Das Projekt wird direkt im Home-Verzeichnis unter `/home/manfred/pyFarm` geklont:
 
 ```bash
-# Verzeichnis anlegen und Benutzerberechtigung zuweisen
-sudo mkdir -p /opt/pyfarm
-sudo chown -R $USER:$USER /opt/pyfarm
-
-# Von GitHub klonen
-git clone https://github.com/mieslman/pyFarm.git /opt/pyfarm
-cd /opt/pyfarm
+cd /home/manfred
+git clone https://github.com/mieslman/pyFarm.git /home/manfred/pyFarm
+cd /home/manfred/pyFarm
 ```
 
 ---
 
-## 4. Python-Umgebung initialisieren (`uv`)
+## 4. Python 3.12 Umgebung initialisieren (`uv`)
 
-Im Projektverzeichnis `/opt/pyfarm`:
+Im Projektverzeichnis `/home/manfred/pyFarm`:
 
 ```bash
-cd /opt/pyfarm
+cd /home/manfred/pyFarm
 
 # Python 3.12 Laufzeitumgebung herunterladen und venv mit allen Dependencies synchronisieren
 uv python install 3.12
 uv sync
 ```
 
-Dadurch wird das virtuelle Environment `/opt/pyfarm/.venv/` mit FastAPI, Uvicorn, Pydantic, HTTPX und allen weiteren Paketen erstellt.
+Dadurch wird das virtuelle Environment `/home/manfred/pyFarm/.venv/` mit FastAPI, Uvicorn, Pydantic, HTTPX und allen weiteren Paketen erstellt.
 
 ---
 
 ## 5. Konfiguration (`.env`)
 
-Erstellen Sie die Konfigurationsdatei `/opt/pyfarm/.env`:
+Erstellen Sie die Konfigurationsdatei `/home/manfred/pyFarm/.env`:
 
 ```bash
-nano /opt/pyfarm/.env
+nano /home/manfred/pyFarm/.env
 ```
 
 Inhalt:
@@ -109,9 +108,9 @@ MFF_PORT=8000
 MFF_DEBUG=False
 ```
 
-Berechtigungen auf `.env` einschränken:
+Berechtigungen auf `.env` einschränken (nur `manfred` darf lesen):
 ```bash
-chmod 600 /opt/pyfarm/.env
+chmod 600 /home/manfred/pyFarm/.env
 ```
 
 ---
@@ -124,7 +123,7 @@ Erstellen Sie die Service-Unit-Datei für Systemd:
 sudo nano /etc/systemd/system/pyfarm.service
 ```
 
-Konfiguration (ersetzen Sie `DEIN_BENUTZERNAME` durch Ihren Linux-Benutzer, z. B. `ubuntu`):
+Konfiguration:
 ```ini
 [Unit]
 Description=pyFarm Automation Backend
@@ -132,12 +131,12 @@ After=network.target
 
 [Service]
 Type=simple
-User=DEIN_BENUTZERNAME
-WorkingDirectory=/opt/pyfarm
-ExecStart=/opt/pyfarm/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+User=manfred
+WorkingDirectory=/home/manfred/pyFarm
+ExecStart=/home/manfred/pyFarm/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=10
-EnvironmentFile=/opt/pyfarm/.env
+EnvironmentFile=/home/manfred/pyFarm/.env
 
 [Install]
 WantedBy=multi-user.target
@@ -195,7 +194,7 @@ server {
 }
 ```
 
-Site verlinken, Syntax testen und Nginx neu laden:
+Site aktivieren, Syntax testen und Nginx neu laden:
 ```bash
 sudo ln -s /etc/nginx/sites-available/mff.miessl.net /etc/nginx/sites-enabled/
 sudo nginx -t
@@ -232,14 +231,14 @@ sudo systemctl stop pyfarm
 
 ### Updates von GitHub einspielen
 ```bash
-cd /opt/pyfarm
+cd /home/manfred/pyFarm
 git pull
 uv sync
 sudo systemctl restart pyfarm
 ```
 
 ### Konfigurations-Backup
-Die automatisierten Einstellungen der Farmen werden kontinuierlich atomar in `/opt/pyfarm/data/user_config.json` persistiert. Diese Datei kann bei Bedarf gesichert werden:
+Die automatisierten Einstellungen der Farmen werden kontinuierlich atomar in `/home/manfred/pyFarm/data/user_config.json` persistiert. Diese Datei kann bei Bedarf gesichert werden:
 ```bash
-cp /opt/pyfarm/data/user_config.json /opt/pyfarm/data/user_config.json.bak
+cp /home/manfred/pyFarm/data/user_config.json /home/manfred/pyFarm/data/user_config.json.bak
 ```
