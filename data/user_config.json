@@ -1,0 +1,269 @@
+{
+  "_comment": "MyFreeFarm Engine - User Configuration",
+  "_version": "1.0",
+  "agriculture": {
+    "enabled": true,
+    "plant_strategy": "plantQuest",
+    "plant_category": "v",
+    "min_products": 500,
+    "auto_water": true,
+    "auto_crop": true,
+    "harvest_mode": "all",
+    "farm_crops": {
+      "1": 8,
+      "3": 8,
+      "4": 113
+    },
+    "farm_categories": {
+      "5": "ex",
+      "6": "alpin",
+      "8": "water",
+      "10": "spice"
+    }
+  },
+  "trade": {
+    "enabled": false,
+    "min_credit_kt": 500.0,
+    "underbid_offset_kt": 0.01,
+    "default_reserve": 1000,
+    "auto_sell_surplus": false,
+    "sell_category_v": false,
+    "exclude_categories": [
+      "v"
+    ],
+    "sell_rules": []
+  },
+  "stock": {
+    "buffer_crops": 500,
+    "buffer_other": 5,
+    "max_price_factor_crops": 1.0,
+    "max_price_factor_other": 3.0,
+    "min_credit_kt": 500.0
+  },
+  "forestry": {
+    "enabled": true,
+    "auto_cut": true,
+    "auto_plant": true,
+    "auto_water": true,
+    "auto_produce": true,
+    "serve_farmis": true
+  },
+  "quest": {
+    "enabled": true,
+    "quest_nr": null,
+    "auto_buy_missing": false
+  },
+  "helpers": {
+    "enabled": true,
+    "farm_dog": true,
+    "donkey": true,
+    "lottery": true,
+    "windmill": true,
+    "loginbonus": true,
+    "greenhouse": true,
+    "pet_parts": true
+  },
+  "formula_dealer": {
+    "enabled": true,
+    "auto_activate_powerups": true,
+    "auto_buy_formulas": true,
+    "formula_min": 20,
+    "required_formulas": [
+      "Zucchiniauflauf",
+      "Apfelkompott",
+      "Erntedankfigur",
+      "Fischfutter, günstig",
+      "Pferdefutter Korn-Karotten",
+      "Pferdefutter Kräuter-Kartoffeln"
+    ]
+  },
+  "fuelstation": {
+    "enabled": true,
+    "auto_harvest": true,
+    "auto_refill": true,
+    "min_reserve": 500,
+    "preferred_pids": [
+      2,
+      18,
+      17,
+      1
+    ],
+    "slot_preferred_pids": {
+      "1": [
+        2,
+        18,
+        17,
+        1
+      ],
+      "2": [
+        18,
+        17,
+        1
+      ],
+      "3": [
+        17,
+        113,
+        33,
+        31
+      ],
+      "4": [
+        17,
+        113,
+        33,
+        31
+      ]
+    }
+  },
+  "farmersmarket": {
+    "enabled": false,
+    "nursery_enabled": true,
+    "flower_area_enabled": true,
+    "flower_slots_enabled": true,
+    "farmis_enabled": true,
+    "pet_breed_enabled": false,
+    "pet_daily_parts": true,
+    "max_flower_batch": 6
+  },
+  "foodworld": {
+    "enabled": true,
+    "auto_cook": true,
+    "auto_seat_guests": true,
+    "auto_cash_tables": true,
+    "auto_buy_ingredients": true,
+    "dish_reserve_buffer": 50,
+    "market_export_enabled": true,
+    "only_empty_market": true,
+    "auto_unlock_tables": false
+  },
+  "sushibar": {
+    "enabled": true,
+    "auto_harvest": true,
+    "auto_produce": true,
+    "auto_train": false,
+    "auto_farmi": true,
+    "production_strategy": "quest5",
+    "preferred_pids": [],
+    "reserve_full_field": true,
+    "coin_protection": true
+  },
+  "factories": {
+    "enabled": true,
+    "auto_harvest": true,
+    "auto_produce": true,
+    "coin_protection": true
+  },
+  "spicehouse": {
+    "enabled": true,
+    "auto_oven": true,
+    "auto_mill": true,
+    "auto_customer": true,
+    "min_crop_reserve": 500
+  },
+  "seasonpass": {
+    "enabled": true,
+    "auto_claim_rewards": false,
+    "friend_unr": "",
+    "preferred_field_farm": 2,
+    "preferred_field_pos": 3,
+    "preferred_forestry_pos": 1
+  },
+  "events": {
+    "enabled": true,
+    "auto_detect": true,
+    "calendar_enabled": true,
+    "delivery_enabled": true,
+    "eventgarden_enabled": true,
+    "oktoberfest_enabled": true,
+    "pentecost_enabled": true,
+    "olympia_enabled": true
+  },
+  "insecthotel": {
+    "enabled": true,
+    "auto_refill_stock": true,
+    "refill_threshold_percent": 0.2,
+    "auto_collect_checkout": true,
+    "checkout_threshold_percent": 0.5,
+    "min_stock_reserve": 50,
+    "auto_buy_feed": true
+  },
+  "stall": {
+    "enabled": true,
+    "auto_clear_depleted": true,
+    "clear_threshold_percent": 0.5,
+    "auto_fill_slots": true,
+    "auto_collect_reward": true,
+    "min_stock_reserve": 500
+  },
+  "vehicles": {
+    "enabled": true,
+    "routes": {
+      "5": {
+        "farm_id": 5,
+        "route": 1,
+        "vehicle": 4,
+        "auto_fastest": true,
+        "transport": true,
+        "required_products": [
+          "Kohlrabi",
+          "Wollknäuel"
+        ],
+        "send_partial": false,
+        "prioritize_quests": true,
+        "only_milled_surplus": false,
+        "only_quest_products": false,
+        "sushi_supply": false,
+        "sushi_reserve_threshold": 500,
+        "min_crop_reserve": 0
+      },
+      "6": {
+        "farm_id": 6,
+        "route": 2,
+        "vehicle": 9,
+        "auto_fastest": true,
+        "transport": true,
+        "required_products": [],
+        "send_partial": false,
+        "prioritize_quests": true,
+        "only_milled_surplus": false,
+        "only_quest_products": false,
+        "sushi_supply": false,
+        "sushi_reserve_threshold": 500,
+        "min_crop_reserve": 0
+      },
+      "8": {
+        "farm_id": 8,
+        "route": 4,
+        "vehicle": 19,
+        "auto_fastest": true,
+        "transport": true,
+        "required_products": [],
+        "send_partial": false,
+        "prioritize_quests": true,
+        "only_milled_surplus": false,
+        "only_quest_products": true,
+        "sushi_supply": true,
+        "sushi_reserve_threshold": 500,
+        "min_crop_reserve": 500
+      },
+      "10": {
+        "farm_id": 10,
+        "route": 4,
+        "vehicle": 19,
+        "auto_fastest": true,
+        "transport": false,
+        "required_products": [],
+        "send_partial": false,
+        "prioritize_quests": true,
+        "only_milled_surplus": true,
+        "only_quest_products": false,
+        "sushi_supply": false,
+        "sushi_reserve_threshold": 500,
+        "min_crop_reserve": 0
+      }
+    }
+  },
+  "poll_interval_seconds": 600,
+  "anti_detection_min_delay_ms": 350,
+  "anti_detection_max_delay_ms": 900,
+  "_last_saved": "2026-09-22T14:50:14.224258+00:00"
+}
