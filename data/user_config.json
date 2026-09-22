@@ -247,8 +247,8 @@
       },
       "10": {
         "farm_id": 10,
-        "route": 4,
-        "vehicle": 19,
+        "route": 6,
+        "vehicle": 29,
         "auto_fastest": true,
         "transport": false,
         "required_products": [],
@@ -265,5 +265,5 @@
   "poll_interval_seconds": 600,
   "anti_detection_min_delay_ms": 350,
   "anti_detection_max_delay_ms": 900,
-  "_last_saved": "2026-09-22T14:50:14.224258+00:00"
+  "_last_saved": "2026-09-22T17:35:27.547917+00:00"
 }

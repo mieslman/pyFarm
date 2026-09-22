@@ -1428,6 +1428,10 @@
               Einstellungen speichern
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Tab Content: Gewürzhaus (Farm 10) -->
     <div id="content-spicehouse" class="space-y-6 hidden">
       <!-- Status & Currency Banner -->
@@ -1447,12 +1451,13 @@
 
         <div class="flex flex-wrap items-center gap-3">
           <div class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 flex items-center space-x-2">
-            <span class="text-amber-400 font-semibold text-xs">Punkte:</span>
+            <span class="text-amber-400 font-semibold text-xs">Streuer-Punkte:</span>
             <span id="shPoints" class="font-bold text-slate-100 text-sm">--</span>
           </div>
           <div class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 flex items-center space-x-2">
-            <span class="text-emerald-400 font-semibold text-xs">Streuer / Rubel:</span>
-            <span id="shRubel" class="font-bold text-slate-100 text-sm">--</span>
+            <span class="text-emerald-400 font-semibold text-xs">Gebäude-Level:</span>
+            <span id="shLevel" class="font-bold text-slate-100 text-sm">--</span>
+            <span id="shRubel" class="hidden">--</span>
           </div>
           <button onclick="harvestSpicehouse()" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold px-3 py-2 rounded-md flex items-center space-x-1.5 transition shadow">
             <i class="fa-solid fa-hand-holding-hand"></i>
@@ -1465,7 +1470,7 @@
         </div>
       </div>
 
-      <!-- Main Layout: 3 Mühlen, Trockenöfen, Kunden & Einstellungen -->
+      <!-- Main Layout: 4 Mühlen, Trockenofen, Kunden & Einstellungen -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Links & Mitte: Mühlen, Öfen, Kunden -->
         <div class="lg:col-span-2 space-y-6">
@@ -1475,12 +1480,12 @@
             <div class="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center space-x-2">
                 <i class="fa-solid fa-gears text-amber-400"></i>
-                <span>3x Gewürzmühlen (Mahlslots)</span>
+                <span>Gewürzmühlen (Mahlslots 1-4)</span>
               </h3>
               <span class="text-xs text-slate-400">Kontinuierliche Mahlung</span>
             </div>
-            <div id="shMillSlotsGrid" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div class="p-4 bg-slate-950 rounded border border-slate-800 text-xs text-slate-500 text-center">Lade Mühlen...</div>
+            <div id="shMillSlotsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div class="p-4 bg-slate-950 rounded border border-slate-800 text-xs text-slate-500 text-center col-span-full">Lade Mühlen...</div>
             </div>
           </div>
 
@@ -1489,12 +1494,12 @@
             <div class="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center space-x-2">
                 <i class="fa-solid fa-fire-burner text-amber-500"></i>
-                <span>Trockenöfen</span>
+                <span>Trockenofen & Bleche 1-4</span>
               </h3>
               <span class="text-xs text-slate-400">Trocknung von Rohgewürzen</span>
             </div>
-            <div id="shOvenSlotsGrid" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div class="p-4 bg-slate-950 rounded border border-slate-800 text-xs text-slate-500 text-center">Lade Öfen...</div>
+            <div id="shOvenSlotsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div class="p-4 bg-slate-950 rounded border border-slate-800 text-xs text-slate-500 text-center col-span-full">Lade Ofen...</div>
             </div>
           </div>
 
@@ -2104,11 +2109,14 @@
 
         vehicles.forEach(v => {
           const card = document.createElement('div');
-          card.className = 'bg-slate-950 border border-slate-800/80 rounded-lg p-3.5 space-y-2.5 flex flex-col justify-between';
+          const isTransportActive = !!v.transport_enabled;
+          card.className = `bg-slate-950 border ${isTransportActive ? 'border-slate-800/80' : 'border-slate-800/40 opacity-70'} rounded-lg p-3.5 space-y-2.5 flex flex-col justify-between`;
 
           let statusBadge = '<span class="px-2 py-0.5 rounded text-[11px] bg-slate-800 text-slate-400">Inaktiv</span>';
           let locText = `Standort: Farm ${v.current_location}`;
-          if (v.status === 'ready_main') {
+          if (!isTransportActive) {
+            statusBadge = '<span class="px-2 py-0.5 rounded text-[11px] bg-slate-800 text-slate-400 border border-slate-700 flex items-center space-x-1"><i class="fa-solid fa-ban text-[9px] mr-1"></i>Deaktiviert</span>';
+          } else if (v.status === 'ready_main') {
             statusBadge = '<span class="px-2 py-0.5 rounded text-[11px] bg-emerald-950 text-emerald-400 border border-emerald-800/60">Bereit auf Farm 1</span>';
           } else if (v.status === 'ready_outer') {
             statusBadge = `<span class="px-2 py-0.5 rounded text-[11px] bg-teal-950 text-teal-300 border border-teal-800/60">Bereit auf Farm ${v.target_farm_id}</span>`;
@@ -2141,7 +2149,11 @@
                 <span class="text-slate-500">Fracht:</span> ${cargoText}
               </div>
             </div>
-            <div class="pt-2 border-t border-slate-900 flex justify-end">
+            <div class="pt-2 border-t border-slate-900 flex items-center justify-between">
+              <button onclick="toggleRouteTransport(${v.target_farm_id}, ${!isTransportActive})" class="px-2 py-1 text-[11px] rounded transition flex items-center space-x-1 ${isTransportActive ? 'bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700'}">
+                <i class="fa-solid ${isTransportActive ? 'fa-toggle-on text-emerald-400' : 'fa-toggle-off text-slate-500'}"></i>
+                <span>${isTransportActive ? 'Aktiv' : 'Inaktiv'}</span>
+              </button>
               <button onclick="triggerSendVehicle(${v.route_id})" class="px-2.5 py-1 text-xs rounded bg-slate-800 hover:bg-slate-700 text-slate-200 transition flex items-center space-x-1">
                 <i class="fa-solid fa-paper-plane text-[10px]"></i>
                 <span>Losschicken</span>
@@ -2152,6 +2164,23 @@
         });
       } catch (e) {
         console.error("Vehicles fetch error", e);
+      }
+    }
+
+    async function toggleRouteTransport(farmId, enable) {
+      try {
+        const res = await fetch(`/api/v1/vehicles/${farmId}/config`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          body: JSON.stringify({ transport: enable })
+        });
+        if (res.ok) {
+          await loadVehiclesData();
+        } else {
+          alert('Fehler beim Aktualisieren der Routen-Einstellung.');
+        }
+      } catch (e) {
+        alert('Netzwerkfehler beim Aktualisieren der Routen-Einstellung.');
       }
     }
 
@@ -3664,6 +3693,22 @@
 
     // ── Gewürzhaus (Farm 10) ───────────────────────────────────────────────────
 
+    function getSpiceProductName(pid) {
+      if (!pid) return '–';
+      const numPid = parseInt(pid);
+      const prod = allProducts && allProducts.find ? allProducts.find(p => p.pid === numPid) : null;
+      if (prod && prod.name) return prod.name;
+      const SPICE_NAMES = {
+        113: 'Chili', 701: 'Salbei', 703: 'Kümmel',
+        1100: 'Pfeffer', 1101: 'Zimt', 1102: 'Muskat', 1103: 'Kardamom', 1104: 'Nelke', 1105: 'Piment', 1106: 'Sternanis',
+        1107: 'Chili getrocknet', 1108: 'Salbei getrocknet', 1109: 'Kümmel getrocknet',
+        1110: 'Pfeffer getrocknet', 1111: 'Zimt getrocknet', 1112: 'Muskat getrocknet', 1113: 'Kardamom getrocknet', 1114: 'Nelke getrocknet', 1115: 'Piment getrocknet', 1116: 'Sternanis getrocknet',
+        1117: 'Chili gemahlen', 1118: 'Salbei gemahlen', 1119: 'Kümmel gemahlen',
+        1120: 'Pfeffer gemahlen', 1121: 'Zimt gemahlen', 1122: 'Muskat gemahlen', 1123: 'Kardamom gemahlen', 1124: 'Nelke gemahlen', 1125: 'Piment gemahlen', 1126: 'Sternanis gemahlen'
+      };
+      return SPICE_NAMES[numPid] || `PID ${numPid}`;
+    }
+
     async function loadSpicehouseData() {
       try {
         const res = await fetch('/api/v1/spicehouse', { headers: authHeaders() });
@@ -3680,54 +3725,79 @@
             ? 'text-xs px-2.5 py-0.5 rounded font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800'
             : 'text-xs px-2.5 py-0.5 rounded font-semibold bg-rose-950 text-rose-400 border border-rose-800';
         }
-        document.getElementById('shPoints').textContent = (sum.points || 0).toLocaleString('de-DE');
-        document.getElementById('shRubel').textContent = (sum.rubel || 0).toLocaleString('de-DE');
+        const ptsEl = document.getElementById('shPoints');
+        if (ptsEl) ptsEl.textContent = (sum.points || 0).toLocaleString('de-DE');
+        const lvlEl = document.getElementById('shLevel');
+        if (lvlEl) lvlEl.textContent = 'Stufe ' + (sum.level || 1);
+        const rubelEl = document.getElementById('shRubel');
+        if (rubelEl) rubelEl.textContent = 'Stufe ' + (sum.level || 1);
 
         // Formular-Inputs
-        document.getElementById('shCfgEnabled').checked = !!cfg.enabled;
-        document.getElementById('shCfgAutoOven').checked = !!cfg.auto_oven;
-        document.getElementById('shCfgAutoMill').checked = !!cfg.auto_mill;
-        document.getElementById('shCfgAutoCustomer').checked = !!cfg.auto_customer;
-        document.getElementById('shCfgMinCropReserve').value = cfg.min_crop_reserve ?? 300;
+        const elEnabled = document.getElementById('shCfgEnabled');
+        if (elEnabled) elEnabled.checked = !!cfg.enabled;
+        const elOven = document.getElementById('shCfgAutoOven');
+        if (elOven) elOven.checked = !!cfg.auto_oven;
+        const elMill = document.getElementById('shCfgAutoMill');
+        if (elMill) elMill.checked = !!cfg.auto_mill;
+        const elCustomer = document.getElementById('shCfgAutoCustomer');
+        if (elCustomer) elCustomer.checked = !!cfg.auto_customer;
+        const elReserve = document.getElementById('shCfgMinCropReserve');
+        if (elReserve) elReserve.value = cfg.min_crop_reserve ?? 500;
 
-        // 3 Mühlen rendern
+        // 4 Mühlen rendern
         const millGrid = document.getElementById('shMillSlotsGrid');
         if (millGrid) {
           const millSlots = sum.mill_slots || {};
           let millHtml = '';
-          for (let i = 1; i <= 3; i++) {
+          for (let i = 1; i <= 4; i++) {
             const slot = millSlots[i] || millSlots[String(i)] || null;
-            if (!slot || slot.is_idle) {
+            const isRentedSlot = (i === 4);
+            const isIdle = !slot || ((slot.amount || 0) === 0 && (slot.output || 0) === 0) || slot.is_idle;
+
+            if (!slot || (!slot.is_rented && isRentedSlot && isIdle)) {
+              millHtml += `
+                <div class="p-4 bg-slate-950 rounded-lg border border-slate-800 flex flex-col justify-between space-y-3 opacity-70">
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold text-slate-300 text-xs">Mühle ${i} ${isRentedSlot ? '(Miete)' : ''}</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400">${isRentedSlot ? 'Nicht gemietet' : 'Inaktiv'}</span>
+                  </div>
+                  <p class="text-xs text-slate-500 italic">Miet-Slot steht aktuell nicht zur Verfügung.</p>
+                  <div class="text-[11px] text-slate-600">Freischaltung für Coins</div>
+                </div>
+              `;
+            } else if (isIdle) {
               millHtml += `
                 <div class="p-4 bg-slate-950 rounded-lg border border-slate-800 flex flex-col justify-between space-y-3">
                   <div class="flex items-center justify-between">
-                    <span class="font-bold text-slate-300 text-xs">Mühle ${i}</span>
+                    <span class="font-bold text-slate-300 text-xs">Mühle ${i} ${isRentedSlot ? '(Miete)' : ''}</span>
                     <span class="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400">Leer / Bereit</span>
                   </div>
-                  <p class="text-xs text-slate-500 italic">Kein aktiver Mahlvorgang.</p>
-                  <div class="text-[11px] text-slate-500">Slot frei für Neubefüllung</div>
+                  <p class="text-xs text-slate-400 italic">Kein aktiver Mahlvorgang.</p>
+                  <div class="pt-2 border-t border-slate-800/80 text-[11px] text-slate-500">
+                    Kapazität: Stufe ${slot.level || 1} (${slot.capacity || 10} Stk.)
+                  </div>
                 </div>
               `;
             } else {
-              const pName = allProducts.find(p => p.pid === slot.pid)?.name || `PID ${slot.pid}`;
+              const pName = getSpiceProductName(slot.pid);
               const remainMin = Math.ceil((slot.remain || 0) / 60);
               const output = slot.output || 0;
               const hasHarvest = output > 0;
               millHtml += `
                 <div class="p-4 bg-slate-950 rounded-lg border ${hasHarvest ? 'border-emerald-600/70 bg-emerald-950/20' : 'border-slate-800'} flex flex-col justify-between space-y-3">
                   <div class="flex items-center justify-between">
-                    <span class="font-bold text-slate-200 text-xs">Mühle ${i}</span>
+                    <span class="font-bold text-slate-200 text-xs">Mühle ${i} ${isRentedSlot ? '(Miete)' : ''}</span>
                     <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${hasHarvest ? 'bg-emerald-900 text-emerald-300' : 'bg-amber-950 text-amber-300 border border-amber-800'}">
-                      ${hasHarvest ? 'Bereit zur Ernte' : 'Mahlt'}
+                      ${hasHarvest ? 'Erntebereit' : 'Mahlt'}
                     </span>
                   </div>
                   <div>
                     <div class="font-semibold text-slate-200 text-xs">${pName}</div>
-                    <div class="text-[11px] text-slate-400 mt-0.5">Gesamt: ${slot.amount || 0} Stk.</div>
+                    <div class="text-[11px] text-slate-400 mt-0.5">Gesamt: ${slot.amount || 0} Stk. (Stufe ${slot.level || 1})</div>
                   </div>
                   <div class="pt-2 border-t border-slate-800/80 space-y-1 text-[11px]">
                     <div class="flex justify-between text-slate-400">
-                      <span>Fertig gemahlen:</span>
+                      <span>Fertig:</span>
                       <span class="font-bold text-emerald-400">${output} Stk.</span>
                     </div>
                     <div class="flex justify-between text-slate-400">
@@ -3742,55 +3812,100 @@
           millGrid.innerHTML = millHtml;
         }
 
-        // Trockenöfen rendern
+        // Trockenofen rendern
         const ovenGrid = document.getElementById('shOvenSlotsGrid');
         if (ovenGrid) {
-          const ovenSlots = sum.oven_slots || {};
-          const slotEntries = Object.entries(ovenSlots);
-          if (slotEntries.length === 0) {
-            ovenGrid.innerHTML = '<div class="p-4 bg-slate-950 rounded border border-slate-800 text-xs text-slate-500 col-span-full text-center">Keine aktiven Trocknungs-Slots.</div>';
+          const ovenLines = sum.oven_lines || sum.oven_slots || {};
+          const linesList = Object.values(ovenLines);
+          const isReady = !!sum.oven_is_ready;
+          const isIdle = sum.oven_is_idle !== false && !isReady && (sum.oven_remain || 0) <= 0;
+          const remainMin = Math.ceil((sum.oven_remain || 0) / 60);
+
+          let ovenStatusBadge = '';
+          if (isReady) {
+            ovenStatusBadge = '<span class="px-2.5 py-0.5 rounded text-[11px] font-semibold bg-emerald-900 text-emerald-300 border border-emerald-700">Erntebereit</span>';
+          } else if (isIdle) {
+            ovenStatusBadge = '<span class="px-2.5 py-0.5 rounded text-[11px] bg-slate-800 text-slate-400">Leer / Bereit</span>';
           } else {
-            ovenGrid.innerHTML = slotEntries.map(([id, s]) => {
-              const pName = allProducts.find(p => p.pid === s.pid)?.name || `PID ${s.pid}`;
-              const remainMin = Math.ceil((s.remain || 0) / 60);
-              return `
+            ovenStatusBadge = `<span class="px-2.5 py-0.5 rounded text-[11px] font-semibold bg-amber-950 text-amber-300 border border-amber-800">Trocknet (${remainMin} Min.)</span>`;
+          }
+
+          let ovenHtml = `
+            <div class="col-span-full p-3.5 bg-slate-950/80 rounded-lg border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div class="flex items-center space-x-3">
+                <div class="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400 text-base">
+                  <i class="fa-solid fa-fire"></i>
+                </div>
+                <div>
+                  <div class="text-xs font-bold text-slate-200">Gesamtstatus Trockenofen</div>
+                  <div class="text-[11px] text-slate-400">${isReady ? 'Trocknung beendet! Bereit zur Entnahme (+100 Streuer).' : (isIdle ? 'Ofen ist frei für die nächste Charge (5,5 Std. Trockenzeit).' : `Trocknung läuft. Verbleibend: ${remainMin} Min.`)}</div>
+                </div>
+              </div>
+              <div class="flex items-center space-x-2">
+                ${ovenStatusBadge}
+              </div>
+            </div>
+          `;
+
+          if (linesList.length === 0) {
+            ovenHtml += '<div class="p-4 bg-slate-950 rounded border border-slate-800 text-xs text-slate-500 col-span-full text-center">Keine Bleche konfiguriert.</div>';
+          } else {
+            linesList.forEach((line) => {
+              const lineNr = line.line || line.id || 1;
+              const isRented = !!line.is_rented;
+              ovenHtml += `
                 <div class="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-2 text-xs">
                   <div class="flex items-center justify-between">
-                    <span class="font-semibold text-slate-300">Ofen-Slot ${id}</span>
-                    <span class="text-[10px] px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800">Trocknet</span>
+                    <span class="font-semibold text-slate-300">Blech ${lineNr} ${isRented ? '(Miete)' : ''}</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded ${isRented ? 'bg-purple-950 text-purple-300 border border-purple-800' : 'bg-slate-800 text-slate-400'}">
+                      Stufe ${line.level || 1}
+                    </span>
                   </div>
-                  <p class="font-bold text-slate-200">${pName} (${s.amount || 0}x)</p>
-                  <p class="text-[11px] text-slate-400 font-mono">Rest: ${remainMin > 0 ? remainMin + ' Min.' : 'Fertig'}</p>
+                  <div class="space-y-1 text-[11px] text-slate-400">
+                    <div class="flex justify-between">
+                      <span>Kapazität:</span>
+                      <span class="text-slate-200 font-bold">${line.capacity || 10} Stk.</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span>Fächer:</span>
+                      <span class="text-slate-300">${line.slots || 4} Fächer</span>
+                    </div>
+                  </div>
                 </div>
               `;
-            }).join('');
+            });
           }
+          ovenGrid.innerHTML = ovenHtml;
         }
 
         // Kunden rendern
         const custGrid = document.getElementById('shCustomersGrid');
         const custCount = document.getElementById('shCustomersCount');
         if (custGrid) {
-          const customers = sum.customers || [];
+          const rawCust = sum.customers || {};
+          const customers = Array.isArray(rawCust) ? rawCust : Object.values(rawCust);
           if (custCount) custCount.textContent = `${customers.length} Kunde(n)`;
           if (customers.length === 0) {
             custGrid.innerHTML = '<div class="p-4 bg-slate-950 rounded border border-slate-800 text-xs text-slate-500 text-center">Aktuell keine Kunden vor der Tür.</div>';
           } else {
             custGrid.innerHTML = customers.map(c => {
-              const prods = Object.entries(c.products || {}).map(([pid, amt]) => {
-                const name = allProducts.find(p => p.pid === parseInt(pid))?.name || `PID ${pid}`;
+              const prodsMap = c.data || c.products || {};
+              const prods = Object.entries(prodsMap).map(([pid, amt]) => {
+                const name = getSpiceProductName(parseInt(pid));
                 return `<span class="bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-[11px] text-slate-300">${amt}x ${name}</span>`;
               }).join(' ');
+              const pts = c.reward_spicehouse_points || c.reward_points || c.points || 0;
+              const money = c.reward_money || c.rubel || 0;
               return `
                 <div class="p-3 bg-slate-950 rounded-lg border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                   <div class="space-y-1">
-                    <span class="font-bold text-slate-200">Kunde #${c.id}</span>
+                    <span class="font-bold text-slate-200">Kunde #${c.id || c.slot}</span>
                     <div class="flex flex-wrap gap-1.5 mt-1">${prods}</div>
                   </div>
                   <div class="flex items-center space-x-3 text-right shrink-0">
                     <div class="text-[11px]">
-                      <span class="text-amber-400 font-bold">+${c.points || 0} Pkt.</span>
-                      <span class="text-emerald-400 font-bold ml-2">+${c.rubel || 0} Rubel</span>
+                      <span class="text-amber-400 font-bold">+${pts.toLocaleString('de-DE')} Streuer</span>
+                      <span class="text-emerald-400 font-bold ml-2">+${money.toLocaleString('de-DE')} kT</span>
                     </div>
                   </div>
                 </div>
@@ -3871,9 +3986,9 @@
         }
 
         document.getElementById('fsCfgEnabled').checked = !!cfg.enabled;
-        document.getElementById('fsCfgAutoHarvest').checked = !!cfg.autoHarvest;
-        document.getElementById('fsCfgAutoRefill').checked = !!cfg.autoRefill;
-        document.getElementById('fsCfgMinReserve').value = cfg.min_reserve ?? 150;
+        document.getElementById('fsCfgAutoHarvest').checked = cfg.auto_harvest !== undefined ? !!cfg.auto_harvest : !!cfg.autoHarvest;
+        document.getElementById('fsCfgAutoRefill').checked = cfg.auto_refill !== undefined ? !!cfg.auto_refill : !!cfg.autoRefill;
+        document.getElementById('fsCfgMinReserve').value = cfg.min_reserve ?? cfg.minReserve ?? 500;
 
         const slotsGrid = document.getElementById('fsSlotsGrid');
         if (slotsGrid) {
@@ -3882,7 +3997,104 @@
             slotsGrid.innerHTML = '<div class="p-4 bg-slate-950 rounded border border-slate-800 text-xs text-slate-500 text-center col-span-full">Keine Slots initialisiert. Bitte erst einen Bot-Zyklus ausführen.</div>';
           } else {
             slotsGrid.innerHTML = slots.map(s => {
-              const pct = s.productionLimit > 0 ? Math.min(100, Math.round((s.currentPoints / s.productionLimit) * 100)) : 0;
+              const isBlocked = !!s.isBlocked;
+              const isFinished = !!s.isFinished;
+              const isBusy = !!s.busy;
+              const isWaitingForRefill = !!s.isWaitingForRefill;
+
+              // Fall 1: Slot ist gesperrt / nicht freigeschaltet (Slot 3, Slot 4)
+              if (isBlocked) {
+                return `
+                  <div class="p-4 bg-slate-950/60 rounded-lg border border-slate-800/80 space-y-3 text-xs opacity-75">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center space-x-2">
+                        <span class="font-bold text-slate-300">Slot ${s.slotId}</span>
+                        <span class="text-[10px] text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded">Gesperrt</span>
+                      </div>
+                      <span class="text-[10px] px-2 py-0.5 rounded font-semibold bg-slate-800 text-slate-400 border border-slate-700 flex items-center space-x-1">
+                        <i class="fa-solid fa-lock text-[9px] mr-1"></i>Nicht freigeschaltet
+                      </span>
+                    </div>
+
+                    <div class="p-4 bg-slate-900/40 rounded border border-slate-800/60 flex flex-col items-center justify-center text-center space-y-1.5 py-6">
+                      <div class="w-8 h-8 rounded-full bg-slate-800/80 flex items-center justify-center text-slate-400 mb-0.5">
+                        <i class="fa-solid fa-lock text-sm"></i>
+                      </div>
+                      <span class="text-xs font-semibold text-slate-300">Produktionsplatz nicht freigeschaltet</span>
+                      <span class="text-[11px] text-slate-400 max-w-xs">
+                        ${s.slotId === 3 ? 'Kann im Spiel für 50 Coins dauerhaft gekauft werden.' : (s.slotId === 4 ? 'Kann im Spiel für 5 Coins für 48 Stunden gemietet werden.' : 'Freischaltung für Coins im Spiel.')}
+                      </span>
+                    </div>
+                  </div>
+                `;
+              }
+
+              // Fall 2: Slot ist aktiv / freigeschaltet (Slot 1, Slot 2 etc.)
+              let statusBadge = '';
+              let middleSection = '';
+
+              if (isFinished) {
+                statusBadge = `
+                  <span class="text-[10px] px-2 py-0.5 rounded font-semibold bg-emerald-900 text-emerald-300 border border-emerald-700 flex items-center space-x-1">
+                    <i class="fa-solid fa-check text-[9px] mr-1"></i>Erntebereit
+                  </span>
+                `;
+                middleSection = `
+                  <div class="p-3 bg-emerald-950/20 rounded border border-emerald-600/50 flex items-center justify-between">
+                    <div>
+                      <div class="text-xs font-bold text-emerald-300">Biokraftstoff fertig gereift!</div>
+                      <div class="text-[11px] text-slate-400 mt-0.5">Ertrag: ${s.level} Kanister bereit zur Abholung</div>
+                    </div>
+                    <span class="text-xl">🛢️</span>
+                  </div>
+                `;
+              } else if (isBusy) {
+                const remainSec = s.remain || 0;
+                const hrs = Math.floor(remainSec / 3600);
+                const mins = Math.floor((remainSec % 3600) / 60);
+                const secs = remainSec % 60;
+                const remainStr = `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')} h`;
+
+                statusBadge = `
+                  <span class="text-[10px] px-2 py-0.5 rounded font-semibold bg-blue-950 text-blue-300 border border-blue-800 flex items-center space-x-1">
+                    <i class="fa-solid fa-gear fa-spin text-[9px] mr-1"></i>In Produktion (${hrs}h ${mins}m)
+                  </span>
+                `;
+                middleSection = `
+                  <div class="p-3 bg-slate-900/60 rounded border border-slate-800/80 space-y-2">
+                    <div class="flex justify-between items-center text-[11px]">
+                      <span class="text-slate-400">Verbleibende Gärzeit:</span>
+                      <span class="font-mono font-bold text-amber-400">${remainStr}</span>
+                    </div>
+                    <div class="flex justify-between items-center text-[11px]">
+                      <span class="text-slate-400">Ertrag bei Fertigstellung:</span>
+                      <span class="text-emerald-400 font-semibold flex items-center space-x-1">
+                        <i class="fa-solid fa-oil-can mr-1"></i>${s.level} Kanister
+                      </span>
+                    </div>
+                  </div>
+                `;
+              } else {
+                // Wartet auf Nachfüllung / Rohstoffe
+                const pct = s.productionLimit > 0 ? Math.min(100, Math.round((s.currentPoints / s.productionLimit) * 100)) : 0;
+                statusBadge = `
+                  <span class="text-[10px] px-2 py-0.5 rounded font-semibold bg-amber-950 text-amber-300 border border-amber-800 flex items-center space-x-1">
+                    <i class="fa-solid fa-wheat-awn text-[9px] mr-1"></i>Wartet auf Rohstoffe
+                  </span>
+                `;
+                middleSection = `
+                  <div>
+                    <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+                      <span>Rohstoff-Befüllung</span>
+                      <span class="font-mono text-slate-200">${s.currentPoints?.toLocaleString('de-DE')} / ${s.productionLimit?.toLocaleString('de-DE')} (${pct}%)</span>
+                    </div>
+                    <div class="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-800">
+                      <div class="bg-teal-500 h-full rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+                    </div>
+                  </div>
+                `;
+              }
+
               const prods = (s.acceptedProducts || []).map(p => {
                 return `<span class="bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-[10px] text-slate-300">${p.name}: <b class="${p.stock > 0 ? 'text-emerald-400' : 'text-slate-500'}">${p.stock} Stk.</b> (+${p.points} Pkt.)</span>`;
               }).join(' ');
@@ -3894,20 +4106,10 @@
                       <span class="font-bold text-slate-200">Slot ${s.slotId}</span>
                       <span class="text-[10px] text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded">Stufe ${s.level}</span>
                     </div>
-                    <span class="text-[10px] px-2 py-0.5 rounded font-semibold ${s.isWaitingForRefill ? 'bg-amber-950 text-amber-300 border border-amber-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'}">
-                      ${s.isWaitingForRefill ? 'Wartet auf Nachfüllung' : 'In Produktion'}
-                    </span>
+                    ${statusBadge}
                   </div>
 
-                  <div>
-                    <div class="flex justify-between text-[11px] text-slate-400 mb-1">
-                      <span>Fortschritt</span>
-                      <span class="font-mono text-slate-200">${s.currentPoints?.toLocaleString('de-DE')} / ${s.productionLimit?.toLocaleString('de-DE')} (${pct}%)</span>
-                    </div>
-                    <div class="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-800">
-                      <div class="bg-teal-500 h-full rounded-full transition-all duration-500" style="width: ${pct}%"></div>
-                    </div>
-                  </div>
+                  ${middleSection}
 
                   <div class="pt-2 border-t border-slate-800 space-y-1.5">
                     <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Akzeptierte Feldfrüchte & Vorrat</span>
@@ -3928,9 +4130,9 @@
       try {
         const payload = {
           enabled: document.getElementById('fsCfgEnabled').checked,
-          autoHarvest: document.getElementById('fsCfgAutoHarvest').checked,
-          autoRefill: document.getElementById('fsCfgAutoRefill').checked,
-          minReserve: parseInt(document.getElementById('fsCfgMinReserve').value) || 150,
+          auto_harvest: document.getElementById('fsCfgAutoHarvest').checked,
+          auto_refill: document.getElementById('fsCfgAutoRefill').checked,
+          min_reserve: parseInt(document.getElementById('fsCfgMinReserve').value) || 500,
         };
         const res = await fetch('/api/v1/fuelstation', {
           method: 'PUT',

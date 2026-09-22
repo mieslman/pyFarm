@@ -101,6 +101,12 @@ async def update_vehicle_config(
     if "required_products" in config_update and isinstance(config_update["required_products"], list):
         route_cfg.required_products = config_update["required_products"]
 
+    v_svc = worker_scheduler.last_vehicle_service
+    if v_svc:
+        for v in v_svc.vehicles.values():
+            if v.target_farm_id == farm_id:
+                v.route_config = route_cfg
+
     settings_manager.save()
     logger.info(f"Fahrzeug-Konfiguration für Farm {farm_id} aktualisiert: {route_cfg.model_dump()}")
-    return {"status": "ok", "route_config": route_cfg.model_dump()}
+    return {"status": "ok", "route_config": route_cfg.model_dump(), "config": route_cfg.model_dump()}

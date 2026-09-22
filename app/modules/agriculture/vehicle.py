@@ -183,6 +183,9 @@ class Vehicle:
         if sushibar_service is not None:
             self.sushibar_service = sushibar_service
 
+        if not self.route_config.transport:
+            return False
+
         # In transit cooldown
         if self.remain_seconds > 0:
             logger.debug(

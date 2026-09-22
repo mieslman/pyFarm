@@ -104,8 +104,8 @@ class VehiclesConfig(BaseModel):
             ),
             10: VehicleRouteConfig(
                 farm_id=10,
-                route=4,
-                vehicle=19,
+                route=6,
+                vehicle=29,
                 auto_fastest=True,
                 transport=False,
                 required_products=[],
