@@ -16,13 +16,39 @@ farmersmarket_router = APIRouter(prefix="/farmersmarket", tags=["FarmersMarket"]
 async def get_farmersmarket_status(_: dict[str, Any] = Depends(get_current_user)):
     """Retrieve current state and summary of the Dorf 2 farmers market domains."""
     fm_svc = worker_scheduler.last_farmersmarket_service
+    if not fm_svc and worker_scheduler.last_stock_service and worker_scheduler.last_stock_service.client:
+        try:
+            from app.modules.farmersmarket.service import FarmersMarketService
+
+            client = worker_scheduler.last_stock_service.client
+            stock_svc = worker_scheduler.last_stock_service
+            fm_svc = FarmersMarketService(client, stock_svc, settings.farmersmarket)
+            res = await client.api_call("farm", {"mode": "getfarms", "farm": 1, "position": 0})
+            fm_data = res.get("updateblock", {}).get("farmersmarket", {})
+            if fm_data:
+                fm_svc.nursery.update(fm_data)
+                fm_svc.flower_area.update(fm_data)
+                fm_svc.flower_slots.update(fm_data)
+                fm_svc.farmis.update(fm_data)
+                fm_svc.pet_breed.update(fm_data)
+                worker_scheduler.last_farmersmarket_service = fm_svc
+        except Exception as e:
+            logger.warning(f"FarmersMarket Endpoint: Fehler beim Laden der Live-Daten: {e}")
+
     if not fm_svc:
         summary = FarmersMarketSummary(
             enabled=settings.farmersmarket.enabled,
+            flower_fields_empty=36,
             pet_breed_enabled=settings.farmersmarket.pet_breed_enabled,
             pet_breed_status="Inaktiv (Konfiguration)"
             if not settings.farmersmarket.pet_breed_enabled
             else "Aktiv",
+            details={
+                "flower_fields": [{"pos": i, "pid": None, "remain": 0} for i in range(1, 37)],
+                "nursery_slots": [],
+                "display_slots": [],
+                "waiting_farmis": [],
+            },
         )
         return summary.model_dump()
 

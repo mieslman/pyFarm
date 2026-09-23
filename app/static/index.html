@@ -594,15 +594,25 @@
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div class="bg-slate-900 border border-slate-800 p-3 rounded-lg">
           <p class="text-[11px] text-slate-400 font-medium">Blumenbeete (36 Felder)</p>
-          <p class="text-base font-bold text-emerald-400 mt-1"><span id="fmFlowerReady">0</span> <span class="text-xs font-normal text-slate-400">reif /</span> <span id="fmFlowerGrowing">0</span> <span class="text-xs font-normal text-slate-400">wachsend</span></p>
+          <p class="text-base font-bold text-emerald-400 mt-1">
+            <span id="fmFlowerReady">0</span> <span class="text-xs font-normal text-slate-400">reif /</span>
+            <span id="fmFlowerGrowing">0</span> <span class="text-xs font-normal text-slate-400">wachsend /</span>
+            <span id="fmFlowerEmpty">0</span> <span class="text-xs font-normal text-slate-400">frei</span>
+          </p>
         </div>
         <div class="bg-slate-900 border border-slate-800 p-3 rounded-lg">
           <p class="text-[11px] text-slate-400 font-medium">Gärtnerei (Gestecke)</p>
-          <p class="text-base font-bold text-amber-400 mt-1"><span id="fmNurseryReady">0</span> <span class="text-xs font-normal text-slate-400">abholbereit</span></p>
+          <p class="text-base font-bold text-amber-400 mt-1">
+            <span id="fmNurseryReady">0</span> <span class="text-xs font-normal text-slate-400">abholbereit /</span>
+            <span id="fmNurseryActive">0</span> <span class="text-xs font-normal text-slate-400">aktiv</span>
+          </p>
         </div>
         <div class="bg-slate-900 border border-slate-800 p-3 rounded-lg">
           <p class="text-[11px] text-slate-400 font-medium">Marktkunden</p>
-          <p class="text-base font-bold text-blue-400 mt-1"><span id="fmFarmisWaiting">0</span> <span class="text-xs font-normal text-slate-400">wartend</span></p>
+          <p class="text-base font-bold text-blue-400 mt-1">
+            <span id="fmFarmisWaiting">0</span> <span class="text-xs font-normal text-slate-400">wartend</span>
+            <span class="text-xs font-normal text-slate-400">(<span id="fmFarmisServed">0</span> bedient)</span>
+          </p>
         </div>
         <div class="bg-slate-900 border border-slate-800 p-3 rounded-lg">
           <p class="text-[11px] text-slate-400 font-medium">Tierzucht-Status</p>
@@ -615,12 +625,44 @@
         <div class="flex items-center justify-between border-b border-slate-800 pb-2">
           <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5">
             <i class="fa-solid fa-seedling text-emerald-400"></i>
-            <span>Blumenbeete (Vorschau Beete 1–12)</span>
+            <span>Blumenwiese (36 Beete)</span>
           </h3>
-          <span class="text-[10px] text-slate-500">Automatisches Ernten, Gießen & Pflanzen</span>
+          <span class="text-[10px] text-slate-500">Ernten wenn alle reif (&lt; 0), Pflanzen kleinste Menge (Kat. fl), Gießen (&lt; 0)</span>
         </div>
-        <div id="fmFlowerGrid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+        <div id="fmFlowerGrid" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-6 lg:grid-cols-9 gap-2">
           <div class="p-3 text-center text-slate-500 col-span-full">Lade Beete...</div>
+        </div>
+      </div>
+
+      <!-- Workshop & Farmis Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Nursery Slots -->
+        <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5">
+              <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
+              <span>Gärtnerei-Werkstatt (Slots)</span>
+            </h3>
+            <span class="text-[10px] text-slate-500">Automatisches Gestecke-Binden</span>
+          </div>
+          <div id="fmNurseryList" class="grid grid-cols-3 gap-2">
+            <div class="p-3 text-center text-slate-500 col-span-full">Lade Werkstatt...</div>
+          </div>
+        </div>
+
+        <!-- Farmis & Display Slots -->
+        <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5">
+              <i class="fa-solid fa-users text-blue-400"></i>
+              <span>Marktkunden & Schau-Slots</span>
+            </h3>
+            <span class="text-[10px] text-slate-500">Farmis & Dorf-Präsentation</span>
+          </div>
+          <div id="fmDisplaySlots" class="grid grid-cols-3 gap-2 mb-2"></div>
+          <div id="fmFarmisList" class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+            <div class="p-3 text-center text-slate-500">Lade Kunden...</div>
+          </div>
         </div>
       </div>
     </div>
@@ -2281,22 +2323,115 @@
         if (!res.ok) return;
         const fm = await res.json();
 
-        document.getElementById('fmFlowerReady').textContent = fm.flower_fields_ready;
-        document.getElementById('fmFlowerGrowing').textContent = fm.flower_fields_growing;
-        document.getElementById('fmFlowerEmpty').textContent = fm.flower_fields_empty;
-        document.getElementById('fmNurseryReady').textContent = fm.nursery_ready_count;
-        document.getElementById('fmFarmisWaiting').textContent = fm.farmis_waiting;
-        document.getElementById('fmPetBreedStatus').textContent = fm.pet_breed_status;
+        const elReady = document.getElementById('fmFlowerReady');
+        if (elReady) elReady.textContent = fm.flower_fields_ready ?? 0;
+        const elGrowing = document.getElementById('fmFlowerGrowing');
+        if (elGrowing) elGrowing.textContent = fm.flower_fields_growing ?? 0;
+        const elEmpty = document.getElementById('fmFlowerEmpty');
+        if (elEmpty) elEmpty.textContent = fm.flower_fields_empty ?? 0;
 
+        const elNurseryReady = document.getElementById('fmNurseryReady');
+        if (elNurseryReady) elNurseryReady.textContent = fm.nursery_ready_count ?? 0;
+        const elNurseryActive = document.getElementById('fmNurseryActive');
+        if (elNurseryActive) elNurseryActive.textContent = fm.nursery_active_count ?? 0;
+
+        const elFarmisWaiting = document.getElementById('fmFarmisWaiting');
+        if (elFarmisWaiting) elFarmisWaiting.textContent = fm.farmis_waiting ?? 0;
+        const elFarmisServed = document.getElementById('fmFarmisServed');
+        if (elFarmisServed) elFarmisServed.textContent = fm.farmis_served_total ?? 0;
+
+        const elPetBreed = document.getElementById('fmPetBreedStatus');
+        if (elPetBreed) {
+          elPetBreed.textContent = fm.pet_breed_status || (fm.pet_breed_enabled ? "Aktiv" : "Inaktiv (Konfiguration)");
+          if (fm.pet_breed_enabled) {
+            elPetBreed.className = "inline-block mt-1 text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-medium";
+          } else {
+            elPetBreed.className = "inline-block mt-1 text-xs px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 font-medium";
+          }
+        }
+
+        // Flower Area 36 beds grid
         const grid = document.getElementById('fmFlowerGrid');
-        if (grid && fm.details && fm.details.flower_fields) {
-          grid.innerHTML = fm.details.flower_fields.map(f => `
-            <div class="p-2 rounded text-center border text-[11px] ${f.pid ? (f.remain <= 0 ? 'bg-emerald-950 border-emerald-500 text-emerald-300' : 'bg-slate-950 border-slate-800 text-slate-300') : 'bg-slate-900 border-slate-800 text-slate-600'}">
-              <span class="block text-[9px] font-mono text-slate-500">Beet #${f.pos}</span>
-              <span class="font-bold">${f.pid ? `PID ${f.pid}` : 'Frei'}</span>
-              <span class="block text-[9px] text-emerald-400 mt-0.5">${f.remain <= 0 ? 'Reif!' : (f.remain > 0 ? `${Math.round(f.remain/60)}m` : '-')}</span>
+        if (grid) {
+          const fields = fm.details && fm.details.flower_fields ? fm.details.flower_fields : [];
+          if (fields.length > 0) {
+            grid.innerHTML = fields.map(f => {
+              const isReady = f.remain < 0;
+              const isGrowing = f.pid && f.remain >= 0;
+              let borderBgClass = 'bg-slate-900/60 border-slate-800 text-slate-500';
+              let badgeText = 'Frei';
+              let badgeColor = 'text-slate-500';
+              if (isReady) {
+                borderBgClass = 'bg-emerald-950/70 border-emerald-500 text-emerald-300';
+                badgeText = 'Reif!';
+                badgeColor = 'text-emerald-400 font-bold';
+              } else if (isGrowing) {
+                borderBgClass = 'bg-slate-950 border-slate-700 text-slate-300';
+                badgeText = f.remain > 0 ? `${Math.round(f.remain/60)}m` : '0m';
+                badgeColor = 'text-blue-400';
+              }
+              const waterBadge = f.water_remain < 0 && f.pid ? '<span class="text-[8px] text-amber-400 font-medium block">Dürstet!</span>' : '';
+              return `
+                <div class="p-1.5 rounded text-center border text-[11px] ${borderBgClass}">
+                  <span class="block text-[9px] font-mono text-slate-500">#${f.pos}</span>
+                  <span class="font-bold block truncate">${f.pid ? `PID ${f.pid}` : '—'}</span>
+                  <span class="block text-[9px] ${badgeColor} mt-0.5">${badgeText}</span>
+                  ${waterBadge}
+                </div>
+              `;
+            }).join('');
+          } else {
+            grid.innerHTML = '<div class="p-3 text-center text-slate-500 col-span-full">Keine Beete gefunden.</div>';
+          }
+        }
+
+        // Nursery slots
+        const nurseryEl = document.getElementById('fmNurseryList');
+        if (nurseryEl && fm.details && fm.details.nursery_slots) {
+          const slots = fm.details.nursery_slots;
+          if (slots.length > 0) {
+            nurseryEl.innerHTML = slots.map(s => `
+              <div class="p-2 rounded text-center border text-[11px] ${s.is_ready ? 'bg-amber-950/60 border-amber-500 text-amber-300' : (s.pid ? 'bg-slate-950 border-slate-700 text-slate-300' : (s.block ? 'bg-slate-950/40 border-slate-900 text-slate-600' : 'bg-slate-900 border-dashed border-slate-700 text-slate-400'))}">
+                <span class="block text-[9px] font-mono text-slate-500">Slot ${s.slot_id}</span>
+                <span class="font-semibold block truncate">${s.pid ? `PID ${s.pid}` : (s.block ? 'Gesperrt' : 'Frei')}</span>
+                <span class="text-[9px] ${s.is_ready ? 'text-amber-400 font-bold' : 'text-slate-400'}">${s.is_ready ? 'Abholbereit!' : (s.remain > 0 ? `${Math.round(s.remain/60)}m` : '—')}</span>
+              </div>
+            `).join('');
+          } else {
+            nurseryEl.innerHTML = '<div class="p-2 text-center text-slate-500 col-span-full text-xs">Keine Werkstattslots aktiv.</div>';
+          }
+        }
+
+        // Display slots
+        const displayEl = document.getElementById('fmDisplaySlots');
+        if (displayEl && fm.details && fm.details.display_slots) {
+          const dSlots = fm.details.display_slots;
+          displayEl.innerHTML = dSlots.map(s => `
+            <div class="p-1.5 rounded text-center border text-[10px] ${s.pid ? 'bg-slate-950 border-slate-700 text-slate-300' : 'bg-slate-900/50 border-slate-800 text-slate-600'}">
+              <span class="block text-[8px] text-slate-500 font-mono">Schau-Slot ${s.slot_id}</span>
+              <span class="font-medium">${s.pid ? `PID ${s.pid}` : 'Leer'}</span>
+              <span class="block text-[8px] text-purple-400">${s.points ? `${s.points} Pkt` : '—'}</span>
             </div>
           `).join('');
+        }
+
+        // Farmis list
+        const farmisEl = document.getElementById('fmFarmisList');
+        if (farmisEl && fm.details) {
+          const farmis = fm.details.waiting_farmis || [];
+          if (farmis.length > 0) {
+            farmisEl.innerHTML = farmis.map(f => `
+              <div class="bg-slate-950 border border-slate-800 p-2 rounded text-xs flex justify-between items-center">
+                <div>
+                  <span class="font-medium text-slate-200">Farmi #${f.id}</span>
+                  <span class="text-[10px] text-slate-400 ml-1.5">${f.name || 'Markt-Kunde'}</span>
+                </div>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Wartet</span>
+              </div>
+            `).join('');
+          } else {
+            farmisEl.innerHTML = '<div class="p-2 text-center text-slate-500 text-xs">Keine wartenden Marktkunden.</div>';
+          }
         }
       } catch (e) {
         console.error("Farmersmarket fetch error", e);

@@ -1,7 +1,7 @@
 ---
 title: Modul FarmersMarket - Source-Code & Schnittstellen
 author: System
-date: 2026-09-13
+date: 2026-09-23
 type: module
 description: Detaillierte Dokumentation von Marktplatz, Blumengestecken (Nursery), 36 Blumenbeeten (FlowerArea), Schauslots (FlowerSlots), Marktkunden (Farmis) und Tierzucht (PetBreed).
 tags: [module, farmersmarket, nursery, flowerarea, flowerslots, farmis, petbreed, interfaces]
@@ -21,9 +21,9 @@ Alle Aktionen des Bauernmarkts laufen über den Endpunkt `farm.php` auf dem jewe
 | `farm` | `getfarms` | `farm=1, position=0` | Liefert den kompletten `updateblock.farmersmarket` Zustand (kein separates Init nötig) |
 | `farm` | `nursery_harvest` | `farm=1, position=1, id={slot}, slot={slot}` | Fertiges Gesteck aus Slot abholen |
 | `farm` | `nursery_startproduction` | `farm=1, position=1, id={pid}, pid={pid}, slot={slot}` | Produktion eines Gestecks starten |
-| `farm` | `flowerarea_harvest` | `farm=1, position=1, set={pos}:{pid}` | Reife Blume auf Beet `{pos}` ernten |
-| `farm` | `flowerarea_plant` | `farm=1, position=1, set={pos}:{pid},` | Samen `{pid}` auf Beet `{pos}` pflanzen |
-| `farm` | `flowerarea_water_all` | `farm=1, position=1` | Alle bepflanzten Beete der Blumenwiese gießen |
+| `farm` | `flowerarea_harvest_all` | `farm=1, position=1` | Gesamte Blumenwiese auf einmal abernten |
+| `farm` | `flowerarea_autoplant` | `farm=1, position=1, set=0, pid={pid}` | Gesamte Blumenwiese komplett mit Blumensorte `{pid}` bepflanzen |
+| `farm` | `flowerarea_water_all` | `farm=1, position=1` | Alle bepflanzten Beete der Blumenwiese auf einmal gießen |
 | `farm` | `flowerslot_remove` | `farm=1, position=1, set={slot}:1` | Verwelktes Gesteck aus Schau-Slot entfernen |
 | `farm` | `flowerslot_water` | `farm=1, position=1, set={slot}:1` | Gesteck im Schau-Slot gießen |
 | `farm` | `flowerslot_plant` | `farm=1, position=1, set=1:{pid}` | Neues Gesteck im Schau-Slot ausstellen |
@@ -66,16 +66,39 @@ app/modules/farmersmarket/
   Bereits in aktiven Slots laufende Produktionen werden berücksichtigt, sodass keine doppelten Gestecke parallel gestartet werden, solange der Bedarf gedeckt ist.
 
 ### 3.2 Blumenwiese (`FlowerAreaService`)
+
 - **36 Beete im 6x6-Raster:**
-  Die 36 Beete sind für 6 verschiedene Blumensorten à 6 Beete optimiert.
-- **Diversitäts-Algorithmus:**
-  Es werden Blumensamen aus dem Lager (Kategorie `'fl'`) bevorzugt, die aktuell **noch nicht** auf der Blumenwiese wachsen. Erst wenn alle verfügbaren Sorten bereits wachsen, wird auf bestehende Sorten mit den geringsten Beständen zurückgegriffen.
-- **Filter für reguläre Samen (`price > 0`):**
-  Sonderitems oder nicht auf der Blumenwiese pflanzbare Blumen (z. B. *Tigerlilie* PID 189 mit Preis `0.0`) werden ignoriert, um Fehlerantworten (`datablock: 0`) des Spielservers zu verhindern.
+  Die Blumenwiese in Teichlingen (Dorf 2) umfasst 36 Beete (`FlowerField`, Position 1 bis 36).
+- **Zustandsmodell & Server-Parsing (`updateblock.farmersmarket.flower_area`):**
+  - **Belegte Beete:** Der Server liefert ein Dictionary der Positionen `"1"` bis `"36"` mit Feldeigenschaften (`pid`, `remain`, `water_remain`, `duration`, `createdate`).
+  - **Vollständig abgeräumte Wiese:** Nach einer Gesamternte (`flowerarea_harvest_all`) liefert der Server ein leeres Array (`"flower_area": []`). Der Service fängt diesen Fall robust ab und initialisiert 36 leere Beete (`pid=None, remain=0, water_remain=0`).
+  - **Status-Kriterien:**
+    - `remain < 0`: Pflanze ist ausgewachsen und erntereif (`field.is_ready`).
+    - `water_remain < 0`: Beet ist trocken und muss bewässert werden (`field.needs_water`).
+    - `pid is None`: Beet ist unbepflanzt (`field.is_empty`).
+- **Batch-Automatisierungslogik (Server-optimiert via `farm=1, position=1`):**
+  - **Gesamternte (`harvest` via `mode=flowerarea_harvest_all`):**
+    - Erntet alle bepflanzten Beete der Wiese mit einer einzigen AJAX-Transaktion ab.
+    - **Synchronitäts-Schutz:** Die Ernte wird nur ausgeführt, wenn **ausnahmslos alle** bepflanzten Beete erntereif sind (`all(f.is_ready for f in planted)`). Dies verhindert das vorzeitige Abräumen unfertiger Pflanzen und hält die Wachstumszyklen aller 36 Beete synchron.
+  - **Vollflächiges Anpflanzen (`plant` via `mode=flowerarea_autoplant&set=0&pid={pid}`):**
+    - Sind Beete frei (`is_empty`), bepflanzt der Autoplant-Befehl alle freien Beete auf einen Schlag mit derselben Blumensorte.
+    - **Lager-Nivellierung (`_get_best_flower_seed`):** Wählt die Blumensorte (Kategorie `'fl'`), von der aktuell der **geringste positive Lagerbestand** (`amount > 0`) vorhanden ist. Dadurch werden Blumen gleichmäßig nachproduziert und Bestände ausgeglichen.
+    - **Coin- & Sonderitem-Filter (`price > 0`):** Spezial-Items oder nicht regulär pflanzbare Blumen (z. B. *Tigerlilie* PID 189 mit Preis `0.0`) werden ausgeschlossen, um Serverfehler (`datablock: 0`) zu verhindern.
+  - **Gesamtbewässerung (`water` via `mode=flowerarea_water_all`):**
+    - Bewässert alle bepflanzten Beete der Blumenwiese auf einmal (setzt `water_remain` auf 86.400 s).
+    - Wird ausgeführt, sobald mindestens ein bepflanztes Beet Wasser benötigt (`any(f.needs_water for f in fields)`).
 - **Optimale Zyklus-Reihenfolge:**
-  1. `harvest()`: Reife Blumen abernten.
-  2. `plant()`: Freie Beete nachpflanzen.
-  3. `water()`: **Danach** alle Beete gießen, sodass frisch gesetzte Blumen sofort im selben Zyklus bewässert werden.
+  1. `harvest()`: Reife Blumen vollständig abernten.
+  2. `plant()`: Leere Beete sofort vollflächig neu bepflanzen.
+  3. `water()`: **Im Anschluss** alle Beete gießen, damit frische Saat unmittelbar im selben Worker-Durchlauf bewässert wird.
+- **Kompakte Schnittstellen-Übersicht:**
+
+  | Aktion | Parameter | Server-Verhalten & Rückgabe |
+  | :--- | :--- | :--- |
+  | **Status** | `mode=getfarms&farm=1&position=0` | Liefert `updateblock.farmersmarket.flower_area` als Positions-Map (`"1"`..`"36"`) |
+  | **Ernten** | `mode=flowerarea_harvest_all&farm=1&position=1` | Erntet alle Beete; Server antwortet mit leerem Array `flower_area: []` |
+  | **Pflanzen** | `mode=flowerarea_autoplant&farm=1&position=1&set=0&pid={pid}` | Bepflanzt alle freien Beete mit Blumensorte `{pid}` |
+  | **Gießen** | `mode=flowerarea_water_all&farm=1&position=1` | Setzt `water_remain` aller bepflanzten Beete auf 86.400 s |
 
 ### 3.3 Marktkunden & Auftragsmanager (`MarketFarmisService`, `FlowerOrderManager`)
 - **Zyklus-Isolation:**
@@ -112,7 +135,7 @@ class FarmersMarketConfig(BaseModel):
     flower_slots_enabled: bool = True
     farmis_enabled: bool = True
     pet_breed_enabled: bool = False  # Vorgegeben: Inaktiv
-    max_flower_batch: int = 6        # Max. Beete pro Pflanzschritt
+    pet_daily_parts: bool = True
 ```
 
 ---

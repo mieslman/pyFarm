@@ -85,8 +85,8 @@ Die Spielserver antworten standardmäßig im JSON-Format mit folgender Grundstru
 - `mode=inner_crop&farm={f}&position={p}[&slot={s}]`: Erntet Tier- oder Fabrikerzeugnis.
 - `mode=inner_feed&farm={f}&position={p}&pid={pid}&amount={amt}`: Füttert Tiere.
 - `mode=inner_init_production&farm={f}&position={p}&pid={pid}&amount={amt}&slot={s}`: Startet Fabrikrezept.
-- `mode=flowerarea_harvest&farm=1&position=1&set={pos}:{pid}`: Erntet Blume von Beet `{pos}` auf der Blumenwiese.
-- `mode=flowerarea_plant&farm=1&position=1&set={pos}:{pid},`: Bepflanzt Beet `{pos}` mit Blumensamen `{pid}`.
+- `mode=flowerarea_harvest_all&farm=1&position=1`: Erntet alle reifen Blumenbeete auf der Blumenwiese auf einmal.
+- `mode=flowerarea_autoplant&farm=1&position=1&set=0&pid={pid}`: Bepflanzt alle freien Beete der Blumenwiese vollständig mit Blumensamen `{pid}`.
 - `mode=flowerarea_water_all&farm=1&position=1`: Bewässert alle bepflanzten Beete der Blumenwiese.
 - `mode=nursery_harvest&farm=1&position=1&id={slot}&slot={slot}`: Erntet fertiges Gesteck aus Gärtnerei-Slot.
 - `mode=nursery_startproduction&farm=1&position=1&id={pid}&pid={pid}&slot={slot}`: Startet Gesteckproduktion.

@@ -79,12 +79,12 @@ class FlowerField(BaseModel):
     @property
     def is_ready(self) -> bool:
         """Flower is fully grown and ready to harvest."""
-        return not self.is_empty and self.remain <= 0
+        return not self.is_empty and self.remain < 0
 
     @property
     def needs_water(self) -> bool:
         """Flower needs watering to grow faster."""
-        return not self.is_empty and self.water_remain <= 0 and self.remain > 0
+        return not self.is_empty and self.water_remain < 0
 
 
 class FlowerAreaState(BaseModel):

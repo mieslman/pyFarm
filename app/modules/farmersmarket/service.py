@@ -171,7 +171,7 @@ class FarmersMarketService:
             pet_breed_status=pb_status,
             details={
                 "nursery_slots": [s.model_dump() for s in self.nursery.state.slots.values()],
-                "flower_fields": [f.model_dump() for f in fields[:12]],  # first 12 preview
+                "flower_fields": [f.model_dump() for f in fields],
                 "display_slots": [s.model_dump() for s in self.flower_slots.state.slots.values()],
                 "waiting_farmis": [f.model_dump() for f in self.farmis.farmis if f.status == 0],
             },

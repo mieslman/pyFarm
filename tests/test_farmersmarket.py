@@ -95,36 +95,54 @@ async def test_nursery_harvest_and_produce(fast_client: MFFGameClient):
 async def test_flower_area_harvest_water_plant(fast_client: MFFGameClient):
     """Test Blumenwiese (FlowerArea) harvesting, watering, and planting flowers."""
     fast_client.rid = "test_rid"
-    stock = DummyStockService({171: 10})  # 10x Blumensamen (category 'fl')
+    # 50x PID 171, 20x PID 172 (both category 'fl') -> PID 172 has smallest quantity
+    stock = DummyStockService({171: 50, 172: 20})
     flower_area = FlowerAreaService(fast_client, stock)  # type: ignore[arg-type]
 
-    raw_data = {
+    # Case 1: Partial ready - some fields remain >= 0 -> harvest should NOT trigger
+    partial_data = {
         "flower_area": {
-            "1": {"pid": "171", "remain": 0, "water_remain": 100},  # Ready
-            "2": {"pid": "172", "remain": 500, "water_remain": 0},  # Needs water
-            # Beete 3..36 leer
+            "1": {"pid": "171", "remain": -100, "water_remain": 100},  # Ready (< 0)
+            "2": {"pid": "171", "remain": 500, "water_remain": 100},   # Growing (>= 0)
         }
     }
-    flower_area.update(raw_data)
+    flower_area.update(partial_data)
+    assert await flower_area.harvest() == 0
+
+    # Case 2: All planted fields ready (remain < 0) -> harvest_all triggers
+    ready_data = {
+        "flower_area": {
+            "1": {"pid": "171", "remain": -200, "water_remain": 100},
+            "2": {"pid": "171", "remain": -50, "water_remain": 100},
+        }
+    }
+    flower_area.update(ready_data)
 
     with respx.mock:
         respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
             side_effect=[
-                httpx.Response(200, json={"datablock": [1, []]}),  # harvest
-                httpx.Response(200, json={"datablock": 1}),  # water_all
-                httpx.Response(200, json={"datablock": 1}),  # plant
-                httpx.Response(200, json={"datablock": 1}),  # plant
+                httpx.Response(200, json={"updateblock": {"farmersmarket": {"flower_area": []}}}),  # harvest_all
+                httpx.Response(200, json={"updateblock": {"farmersmarket": {"flower_area": {str(i): {"pid": "172", "remain": 14000, "water_remain": -10} for i in range(1, 37)}}}}),  # autoplant
+                httpx.Response(200, json={"updateblock": {"farmersmarket": {"flower_area": {str(i): {"pid": "172", "remain": 14000, "water_remain": 86400} for i in range(1, 37)}}}}),  # water_all
             ]
         )
 
         harvested = await flower_area.harvest()
-        assert harvested == 1
+        assert harvested == 2
+        assert all(f.is_empty for f in flower_area.state.fields.values())
 
+        # 2. Autoplant: chooses PID 172 (smallest quantity 20 vs 50)
+        planted = await flower_area.plant()
+        assert planted == 36
+        assert flower_area.state.fields[1].pid == 172
+
+        # 3. Water all: water_remain is -10 (< 0)
         watered = await flower_area.water()
         assert watered is True
+        assert flower_area.state.fields[1].water_remain == 86400
 
-        planted = await flower_area.plant(max_batch=2)
-        assert planted == 2
+        # Subsequent water call does nothing because water_remain >= 0
+        assert await flower_area.water() is False
 
 
 @pytest.mark.asyncio

@@ -115,14 +115,13 @@
     }
   },
   "farmersmarket": {
-    "enabled": false,
+    "enabled": true,
     "nursery_enabled": true,
     "flower_area_enabled": true,
     "flower_slots_enabled": true,
     "farmis_enabled": true,
     "pet_breed_enabled": false,
-    "pet_daily_parts": true,
-    "max_flower_batch": 6
+    "pet_daily_parts": true
   },
   "foodworld": {
     "enabled": true,

@@ -123,14 +123,13 @@ class FuelstationConfig(BaseModel):
 class FarmersMarketConfig(BaseModel):
     """Farmersmarket (Dorf 2) automation settings."""
 
-    enabled: bool = False
+    enabled: bool = True
     nursery_enabled: bool = True
     flower_area_enabled: bool = True
     flower_slots_enabled: bool = True
     farmis_enabled: bool = True
     pet_breed_enabled: bool = False  # Vorgegeben: Inaktiv
     pet_daily_parts: bool = True
-    max_flower_batch: int = 6  # Max. Beete pro Pflanzschritt
 
 
 class FoodworldConfig(BaseModel):
