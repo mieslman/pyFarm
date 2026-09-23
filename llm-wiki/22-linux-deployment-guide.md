@@ -232,10 +232,16 @@ sudo systemctl reload nginx
 ## 8. Wartung & Betriebsführung
 
 ### Live-Logs einsehen
-```bash
-# Systemd-Dienst-Logs in Echtzeit verfolgen
-sudo journalctl -u pyfarm -f -n 100
-```
+
+pyFarm loggt auf zwei Wegen:
+1. **Dedizierte Log-Datei (inkl. DEBUG-Level, Rotation alle 10 MB, 14 Tage Aufbewahrung):**
+   ```bash
+   tail -f -n 100 /home/manfred/pyFarm/logs/myfreefarm.log
+   ```
+2. **Systemd Journal (Service-Ebene & Standardausgabe):**
+   ```bash
+   sudo journalctl -u pyfarm -f -n 100
+   ```
 
 ### Neustart & Stopp
 ```bash

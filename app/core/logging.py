@@ -23,6 +23,12 @@ def mask_sensitive_data(data: Any) -> Any:
     return data
 
 
+from pathlib import Path
+
+LOGS_DIR = Path(__file__).resolve().parent.parent.parent / "logs"
+LOG_FILE = LOGS_DIR / "myfreefarm.log"
+
+
 def setup_logging(debug: bool = False):
     """Configure Loguru structured logging."""
     logger.remove()
@@ -34,5 +40,6 @@ def setup_logging(debug: bool = False):
     )
     log_level = "DEBUG" if debug else "INFO"
     logger.add(sys.stdout, format=log_format, level=log_level, colorize=True)
-    logger.add("logs/myfreefarm.log", rotation="10 MB", retention="14 days", level="DEBUG")
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    logger.add(str(LOG_FILE), rotation="10 MB", retention="14 days", level="DEBUG")
     return logger

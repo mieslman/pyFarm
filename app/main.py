@@ -11,6 +11,7 @@ from loguru import logger
 from app.api.router import api_router
 from app.api.websocket import loguru_websocket_sink, ws_manager, ws_router
 from app.config import settings
+from app.core.logging import setup_logging
 from app.core.settings_manager import settings_manager
 from app.worker.scheduler import worker_scheduler
 
@@ -21,6 +22,7 @@ INDEX_HTML = STATIC_DIR / "index.html"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan event handler for FastAPI startup and shutdown."""
+    setup_logging(debug=settings.debug)
     logger.info("Starting MyFreeFarm Python Engine...")
 
     # Hydrate configuration from data/user_config.json
