@@ -103,7 +103,7 @@ class FarmersMarketService:
         if self.config.flower_area_enabled:
             try:
                 f_harvested = await self.flower_area.harvest()
-                f_planted = await self.flower_area.plant(max_batch=self.config.max_flower_batch)
+                f_planted = await self.flower_area.plant()
                 f_watered = await self.flower_area.water()
                 results["flowers_harvested"] = f_harvested
                 results["flowers_planted"] = f_planted

@@ -10,9 +10,9 @@
     "auto_crop": true,
     "harvest_mode": "all",
     "farm_crops": {
-      "1": 8,
-      "3": 8,
-      "4": 113
+      "4": 113,
+      "1": 21,
+      "3": 21
     },
     "farm_categories": {
       "5": "ex",
@@ -162,8 +162,8 @@
     "enabled": true,
     "auto_claim_rewards": false,
     "friend_unr": "",
-    "preferred_field_farm": 2,
-    "preferred_field_pos": 3,
+    "preferred_field_farm": 4,
+    "preferred_field_pos": 1,
     "preferred_forestry_pos": 1
   },
   "events": {
@@ -264,5 +264,5 @@
   "poll_interval_seconds": 600,
   "anti_detection_min_delay_ms": 350,
   "anti_detection_max_delay_ms": 900,
-  "_last_saved": "2026-09-22T17:35:27.547917+00:00"
+  "_last_saved": "2026-09-26T14:06:20.917017+00:00"
 }

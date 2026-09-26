@@ -130,6 +130,7 @@ class FarmersMarketConfig(BaseModel):
     farmis_enabled: bool = True
     pet_breed_enabled: bool = False  # Vorgegeben: Inaktiv
     pet_daily_parts: bool = True
+    max_flower_batch: int = 36
 
 
 class FoodworldConfig(BaseModel):
