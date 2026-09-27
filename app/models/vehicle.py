@@ -35,6 +35,22 @@ class VehicleRouteConfig(BaseModel):
         default_factory=list,
         description="Products to supply from main farm to this outer farm (names or PIDs)",
     )
+    supply_threshold: int = Field(
+        default=500,
+        description="Default target stock / batch size to supply from main farm to outer farm",
+    )
+    reorder_threshold: int | None = Field(
+        default=None,
+        description="Optional stock level on outer farm at or below which a new supply batch is triggered (batch mode)",
+    )
+    required_product_targets: dict[str, int] = Field(
+        default_factory=dict,
+        description="Specific target stock / batch amount per product (e.g. {'Wolle': 400, 'Kohlrabi': 400})",
+    )
+    required_reorder_thresholds: dict[str, int] = Field(
+        default_factory=dict,
+        description="Specific reorder threshold per product at or below which supply is triggered (e.g. {'Wolle': 50})",
+    )
     send_partial: bool = Field(
         default=False,
         description="Send vehicle back even if capacity is not fully loaded",
@@ -64,6 +80,28 @@ class VehicleRouteConfig(BaseModel):
         description="Minimum crop safety reserve to keep on outer farm (e.g. 500 for water plants on Farm 8)",
     )
 
+    def get_product_target(self, pid: int | None = None, name: str | None = None) -> int:
+        """Return the target stock amount for a product on this route."""
+        if name and name in self.required_product_targets:
+            return self.required_product_targets[name]
+        if pid is not None:
+            if pid in self.required_product_targets:
+                return self.required_product_targets[pid]
+            if str(pid) in self.required_product_targets:
+                return self.required_product_targets[str(pid)]
+        return self.supply_threshold
+
+    def get_reorder_threshold(self, pid: int | None = None, name: str | None = None) -> int | None:
+        """Return the stock threshold below which a new supply batch is triggered, or None."""
+        if name and name in self.required_reorder_thresholds:
+            return self.required_reorder_thresholds[name]
+        if pid is not None:
+            if pid in self.required_reorder_thresholds:
+                return self.required_reorder_thresholds[pid]
+            if str(pid) in self.required_reorder_thresholds:
+                return self.required_reorder_thresholds[str(pid)]
+        return self.reorder_threshold
+
 
 class VehiclesConfig(BaseModel):
     """Overall vehicle logistics settings."""
@@ -77,7 +115,11 @@ class VehiclesConfig(BaseModel):
                 vehicle=4,
                 auto_fastest=True,
                 transport=True,
-                required_products=["Kohlrabi", "Wollknäuel"],
+                required_products=["Kohlrabi", "Wolle"],
+                supply_threshold=400,
+                reorder_threshold=50,
+                required_product_targets={"Wolle": 400},
+                required_reorder_thresholds={"Wolle": 50},
                 prioritize_quests=True,
             ),
             6: VehicleRouteConfig(
@@ -141,6 +183,10 @@ class VehicleInfo(BaseModel):
     status: str  # "ready_main", "ready_outer", "driving", "waiting_outer", "disabled"
     transport_enabled: bool
     required_products: list[str | int]
+    supply_threshold: int = 500
+    reorder_threshold: int | None = None
+    required_product_targets: dict[str, int] = Field(default_factory=dict)
+    required_reorder_thresholds: dict[str, int] = Field(default_factory=dict)
     cargo: list[VehicleCargoItem] = Field(default_factory=list)
     last_sent_cart: str = ""
     only_quest_products: bool = False

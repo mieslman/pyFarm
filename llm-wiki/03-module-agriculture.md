@@ -75,9 +75,12 @@ Das `agriculture`-Modul steuert den Ackerbau, die Sushibar-Produktion sowie den 
   - **Spezialregel Farm 10 (Mühlenprodukte):**
     - Auf Farm 10 werden für allgemeinen Ernteüberschuss (Prio 2) ausschließlich gemahlene Erzeugnisse der Gewürzmühle verladen (`"gemahlen" in name.lower()`). Ungemahlene Gewürze (Pfeffer, Zimt etc.) verbleiben auf Farm 10 als Mahlgut.
   - **Saatgut-Schutz:** Auf Außenfarmen (5, 6, 8, 10) wird zwingend eine Saatgutreserve von $120 / (\text{size\_x} \times \text{size\_y})$ Einheiten im lokalen Farm-Regal (`tempstock`) geschützt.
-  - **Versorgungs- & Dringlichkeits-Schwellenwerte:**
-    - Versorgungs-Stopp: Lieferungen von Farm 1 stoppen, wenn Außenfarm $\ge 4000$ Einheiten vorrätig hat.
-    - Dringende Rückfahrt: Fällt ein Versorgungsgut auf der Außenfarm unter 500 Einheiten, fährt das Fahrzeug sofort zurück nach Farm 1 zur Nachbeschaffung.
+  - **Konfigurierbare Versorgungs- & Dringlichkeits-Schwellenwerte:**
+    - **Dynamische Zielmengen & Batch-Größen:** Routen können mit `supply_threshold` (Standard: 500) und produktspezifischen Zielmengen in `required_product_targets` (z. B. `{"Wolle": 400}`) konfiguriert werden. Die alte starre Obergrenze von 4000 Einheiten wurde vollständig durch bedarfsorientierte Schwellenwerte ersetzt.
+    - **Sprit- & Kapazitätsschonender Batch-Modus (`reorder_threshold`):**  
+      Wird ein Meldebestand (`reorder_threshold`, z. B. 50 Einheiten) definiert, führt das Fahrzeug keine unnötigen Kleintransporte durch. Erst wenn der Außenfarm-Bestand auf oder unter diesen Schwellenwert fällt, wird eine neue volle Charge (`min(load_per_slot, target_amount)`, z. B. 400 Einheiten Wolle) geliefert. Liegt der Bestand über der Meldeschwelle, bleibt der Laderaum komplett frei für Ernte-Rücktransporte.
+    - **Dringende Rückfahrt:** Erst wenn der Außenfarmbestand eines Versorgungsguts den Meldeschwellenwert (`get_reorder_threshold(pid)`) erreicht oder unterschreitet, wird die Rückfahrt als `supplies_urgent` eingestuft.
+    - **Produkt-Aliase:** `resolve_pid()` unterstützt benutzerfreundliche Synonyme (z. B. `"Schafwolle"` $\to$ PID 11).
   - **REST-API & Dashboard:** Endpunkte `/api/v1/vehicles`, `/api/v1/vehicles/{route}/send` und interaktive Statuskarten im Web-Dashboard.
   - Externe MFF API: `farm.php?mode=map_sendvehicle&farm={current}&position=1&route={route}&vehicle={vehicle}&cart={cart}`. Cart-Format: `${slot},${pid},${amount}_`.
 
@@ -159,4 +162,8 @@ Die MyFreeFarm-Serverarchitektur trennt das Saatgut und die Erntebestände der S
   - **Lokale Saatgut-Verfügbarkeit auf Spezialfarmen:**
     - Auf Spezialfarmen (5, 6, 8, 10) prüft der Solver vor der Auswahl eines Kandidaten zwingend `stock_service.get_farm_amount(farm_id, pid) > 0`.
     - Ist für ein Quest-Produkt das lokale Regal leer (z. B. 0 Malve auf Farm 6 bei aktiver Naturschutz-Quest), wird das Produkt verworfen und stattdessen die nächste Quest-Anforderung oder die Kategorie-Pflanze mit dem geringsten Bestand gewählt, für die **tatsächlich Saatgut im lokalen Regal liegt** (z. B. Melisse). Dadurch wird verhindert, dass freigeschaltete Ackerflächen brach und unbepflanzt liegen bleiben.
+  - **Fallback-Kette & Fehlgeschlagene Saaten (`failed_pids`):**
+    - `Field` führt eine temporäre Sperrliste `failed_pids`. Schlägt ein `autoplant`-Aufruf für eine Pflanze fehl (z. B. wegen mangelndem Platz bei Mehrfeldpflanzen `size_x * size_y > 1` oder serverseitiger Ablehnung), wird die PID zu `failed_pids` hinzugefügt.
+    - `Field.serve()` durchläuft bei einem Fehlschlag sofort die dynamisch ermittelten Fallback-Kandidaten (`fallback_candidates`), bis eine alternative Pflanze erfolgreich gesät werden kann.
+    - Nach erfolgreichem Abernten (`Field.crop()`) wird `failed_pids` automatisch geleert.
 

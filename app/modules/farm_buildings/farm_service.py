@@ -221,7 +221,7 @@ class FarmService:
             try:
                 fixed_pid = self.config.farm_crops.get(field.farm_id)
                 farm_category = self.config.get_farm_category(field.farm_id)
-                plant_candidate = PlantStrategySolver.resolve_candidate(
+                plant_candidates = PlantStrategySolver.resolve_candidates(
                     strategy_name=self.config.plant_strategy,
                     stock_service=stock_service,
                     category=farm_category,
@@ -230,8 +230,11 @@ class FarmService:
                     fixed_pid=fixed_pid,
                     farm_id=field.farm_id,
                     quest5_water_candidates=quest5_water_candidates if field.farm_id == 8 else None,
+                    exclude_pids=field.failed_pids,
                 )
-                await field.serve(plant_candidate)
+                primary = plant_candidates[0] if plant_candidates else None
+                fallbacks = plant_candidates[1:] if len(plant_candidates) > 1 else []
+                await field.serve(primary, fallback_candidates=fallbacks)
             except Exception as e:  # noqa: BLE001
                 logger.opt(exception=True).error(
                     f"FarmService: Fehler bei Feld {field.farm_id}/{field.position}: {e}"

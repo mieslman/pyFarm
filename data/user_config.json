@@ -204,8 +204,18 @@
         "transport": true,
         "required_products": [
           "Kohlrabi",
-          "Wollknäuel"
+          "Wolle"
         ],
+        "supply_threshold": 400,
+        "reorder_threshold": 50,
+        "required_product_targets": {
+          "Wolle": 400,
+          "Kohlrabi": 400
+        },
+        "required_reorder_thresholds": {
+          "Wolle": 50,
+          "Kohlrabi": 50
+        },
         "send_partial": false,
         "prioritize_quests": true,
         "only_milled_surplus": false,

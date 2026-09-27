@@ -87,11 +87,11 @@ def test_vehicle_fastest_selection(fast_client, mock_map_data):
 
 @pytest.mark.asyncio
 async def test_vehicle_main_to_outer_with_supplies(fast_client):
-    """Test Leg 1: At Farm 1, vehicle loads Kohlrabi (< 4000) and dispatches map_sendvehicle."""
+    """Test Leg 1: At Farm 1, vehicle loads Kohlrabi (< 500) and dispatches map_sendvehicle."""
     stock = StockService(fast_client)
     kohlrabi = Product(pid=4, name="Kohlrabi", category="v", amount=1000, tmp_amount=0)
     stock.products = {4: kohlrabi}
-    stock.farm_temp_stocks = {5: {4: 100}}  # Outer farm has only 100 units (< 4000)
+    stock.farm_temp_stocks = {5: {4: 100}}  # Outer farm has only 100 units (deficit: 500 - 100 = 400)
 
     state = VehicleState(current=1, route=1, vehicle_type=4, remain=0)
     config = VehicleConfigData(name="Traktor", capacity=500, products=2, farms=[5], duration=1800)
@@ -108,8 +108,9 @@ async def test_vehicle_main_to_outer_with_supplies(fast_client):
         )
         res = await v.loop(stock)
         assert res is True
-        assert v.last_sent_cart == "1,4,500_"
-        assert stock.products[4].amount == 500  # 1000 - 500 deducted
+        # Loads exact needed amount 400 to reach target threshold 500
+        assert v.last_sent_cart == "1,4,400_"
+        assert stock.products[4].amount == 600  # 1000 - 400 deducted
 
 
 @pytest.mark.asyncio
@@ -679,7 +680,7 @@ async def test_vehicle_supplies_wollknaeuel_to_farm_5(fast_client):
     kohlrabi = Product(pid=153, name="Kohlrabi", category="v", amount=1000)
     wollknaeuel = Product(pid=28, name="Wollknäuel", category="e", amount=2500)
     stock.products = {153: kohlrabi, 28: wollknaeuel}
-    # Kohlrabi is already full (4080 >= 4000), Wollknäuel is 0 on Farm 5
+    # Kohlrabi is already full (4080 >= 400), Wollknäuel is 0 on Farm 5
     stock.farm_temp_stocks = {5: {153: 4080, 28: 0}}
 
     state = VehicleState(current=1, route=1, vehicle_type=4, remain=0)
@@ -689,6 +690,8 @@ async def test_vehicle_supplies_wollknaeuel_to_farm_5(fast_client):
         route=1,
         vehicle=4,
         required_products=["Kohlrabi", "Wollknäuel"],
+        supply_threshold=400,
+        required_product_targets={"Wollknäuel": 400},
         transport=True,
     )
 
@@ -703,9 +706,45 @@ async def test_vehicle_supplies_wollknaeuel_to_farm_5(fast_client):
         )
         res = await v.loop(stock)
         assert res is True
-        # Only Wollknäuel needed (Kohlrabi is full), full 1000 loaded
-        assert v.last_sent_cart == "1,28,1000_"
-        assert stock.products[28].amount == 1500  # 2500 - 1000
+        # Only Wollknäuel needed (Kohlrabi is full), loads exact 400 up to target
+        assert v.last_sent_cart == "1,28,400_"
+        assert stock.products[28].amount == 2100  # 2500 - 400
+
+
+@pytest.mark.asyncio
+async def test_vehicle_supplies_exact_remaining_delta_wollknaeuel(fast_client):
+    """Test that vehicle on Farm 1 only loads 50 Wollknäuel if Farm 5 already has 350 and target is 400."""
+    stock = StockService(fast_client)
+    wollknaeuel = Product(pid=28, name="Wollknäuel", category="e", amount=1000)
+    stock.products = {28: wollknaeuel}
+    stock.farm_temp_stocks = {5: {28: 350}}
+
+    state = VehicleState(current=1, route=1, vehicle_type=4, remain=0)
+    config = VehicleConfigData(name="Sportwagen", capacity=1000, products=2, farms=[5], duration=900)
+    route_cfg = VehicleRouteConfig(
+        farm_id=5,
+        route=1,
+        vehicle=4,
+        required_products=["Wollknäuel"],
+        supply_threshold=400,
+        required_product_targets={"Wollknäuel": 400},
+        transport=True,
+    )
+
+    v = Vehicle(fast_client, state, config, route_cfg)
+
+    with respx.mock:
+        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
+            return_value=httpx.Response(
+                200,
+                json={"datablock": 1, "updateblock": {"map": {"vehicles": {"1": {"4": {"current": 5, "remain": 900}}}}}},
+            )
+        )
+        res = await v.loop(stock)
+        assert res is True
+        # Only loads the missing 50 (400 - 350)
+        assert v.last_sent_cart == "1,28,50_"
+        assert stock.products[28].amount == 950  # 1000 - 50
 
 
 @pytest.mark.asyncio
@@ -739,6 +778,79 @@ async def test_vehicle_outer_urgent_wollknaeuel_departure(fast_client):
         res = await v.loop(stock)
         assert res is True
         assert "1,351,200_" in v.last_sent_cart
+
+
+@pytest.mark.asyncio
+async def test_vehicle_supplies_wolle_batch_400_when_stock_zero(fast_client):
+    """Test that vehicle loads full batch of 400 Wolle (PID 11) when outer stock is 0."""
+    stock = StockService(fast_client)
+    wolle = Product(pid=11, name="Wolle", category="e", amount=30000)
+    stock.products = {11: wolle}
+    stock.farm_temp_stocks = {5: {11: 0}}
+
+    state = VehicleState(current=1, route=1, vehicle_type=4, remain=0)
+    config = VehicleConfigData(name="Sportwagen", capacity=1000, products=2, farms=[5], duration=900)
+    route_cfg = VehicleRouteConfig(
+        farm_id=5,
+        route=1,
+        vehicle=4,
+        required_products=["Wolle"],
+        supply_threshold=400,
+        reorder_threshold=50,
+        required_product_targets={"Wolle": 400},
+        required_reorder_thresholds={"Wolle": 50},
+        transport=True,
+    )
+
+    v = Vehicle(fast_client, state, config, route_cfg)
+
+    with respx.mock:
+        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
+            return_value=httpx.Response(
+                200,
+                json={"datablock": 1, "updateblock": {"map": {"vehicles": {"1": {"4": {"current": 5, "remain": 900}}}}}},
+            )
+        )
+        res = await v.loop(stock)
+        assert res is True
+        # Always transports full batch of 400 Wolle
+        assert v.last_sent_cart == "1,11,400_"
+        assert stock.products[11].amount == 29600  # 30000 - 400
+
+
+@pytest.mark.asyncio
+async def test_vehicle_skips_wolle_supply_when_above_reorder_threshold(fast_client):
+    """Test that vehicle does NOT load Wolle when Farm 5 still has 392 Wolle (> 50 reorder threshold)."""
+    stock = StockService(fast_client)
+    wolle = Product(pid=11, name="Wolle", category="e", amount=30000)
+    stock.products = {11: wolle}
+    stock.farm_temp_stocks = {5: {11: 392}}
+
+    state = VehicleState(current=1, route=1, vehicle_type=4, remain=0)
+    config = VehicleConfigData(name="Sportwagen", capacity=1000, products=2, farms=[5], duration=900)
+    route_cfg = VehicleRouteConfig(
+        farm_id=5,
+        route=1,
+        vehicle=4,
+        required_products=["Schafwolle"],  # Tests alias resolution "Schafwolle" -> PID 11
+        supply_threshold=400,
+        reorder_threshold=50,
+        required_product_targets={"Schafwolle": 400},
+        required_reorder_thresholds={"Schafwolle": 50},
+        transport=True,
+    )
+
+    v = Vehicle(fast_client, state, config, route_cfg)
+
+    with respx.mock:
+        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
+            return_value=httpx.Response(200, json={"datablock": 1})
+        )
+        res = await v.loop(stock)
+        assert res is True
+        # Empty cart because Wolle is above 50 (saves fuel and capacity!)
+        assert v.last_sent_cart == ""
+        assert stock.products[11].amount == 30000
 
 
 

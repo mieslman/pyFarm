@@ -58,3 +58,7 @@ class BarnData(BaseModel):
     rest_seconds: int = Field(default=0, description="Total cycle time")
     # Feed options: pid -> feeding duration/time per unit
     feed_options: dict[int, int] = Field(default_factory=dict)
+
+    @property
+    def is_ready(self) -> bool:
+        return self.remain_seconds <= 1

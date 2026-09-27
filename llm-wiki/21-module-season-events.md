@@ -321,8 +321,8 @@ classDiagram
 | **`plant`** | Pflanzen anbauen | Auf einem konfigurierten Ackerfeld (`Field`) ernten, Pflanze mit PID `payload.pid` anbauen und gießen. |
 | **`harvest`** | Pflanzen ernten | Reife Ackerpflanzen abernten (`gardenharvest`). |
 | **`water`** | Felder gießen | Ackerflächen mit Wasser versorgen (`gardenwater`). |
-| **`startproduction`** | Tierstall starten | Tierstall mit Gebäude-ID `payload.building` füttern und Produktion starten (`inner_feed`). |
-| **`harvestproduction`** | Stallprodukte ernten | Tierställe leeren (`inner_harvest`). |
+| **`startproduction`** | Tierstall starten | Tierstall mit Gebäude-ID `payload.building` prüfen (falls `is_ready`, erst `crop()`), füttern und Produktion starten (`inner_feed`). |
+| **`harvestproduction`** | Stallprodukte ernten | Tierställe prüfen und bei `is_ready` (`remain_seconds <= 1`) leeren (`inner_crop`). |
 | **`forestryplant`** | Baum pflanzen | Im Forstbereich Baumplatz roden (`forestry?action=cancelcrop`), Setzling mit PID `payload.pid` pflanzen (`action=plant`) und gießen (`action=water`). |
 | **`forestryharvest`** | Baum fällen | Ausgewachsenen Baum im Forst fällen (`action=harvest`). |
 | **`forestrywater`** | Bäume gießen | Alle Forstelemente bewässern (`action=water`). |

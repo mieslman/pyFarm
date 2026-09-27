@@ -36,6 +36,10 @@ async def get_vehicles(_: dict[str, Any] = Depends(get_current_user)):
                 status="ready_main",
                 transport_enabled=r_cfg.transport,
                 required_products=r_cfg.required_products,
+                supply_threshold=r_cfg.supply_threshold,
+                reorder_threshold=r_cfg.reorder_threshold,
+                required_product_targets=r_cfg.required_product_targets,
+                required_reorder_thresholds=r_cfg.required_reorder_thresholds,
                 cargo=[],
                 last_sent_cart="",
             )
@@ -98,8 +102,24 @@ async def update_vehicle_config(
         route_cfg.sushi_reserve_threshold = int(config_update["sushi_reserve_threshold"])
     if "min_crop_reserve" in config_update:
         route_cfg.min_crop_reserve = int(config_update["min_crop_reserve"])
+    if "supply_threshold" in config_update:
+        route_cfg.supply_threshold = int(config_update["supply_threshold"])
+    if "reorder_threshold" in config_update:
+        route_cfg.reorder_threshold = (
+            int(config_update["reorder_threshold"])
+            if config_update["reorder_threshold"] is not None
+            else None
+        )
     if "required_products" in config_update and isinstance(config_update["required_products"], list):
         route_cfg.required_products = config_update["required_products"]
+    if "required_product_targets" in config_update and isinstance(config_update["required_product_targets"], dict):
+        route_cfg.required_product_targets = {
+            str(k): int(v) for k, v in config_update["required_product_targets"].items()
+        }
+    if "required_reorder_thresholds" in config_update and isinstance(config_update["required_reorder_thresholds"], dict):
+        route_cfg.required_reorder_thresholds = {
+            str(k): int(v) for k, v in config_update["required_reorder_thresholds"].items()
+        }
 
     v_svc = worker_scheduler.last_vehicle_service
     if v_svc:

@@ -21,8 +21,17 @@ def resolve_pid(item: str | int, stock_service: StockService | None = None) -> i
         return item
     if str(item).isdigit():
         return int(item)
+    item_str = str(item).strip()
+    aliases = {
+        "schafwolle": 11,
+        "wolle": 11,
+        "wollknäuel": 28,
+        "wollknaeuel": 28,
+    }
+    if item_str.lower() in aliases:
+        return aliases[item_str.lower()]
     if stock_service:
-        p = stock_service.get_product_by_name(str(item))
+        p = stock_service.get_product_by_name(item_str)
         if p:
             return p.pid
     return None
@@ -225,7 +234,7 @@ class Vehicle:
 
         products_to_send: list[int] = []
 
-        # 1. Standard configured required products (supply stops at 4000)
+        # 1. Standard configured required products
         for req in self.route_config.required_products:
             pid = resolve_pid(req, stock_service)
             if pid is None:
@@ -234,8 +243,16 @@ class Vehicle:
                 stock_service.get_farm_amount(self.target_farm_id, pid),
                 stock_service.get_temp_amount(self.target_farm_id, pid),
             )
-            if outer_stock < 4000:
-                products_to_send.append(pid)
+            p_obj = stock_service.get_product(pid)
+            req_name = p_obj.name if p_obj else (req if isinstance(req, str) else None)
+            target_amount = self.route_config.get_product_target(pid=pid, name=req_name)
+            reorder_thresh = self.route_config.get_reorder_threshold(pid=pid, name=req_name)
+            if reorder_thresh is not None:
+                if outer_stock <= reorder_thresh:
+                    products_to_send.append(pid)
+            else:
+                if outer_stock < target_amount:
+                    products_to_send.append(pid)
 
         # 2. Sushi-Bar ingredients (Farm 8) - only supply when reserve < threshold (500)
         if self.route_config.sushi_supply:
@@ -269,10 +286,30 @@ class Vehicle:
                 if slot > self.products_slots or load_per_slot <= 0:
                     break
 
+                outer_stock = max(
+                    stock_service.get_farm_amount(self.target_farm_id, pid),
+                    stock_service.get_temp_amount(self.target_farm_id, pid),
+                )
+                p_obj = stock_service.get_product(pid)
+                req_name = p_obj.name if p_obj else None
+                target_amount = self.route_config.get_product_target(pid=pid, name=req_name)
+                reorder_thresh = self.route_config.get_reorder_threshold(pid=pid, name=req_name)
+                if self.route_config.sushi_supply and pid not in [
+                    resolve_pid(r, stock_service) for r in self.route_config.required_products
+                ]:
+                    target_amount = self.route_config.sushi_reserve_threshold
+
+                if reorder_thresh is not None:
+                    # In batch mode, always transport the configured full batch size (e.g. 400), capped at slot capacity
+                    load_amount = min(load_per_slot, target_amount)
+                else:
+                    needed_amount = max(0, target_amount - outer_stock)
+                    load_amount = min(load_per_slot, needed_amount) if needed_amount > 0 else load_per_slot
+
                 # Ensure stock is available on Farm 1 (grasps/buys if needed)
-                await stock_service.grasp_products([{"pid": pid, "amount": load_per_slot}])
+                await stock_service.grasp_products([{"pid": pid, "amount": load_amount}])
                 avail = stock_service.get_amount(pid)
-                actual_load = min(load_per_slot, avail)
+                actual_load = min(load_amount, avail)
 
                 if actual_load > 0:
                     cart += f"{slot},{pid},{actual_load}_"
@@ -484,14 +521,23 @@ class Vehicle:
         # Check departure conditions:
         is_full = remaining_capacity == 0
         supplies_urgent = False
-        threshold = self.route_config.sushi_reserve_threshold if self.route_config.sushi_supply else 500
         for pid in required_pids:
             if pid is not None:
                 outer_stock = max(
                     stock_service.get_farm_amount(self.target_farm_id, pid),
                     stock_service.get_temp_amount(self.target_farm_id, pid),
                 )
-                if outer_stock < threshold:
+                p_obj = stock_service.get_product(pid)
+                req_name = p_obj.name if p_obj else None
+                reorder_thresh = self.route_config.get_reorder_threshold(pid=pid, name=req_name)
+                target_amount = self.route_config.get_product_target(pid=pid, name=req_name)
+                if self.route_config.sushi_supply and pid not in [
+                    resolve_pid(r, stock_service) for r in self.route_config.required_products
+                ]:
+                    reorder_thresh = self.route_config.sushi_reserve_threshold
+
+                urgency_threshold = reorder_thresh if reorder_thresh is not None else target_amount
+                if outer_stock <= urgency_threshold:
                     supplies_urgent = True
                     break
 
@@ -581,6 +627,10 @@ class Vehicle:
             status=self.get_status(),
             transport_enabled=self.route_config.transport,
             required_products=self.route_config.required_products,
+            supply_threshold=self.route_config.supply_threshold,
+            reorder_threshold=self.route_config.reorder_threshold,
+            required_product_targets=self.route_config.required_product_targets,
+            required_reorder_thresholds=self.route_config.required_reorder_thresholds,
             cargo=self.current_cargo,
             last_sent_cart=self.last_sent_cart,
             only_quest_products=self.route_config.only_quest_products,

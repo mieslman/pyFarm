@@ -26,6 +26,10 @@ class Shed:
         self.name = name
         self.barn: BarnData | None = None
 
+    @property
+    def is_ready(self) -> bool:
+        return self.barn.is_ready if self.barn else False
+
     async def update(self, body: dict[str, Any] | None = None) -> BarnData | None:
         """Fetch current barn status via inner_init and update BarnData model."""
         if not body:

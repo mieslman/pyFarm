@@ -29,6 +29,7 @@ class Field:
         self.auto_water = auto_water
         self.auto_crop = auto_crop
         self.tiles: list[PlantTile] = []
+        self.failed_pids: set[int] = set()
 
     @property
     def is_fully_planted(self) -> bool:
@@ -159,6 +160,7 @@ class Field:
                 {"mode": "cropgarden", "farm": self.farm_id, "position": self.position},
             )
             await self.update(body)
+            self.failed_pids.clear()
             return True
 
         return False
@@ -166,8 +168,18 @@ class Field:
     async def plant(self, plant: Product) -> bool:
         """Plant candidate crop on all free field tiles using autoplant."""
         if len(self.tiles) < 120:
+            required_tiles = plant.size_x * plant.size_y
+            free_tiles = 120 - len(self.tiles)
+            if free_tiles < required_tiles:
+                logger.warning(
+                    f"Feld {self.farm_id}/{self.position}: Nicht genug freie Kacheln für '{plant.name}' "
+                    f"({plant.size_x}x{plant.size_y}, benötigt: {required_tiles}, frei: {free_tiles})."
+                )
+                self.failed_pids.add(plant.pid)
+                return False
+
             logger.info(
-                f"Feld {self.farm_id}/{self.position}: Säe '{plant.name}' (PID {plant.pid}) auf {120 - len(self.tiles)} freie Kacheln..."
+                f"Feld {self.farm_id}/{self.position}: Säe '{plant.name}' (PID {plant.pid}) auf {free_tiles} freie Kacheln..."
             )
             body = await self.client.api_call(
                 "farm",
@@ -185,8 +197,10 @@ class Field:
                 logger.warning(
                     f"Feld {self.farm_id}/{self.position}: Säen von '{plant.name}' fehlgeschlagen: {err_msg}"
                 )
+                self.failed_pids.add(plant.pid)
                 return False
 
+            self.failed_pids.discard(plant.pid)
             await self.update(body)
             return True
 
@@ -210,15 +224,44 @@ class Field:
 
         return False
 
-    async def serve(self, plant_candidate: Product | None = None) -> bool:
+    async def serve(
+        self,
+        plant_candidate: Product | list[Product] | None = None,
+        fallback_candidates: list[Product] | None = None,
+    ) -> bool:
         """Execute full field lifecycle: update -> crop -> plant -> water."""
         logger.info(f"--- Feld {self.farm_id}/{self.position} ({self.name}) wird bedient ---")
         await self.update()
         cropped = await self.crop()
         if cropped:
             await self.update()
+
+        # Assemble candidate queue
+        candidates: list[Product] = []
+        if isinstance(plant_candidate, list):
+            candidates.extend(plant_candidate)
+        elif plant_candidate:
+            candidates.append(plant_candidate)
+
+        if fallback_candidates:
+            existing_pids = {c.pid for c in candidates}
+            for fb in fallback_candidates:
+                if fb.pid not in existing_pids:
+                    candidates.append(fb)
+                    existing_pids.add(fb.pid)
+
         planted = False
-        if plant_candidate:
-            planted = await self.plant(plant_candidate)
+        if not self.is_fully_planted and len(self.tiles) < 120:
+            for idx, candidate in enumerate(candidates):
+                if candidate.pid in self.failed_pids:
+                    continue
+                planted = await self.plant(candidate)
+                if planted:
+                    break
+                if idx + 1 < len(candidates):
+                    logger.info(
+                        f"Feld {self.farm_id}/{self.position}: Fallback zum nächsten Pflanzenkandidaten..."
+                    )
+
         await self.water()
         return cropped or planted

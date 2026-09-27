@@ -196,6 +196,38 @@ def test_factory_farm5_strict_local_shelf(mock_client, mock_stock_service):
     assert chosen.item_id == "2"
 
 
+def test_factory_wollspinnerei_crafts_wollknaeuel_when_wolle_present(mock_client, mock_stock_service):
+    """Verify that Wollspinnerei crafts Wollknäuel (PID 28) when Wolle (PID 11) is delivered to Farm 5."""
+    factory = Factory(client=mock_client, farm_id=5, position=5, building_id=9, name="Wollspinnerei")
+
+    # Wolle 400 on Farm 5, Wollknäuel stock 5 < Angoragarn stock 100
+    mock_stock_service.farm_stocks[5] = {11: 400, 151: 50, 28: 5, 152: 100}
+
+    mock_data = {
+        "datablock": [
+            1,
+            {
+                "farm": "5",
+                "position": 5,
+                "buildingid": "9",
+                "level": "4",
+                "products": {
+                    "1": [0, [[11, 8]], [28, 24], 5000, 153000, 27, 9],
+                    "2": [0, [[151, 5]], [152, 20], 7750, 165240, 38, 9],
+                },
+                "slots": {"1": []},
+            },
+        ]
+    }
+    pytest.importorskip("asyncio").run(factory.update(body=mock_data))
+
+    chosen = factory.select_recipe(stock_service=mock_stock_service)
+    assert chosen is not None
+    # Chooses Recipe 1 (Wollknäuel) because Wolle is present and Wollknäuel stock (5) < Angoragarn (100)
+    assert chosen.output_pid == 28
+    assert chosen.item_id == "1"
+
+
 @pytest.mark.asyncio
 async def test_factory_harvest_and_produce(mock_client, mock_stock_service):
     """Verify harvesting a ready slot and producing in an empty slot."""

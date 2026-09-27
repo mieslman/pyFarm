@@ -12,7 +12,7 @@ from app.modules.seasonpass.handlers.crops import HarvestTaskHandler, PlantTaskH
 from app.modules.seasonpass.handlers.defaults import NoOpTaskHandler
 from app.modules.seasonpass.handlers.forestry import ForestryHarvestTaskHandler, ForestryPlantTaskHandler
 from app.modules.seasonpass.handlers.misc import FarmiTaskHandler, FriendVisitTaskHandler, WeatherTaskHandler
-from app.modules.seasonpass.handlers.sheds import StartProductionTaskHandler
+from app.modules.seasonpass.handlers.sheds import HarvestProductionTaskHandler, StartProductionTaskHandler
 from app.modules.seasonpass.task_registry import get_registered_types, get_task_handler
 from app.services.stock_service import StockService
 from app.worker.scheduler import worker_scheduler
@@ -337,3 +337,67 @@ def test_seasonpass_api_endpoints():
     status_data = status_res.json()
     assert "config" in status_data
     assert "summary" in status_data
+
+
+@pytest.mark.asyncio
+async def test_shed_harvest_production_task_and_is_ready():
+    """Verify BarnData.is_ready property and HarvestProductionTaskHandler execution without AttributeError."""
+    from app.models.farm import BarnData
+    from app.modules.farm_buildings.farm_service import FarmService
+    from app.modules.farm_buildings.shed import Shed
+
+    # 1. Test BarnData.is_ready property
+    ready_barn = BarnData(
+        farm_id=1, position=2, building_id=2, product_id=9, animals_count=10, remain_seconds=0
+    )
+    not_ready_barn = BarnData(
+        farm_id=1, position=2, building_id=2, product_id=9, animals_count=10, remain_seconds=3600
+    )
+    assert ready_barn.is_ready is True
+    assert not_ready_barn.is_ready is False
+
+    # 2. Test HarvestProductionTaskHandler execution with ready shed
+    client = MFFGameClient(server=1, username="test", password="pwd")
+    client.rid = "test_rid"
+    farm_svc = FarmService(client)
+
+    shed = Shed(client, farm_id=1, position=2, building_id=2, name="Hühnerstall")
+    shed.barn = ready_barn
+    farm_svc.sheds = [shed]
+
+    task = SeasonPassTask(
+        id="629998",
+        type="harvestproduction",
+        payload={"building": 2, "count": 1, "points": 100, "done": 0},
+    )
+    handler = HarvestProductionTaskHandler(task=task, client=client, farm_service=farm_svc)
+
+    with respx.mock:
+        # Mock shed update (inner_init)
+        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php", params__contains={"mode": "inner_init"}).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "datablock": [
+                        1,
+                        {"1": {"2": {"pid": 9, "animals": {"amount": 10}, "remain": 0, "rest": 7200, "feed": {}}}},
+                    ]
+                },
+            )
+        )
+        # Mock shed crop (inner_crop)
+        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php", params__contains={"mode": "inner_crop"}).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "datablock": [
+                        1,
+                        {"1": {"2": {"pid": 9, "animals": {"amount": 10}, "remain": 7200, "rest": 7200, "feed": {}}}},
+                    ]
+                },
+            )
+        )
+
+        success = await handler.run()
+        assert success is True
+
