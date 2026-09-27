@@ -9,6 +9,14 @@ class InsectNicheSlot(BaseModel):
     level: int = 1
     population: int = 0
     happiness: float = 0.0
+    happiness_decay: int = 0
+    min_happiness: float = 0.0
+    max_happiness: float = 0.0
+    population_gain: int = 0
+    population_loss: int = 0
+    plants: dict[int, float] = Field(default_factory=dict)
+    reward_money: float = 0.0
+    reward_points: float = 0.0
 
 
 class InsectStockSlot(BaseModel):
@@ -68,6 +76,8 @@ class InsectHotelSnapshot(BaseModel):
     checkout: InsectCheckout = Field(default_factory=InsectCheckout)
     total_population: int = 0
     last_updated: Optional[str] = None
+    target_pids: list[int] = Field(default_factory=list)
+    current_strategy: str = ""
 
 
 class InsectHotelSummary(BaseModel):
@@ -81,4 +91,7 @@ class InsectHotelSummary(BaseModel):
     checkout_points: int = 0
     checkout_money_limit: float = 0.0
     checkout_points_limit: int = 0
+    strategy: str = ""
+    target_pids: list[int] = Field(default_factory=list)
+    endangered_species: list[str] = Field(default_factory=list)
     last_updated: Optional[str] = None

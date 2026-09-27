@@ -269,32 +269,94 @@ async def test_insecthotel_refill_with_auto_buy_feed(
 
 
 # ---------------------------------------------------------------------------
-# 4. Service Serve Orchestration
+# 4. Service Serve Orchestration & Dynamic Rotation
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_insecthotel_serve(dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch):
     service = InsectHotelService(dummy_client)
-    stock_mock = MockStockService({19: 500, 20: 500})
+    stock_mock = MockStockService({19: 500, 20: 500, 34: 500, 35: 500})
+    calls = []
 
     async def mock_api_call(endpoint: str, params: dict[str, Any], **kwargs):
+        calls.append((endpoint, params))
         mode = params.get("mode")
         if mode == "insecthotel_init":
             return MOCK_INSECTHOTEL_INIT
-        elif mode in ("insecthotel_collect_checkout", "insecthotel_set_stockslot"):
+        elif mode in ("insecthotel_collect_checkout", "insecthotel_set_stockslot", "insecthotel_delete_stockslot"):
             return {"datablock": 1}
         return {}
 
     monkeypatch.setattr(dummy_client, "api_call", mock_api_call)
 
+    # Test serve with dynamic rotation enabled
     res = await service.serve(stock_service=stock_mock)
     assert res["active"] is True
     assert res["total_population"] == 778 + 816
     assert res["collected_checkout"] is True
-    assert res["refilled_slots"] == 1
+    assert res["rotated_slots"] == 2
+    assert res["refilled_slots"] == 2
+    assert "Wildbienen" in res["endangered_species"]
 
     summary = service.get_summary()
     assert summary.active is True
     assert summary.hotel_id == "154"
+    assert summary.strategy == "dynamic_rotation"
+
+
+@pytest.mark.asyncio
+async def test_insecthotel_dynamic_rotation_switch(dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch):
+    from app.modules.insecthotel.planner import plan_target_pids
+
+    service = InsectHotelService(dummy_client)
+
+    # 1. State where Wildbienen is endangered (< 20) -> should choose rescue set with Erdbeeren (20)
+    async def mock_init_low(endpoint: str, params: dict[str, Any], **kwargs):
+        return MOCK_INSECTHOTEL_INIT
+
+    monkeypatch.setattr(dummy_client, "api_call", mock_init_low)
+    snap_low = await service.init_remote()
+    target_low = plan_target_pids(snap_low, max_slots=8)
+    assert 20 in target_low  # Erdbeeren included to rescue Wildbienen!
+    assert 24 not in target_low
+
+    # 2. State where all populations are healthy (> 50) -> should choose triple growth set with Blumenkohl (24)
+    healthy_init = {
+        "datablock": 1,
+        "updateblock": {
+            "map": {
+                "insecthotel": {
+                    "data": {
+                        "id": "154",
+                        "slots": {
+                            "1": {"level": 6, "population": 800, "happiness": 55.0},
+                            "2": {"level": 6, "population": 1000, "happiness": 52.0},
+                        },
+                        "stock": {
+                            "1": {"level": 2, "pid": 19, "amount": 100},
+                            "2": {"level": 2, "pid": 20, "amount": 100},
+                        },
+                        "checkout": {"level": 4, "money": 0.0, "points": 0},
+                    },
+                    "config": {
+                        "slots": {
+                            "1": {"name": "Wildbienen", "population_limit": [20, 50], "happiness_decay": 4},
+                            "2": {"name": "Ohrwürmer", "population_limit": [25, 50], "happiness_decay": 3},
+                        },
+                        "stock_level": {"2": {"capacity": 120}},
+                        "checkout_level": {"4": {"limit": {"money": 17500.0, "points": 350000}}},
+                    },
+                }
+            }
+        },
+    }
+
+    async def mock_init_healthy(endpoint: str, params: dict[str, Any], **kwargs):
+        return healthy_init
+
+    monkeypatch.setattr(dummy_client, "api_call", mock_init_healthy)
+    snap_healthy = await service.init_remote()
+    target_healthy = plan_target_pids(snap_healthy, max_slots=8)
+    assert 24 in target_healthy  # Blumenkohl included for max growth of Schwebfliegen + Schmetterling!
 
 
 # ---------------------------------------------------------------------------
@@ -322,6 +384,7 @@ async def test_insecthotel_api(auth_headers: dict[str, str], dummy_client: MFFGa
         assert "config" in data
         assert "summary" in data
         assert data["summary"]["active"] is True
+        assert "strategy" in data["config"]
 
         # 2. GET /api/v1/insecthotel/settings
         res = await client.get("/api/v1/insecthotel/settings", headers=auth_headers)
@@ -331,19 +394,51 @@ async def test_insecthotel_api(auth_headers: dict[str, str], dummy_client: MFFGa
         # 3. PUT /api/v1/insecthotel/settings
         res = await client.put(
             "/api/v1/insecthotel/settings",
-            json={"checkout_threshold_percent": 0.75, "min_stock_reserve": 100},
+            json={
+                "checkout_threshold_percent": 0.75,
+                "min_stock_reserve": 100,
+                "strategy": "dynamic_rotation",
+                "auto_rotate_slots": True,
+            },
             headers=auth_headers,
         )
         assert res.status_code == 200
         assert res.json()["config"]["checkout_threshold_percent"] == 0.75
         assert res.json()["config"]["min_stock_reserve"] == 100
+        assert res.json()["config"]["strategy"] == "dynamic_rotation"
 
         # 4. POST /api/v1/insecthotel/action/checkout
         res = await client.post("/api/v1/insecthotel/action/checkout?force=true", headers=auth_headers)
         assert res.status_code == 200
         assert "collected" in res.json()
 
-        # 5. POST /api/v1/insecthotel/action/refill
+        # 5. POST /api/v1/insecthotel/action/rotate
+        res = await client.post("/api/v1/insecthotel/action/rotate?force=true", headers=auth_headers)
+        assert res.status_code == 200
+        assert "result" in res.json()
+
+        # 6. POST /api/v1/insecthotel/action/refill
         res = await client.post("/api/v1/insecthotel/action/refill?force=true", headers=auth_headers)
         assert res.status_code == 200
         assert "refilled_slots" in res.json()
+
+
+def test_planner_mathematical_guarantees():
+    from app.modules.insecthotel.planner import (
+        RESCUE_TWIN_GROWTH_PIDS,
+        TRIPLE_GROWTH_PIDS,
+        calculate_species_net_happiness,
+    )
+
+    # 1. TRIPLE_GROWTH_PIDS: Schmetterling, Marienkäfer, and Schwebfliegen MUST all be positive!
+    triple_set = set(TRIPLE_GROWTH_PIDS)
+    assert calculate_species_net_happiness("6", triple_set) == 1.75   # Schmetterling (+1.75)
+    assert calculate_species_net_happiness("4", triple_set) == 0.75   # Marienkäfer (+0.75)
+    assert calculate_species_net_happiness("3", triple_set) == 0.50   # Schwebfliegen (+0.50)
+
+    # 2. RESCUE_TWIN_GROWTH_PIDS: Wildbienen MUST be positive (+0.4) and Ohrwürmer neutral (0.0)!
+    rescue_set = set(RESCUE_TWIN_GROWTH_PIDS)
+    assert calculate_species_net_happiness("1", rescue_set) == 0.40   # Wildbienen (+0.40) -> rescues bees!
+    assert calculate_species_net_happiness("2", rescue_set) == 0.00   # Ohrwürmer (0.00) -> 0 loss!
+    assert calculate_species_net_happiness("6", rescue_set) == 1.25   # Schmetterling (+1.25) -> fast growth!
+    assert calculate_species_net_happiness("4", rescue_set) == 0.75   # Marienkäfer (+0.75) -> growth!

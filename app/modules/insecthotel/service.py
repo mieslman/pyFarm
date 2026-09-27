@@ -11,10 +11,15 @@ from app.modules.insecthotel.models import (
     InsectNicheSlot,
     InsectStockSlot,
 )
+from app.modules.insecthotel.planner import (
+    INSECT_PRODUCTS,
+    get_endangered_species,
+    plan_target_pids,
+)
 
 
 class InsectHotelService:
-    """Manages the Insect Hotel: monitoring populations, refilling food stock, and collecting checkout."""
+    """Manages the Insect Hotel: monitoring populations, dynamic slot rotation, refilling food stock, and collecting checkout."""
 
     def __init__(self, client: MFFGameClient):
         self.client = client
@@ -42,12 +47,35 @@ class InsectHotelService:
                 name = slot_cfg.get("name", f"Slot {slot_id}")
                 pop = int(s_info.get("population", 0))
                 total_pop += pop
+
+                pop_limits = slot_cfg.get("population_limit", [0, 0])
+                min_h = float(pop_limits[0]) if len(pop_limits) > 0 else 0.0
+                max_h = float(pop_limits[1]) if len(pop_limits) > 1 else 0.0
+                decay = int(slot_cfg.get("happiness_decay", 0))
+                p_gain = int(slot_cfg.get("population_gain", 0))
+                p_loss = int(slot_cfg.get("population_loss", 0))
+
+                plants_dict: dict[int, float] = {}
+                for p_id_str, p_cfg in slot_cfg.get("plants", {}).items():
+                    if str(p_id_str).isdigit():
+                        plants_dict[int(p_id_str)] = float(p_cfg.get("happiness", 0.0))
+
+                reward = slot_cfg.get("reward", {})
+
                 slots_map[str(slot_id)] = InsectNicheSlot(
                     slot_id=str(slot_id),
                     name=name,
                     level=int(s_info.get("level", 1)),
                     population=pop,
                     happiness=float(s_info.get("happiness", 0.0)),
+                    happiness_decay=decay,
+                    min_happiness=min_h,
+                    max_happiness=max_h,
+                    population_gain=p_gain,
+                    population_loss=p_loss,
+                    plants=plants_dict,
+                    reward_money=float(reward.get("money", 0.0)),
+                    reward_points=float(reward.get("points", 0.0)),
                 )
 
             # 2. Parse feeding stock slots
@@ -61,11 +89,13 @@ class InsectHotelService:
                 pid = int(raw_pid) if raw_pid is not None and str(raw_pid).isdigit() else None
                 amt = int(st_info.get("amount", 0))
 
-                p_name = f"PID {pid}" if pid else "Leer"
-                if pid and stock_service:
-                    p_obj = stock_service.get_product(pid)
-                    if p_obj:
-                        p_name = p_obj.name
+                p_name = "Leer"
+                if pid:
+                    p_name = INSECT_PRODUCTS.get(pid, f"PID {pid}")
+                    if stock_service and hasattr(stock_service, "get_product"):
+                        p_obj = stock_service.get_product(pid)
+                        if p_obj:
+                            p_name = p_obj.name
 
                 stock_slots_map[str(stock_id)] = InsectStockSlot(
                     slot_id=str(stock_id),
@@ -99,6 +129,18 @@ class InsectHotelService:
                 total_population=total_pop,
                 last_updated=datetime.now().isoformat(),
             )
+
+            # Compute target plan
+            target_pids = plan_target_pids(
+                snapshot=snapshot,
+                max_slots=len(stock_slots_map),
+                strategy=settings.insecthotel.strategy,
+                priority_species=settings.insecthotel.priority_species,
+                min_safety_happiness=settings.insecthotel.min_safety_happiness,
+            )
+            snapshot.target_pids = target_pids
+            snapshot.current_strategy = settings.insecthotel.strategy
+
             self.snapshot = snapshot
             return snapshot
 
@@ -145,6 +187,91 @@ class InsectHotelService:
             logger.error(f"InsectHotelService: Fehler beim Kassenleeren: {e}")
             return False
 
+    async def rotate_slots(self, stock_service: Optional[Any] = None, force: bool = False) -> dict[str, Any]:
+        """Align food stock compartments with optimal target PIDs based on current strategy and species health."""
+        if not self.snapshot:
+            return {"rotated": 0, "swapped": []}
+
+        if not settings.insecthotel.auto_rotate_slots and not force:
+            logger.debug("InsectHotelService: Automatische Futterfach-Rotation ist deaktiviert.")
+            return {"rotated": 0, "swapped": []}
+
+        target_pids = plan_target_pids(
+            snapshot=self.snapshot,
+            max_slots=len(self.snapshot.stock_slots),
+            strategy=settings.insecthotel.strategy,
+            priority_species=settings.insecthotel.priority_species,
+            min_safety_happiness=settings.insecthotel.min_safety_happiness,
+        )
+        self.snapshot.target_pids = target_pids
+
+        current_slots = self.snapshot.stock_slots
+        assigned_pids = {slot.pid for slot in current_slots.values() if slot.pid and slot.pid in target_pids}
+        missing_pids = [p for p in target_pids if p not in assigned_pids]
+
+        if not missing_pids:
+            logger.debug(
+                f"InsectHotelService: Alle {len(assigned_pids)} Futterfächer entsprechen bereits den optimalen Ziel-Pflanzen."
+            )
+            return {"rotated": 0, "swapped": []}
+
+        logger.info(
+            f"InsectHotelService: Starte Futterfach-Rotation (Fehlende Ziel-Pflanzen: {[INSECT_PRODUCTS.get(p, p) for p in missing_pids]})..."
+        )
+
+        candidates_empty = [s for s in current_slots.values() if not s.pid or s.amount <= 0]
+        candidates_unneeded = [
+            s for s in current_slots.values() if s.pid and s.pid not in target_pids and s not in candidates_empty
+        ]
+        slots_to_change = candidates_empty + candidates_unneeded
+
+        swapped = []
+        for slot in slots_to_change:
+            if not missing_pids:
+                break
+
+            new_pid = missing_pids.pop(0)
+            old_pid = slot.pid
+            old_name = slot.product_name
+
+            # If slot is occupied by a different crop, delete it upstream first to return food to main stock
+            if old_pid and old_pid != new_pid:
+                logger.info(
+                    f"InsectHotelService: Tausche Lagerslot {slot.slot_id}: Entferne '{old_name}' (PID {old_pid}) via delete_stockslot..."
+                )
+                try:
+                    res = await self.client.api_call(
+                        "farm",
+                        {"mode": "insecthotel_delete_stockslot", "slot": slot.slot_id},
+                    )
+                    datablock = res.get("datablock")
+                    if datablock == 1 or (isinstance(datablock, list) and datablock and datablock[0] == 1):
+                        logger.info(f"InsectHotelService: Lagerslot {slot.slot_id} erfolgreich freigegeben.")
+                    else:
+                        logger.warning(
+                            f"InsectHotelService: Unerwartete Antwort bei delete_stockslot {slot.slot_id}: {res}"
+                        )
+                except Exception as e:
+                    logger.error(f"InsectHotelService: Fehler bei delete_stockslot {slot.slot_id}: {e}")
+                    continue
+
+            # Update slot representation
+            slot.pid = new_pid
+            slot.product_name = INSECT_PRODUCTS.get(new_pid, f"PID {new_pid}")
+            slot.amount = 0  # will be filled by refill_stock
+
+            swapped.append({
+                "slot_id": slot.slot_id,
+                "old_pid": old_pid,
+                "new_pid": new_pid,
+                "new_name": slot.product_name,
+            })
+            logger.info(
+                f"InsectHotelService: Lagerslot {slot.slot_id} neu zugewiesen an '{slot.product_name}' (PID {new_pid})."
+            )
+
+        return {"rotated": len(swapped), "swapped": swapped}
+
     async def refill_stock(self, stock_service: Optional[Any] = None, force: bool = False) -> int:
         """Refill feeding compartments if stock dropped below threshold, or if force is True."""
         if not self.snapshot:
@@ -170,7 +297,10 @@ class InsectHotelService:
                 avail = stock_service.get_stock(slot.pid)
                 usable = max(0, avail - reserve)
                 if usable < slot.missing_amount:
-                    missing_requirements.append({"pid": slot.pid, "amount": slot.missing_amount})
+                    missing_requirements.append({
+                        "pid": slot.pid,
+                        "amount": slot.missing_amount - usable,
+                    })
 
             if missing_requirements:
                 logger.info(
@@ -242,7 +372,7 @@ class InsectHotelService:
         return refilled_count
 
     async def serve(self, stock_service: Optional[Any] = None) -> dict[str, Any]:
-        """Orchestrate regular inspection, checkout collection, and stock refilling."""
+        """Orchestrate regular inspection, checkout collection, dynamic slot rotation, and stock refilling."""
         if not settings.insecthotel.enabled:
             logger.debug("InsectHotelService: Modul ist in Konfiguration deaktiviert.")
             return {"active": False, "enabled": False}
@@ -257,13 +387,23 @@ class InsectHotelService:
         if settings.insecthotel.auto_collect_checkout:
             collected = await self.collect_checkout()
 
+        rotated_info = {"rotated": 0, "swapped": []}
+        if settings.insecthotel.auto_rotate_slots:
+            rotated_info = await self.rotate_slots(stock_service=stock_service)
+
         refilled_slots = 0
         if settings.insecthotel.auto_refill_stock:
             refilled_slots = await self.refill_stock(stock_service=stock_service)
 
+        endangered = get_endangered_species(
+            snapshot,
+            min_safety_happiness=settings.insecthotel.min_safety_happiness,
+        )
+
         logger.info(
             f"========== Insektenhotel: Zyklus abgeschlossen (Population: {snapshot.total_population}, "
-            f"Kasse geleert: {collected}, Slots aufgefüllt: {refilled_slots}) =========="
+            f"Kasse geleert: {collected}, Slots rotiert: {rotated_info['rotated']}, Slots aufgefüllt: {refilled_slots}, "
+            f"Gefährdete Arten: {endangered or 'Keine'}) =========="
         )
 
         return {
@@ -271,7 +411,10 @@ class InsectHotelService:
             "hotel_id": snapshot.id,
             "total_population": snapshot.total_population,
             "collected_checkout": collected,
+            "rotated_slots": rotated_info["rotated"],
             "refilled_slots": refilled_slots,
+            "target_pids": snapshot.target_pids,
+            "endangered_species": endangered,
             "checkout_money": snapshot.checkout.money,
             "checkout_points": snapshot.checkout.points,
         }
@@ -282,6 +425,11 @@ class InsectHotelService:
             return InsectHotelSummary(active=False)
 
         chk = self.snapshot.checkout
+        endangered = get_endangered_species(
+            self.snapshot,
+            min_safety_happiness=settings.insecthotel.min_safety_happiness,
+        )
+
         return InsectHotelSummary(
             active=True,
             hotel_id=self.snapshot.id,
@@ -292,5 +440,8 @@ class InsectHotelService:
             checkout_points=chk.points,
             checkout_money_limit=chk.limit_money,
             checkout_points_limit=chk.limit_points,
+            strategy=settings.insecthotel.strategy,
+            target_pids=self.snapshot.target_pids,
+            endangered_species=endangered,
             last_updated=self.snapshot.last_updated,
         )

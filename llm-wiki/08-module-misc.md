@@ -14,16 +14,16 @@ Dieses Dokument beschreibt die spezialisierten Subsysteme und täglichen Helper-
 
 Das Insektenhotel ist ein passives Produktionsgebäude auf der Landkarte (freigeschaltet ab Level 29 für 125.000 kT), das kontinuierlich Käsetaler (kT) und Erfahrungspunkte (XP) über die Pflege von Insektenpopulationen erwirtschaftet.
 
-### 1.1 Spielmechanik & Simulationszyklus
+### 1.1 Spielmechanik & Futter-System
 - **Simulationsintervall:** Alle 4 Stunden (14.400 Sekunden) führt der Server einen Simulationsschritt durch.
 - **Fütterung & Zufriedenheit:**
-  - Jede Insektenart verbraucht spezifische Futterpflanzen aus dem Futterlager.
-  - Ausreichend Futter steigert die Zufriedenheit (`happiness`).
-  - Ohne Futter sinkt die Zufriedenheit pro Zyklus um `happiness_decay` (2–5 Punkte).
-- **Populationsdynamik & Ertrag:**
-  - Bei hoher Zufriedenheit wächst die Population (`population_gain`, +2 bis +15 Tiere/4h).
-  - Bei Nahrungsmangel sinkt die Population (`population_loss`).
-  - Jedes lebende Tier generiert pro 4h-Zyklus feste kT- und XP-Erträge (bis zu 1.70 kT und 35.2 XP pro Tier bei Schmetterlingen!).
+  - Jede der 6 Insektenarten akzeptiert genau 4 spezifische Ackerfrüchte/Gemüse/Beeren (insgesamt 12 Früchte: Radieschen 19, Erdbeeren 20, Tomaten 21, Zwiebeln 22, Spinat 23, Blumenkohl 24, Kartoffeln 26, Zucchini 31, Heidelbeeren 32, Himbeeren 33, Johannisbeeren 34, Brombeeren 35).
+  - Jede Frucht liefert bei Anwesenheit im Futterlager einen festen Zufriedenheitsbonus.
+  - Pro 4h-Zyklus verfällt die Zufriedenheit um `happiness_decay` (2 bis 5 Punkte).
+- **Populationsdynamik:**
+  - Unterhalb der Verlustgrenze (`min_happiness`, z. B. 20 bei Bienen, 50 bei Schmetterlingen) sinkt die Population um `population_loss` (-2 bis -15 Tiere/4h).
+  - Im neutralen Bereich bleibt die Population unverändert ($\pm 0$).
+  - Oberhalb der Wachstumsgrenze (`max_happiness`, z. B. 50 bei Bienen, 65 bei Schmetterlingen) wächst die Population um `population_gain` (+2 bis +15 Tiere/4h).
 - **Kasse (Checkout):**
   - Erträge sammeln sich in der Kasse (Limits je nach Level: 3.000 kT / 60.000 Punkte bis 100.000 kT / 2.000.000 Punkte).
   - Ist die Kasse voll, verfallen weitere Erträge.
@@ -33,25 +33,33 @@ Das Insektenhotel ist ein passives Produktionsgebäude auf der Landkarte (freige
 | :--- | :--- | :--- |
 | `insecthotel_init` | `mode=insecthotel_init` | Gesamtstatus (Slots, Populationen, Futterlager, Kasse) abrufen |
 | `insecthotel_set_stockslot` | `slot={id}, pid={pid}, amount={count}` | Bestimmten Futter-Lagerslot aus dem Hauptlager auffüllen |
+| `insecthotel_delete_stockslot` | `slot={id}` | Futter-Lagerslot leeren und Vorrat zurück ins Hauptlager buchen |
 | `insecthotel_collect_checkout` | `mode=insecthotel_collect_checkout` | Hotelkasse leeren und Erträge dem Spielerkonto gutschreiben |
 
 ### 1.3 Python-Architektur (`app/modules/insecthotel/`)
-- **Modelle ([`models.py`](file:///c:/Projekte/MyFreeFarm/myfreefarm/myfreefarm_python/app/modules/insecthotel/models.py)):**
-  - `InsectNicheSlot`: Nistplatz (ID, Name, Level, Population, Zufriedenheit).
+- **Modelle ([`models.py`](file:///c:/Projekte/pyFarm/app/modules/insecthotel/models.py)):**
+  - `InsectNicheSlot`: Nistplatz (ID, Name, Level, Population, Zufriedenheit, Decay, Limits, Pflanzen-Map, Ertrag).
   - `InsectStockSlot`: Futter-Lagerslot (PID, Produktname, Menge, Kapazität, Füllstand).
   - `InsectCheckout`: Kasse (kT, Punkte, Grenzwerte, Füllgrad-Berechnung).
-  - `InsectHotelSnapshot` & `InsectHotelSummary`: Runtime-Zustand und Dashboard-DTOs.
-- **Service ([`service.py`](file:///c:/Projekte/MyFreeFarm/myfreefarm/myfreefarm_python/app/modules/insecthotel/service.py)):**
+  - `InsectHotelSnapshot` & `InsectHotelSummary`: Runtime-Zustand, Ziel-PIDs, Strategie und Dashboard-DTOs.
+- **Planner & Optimierung ([`planner.py`](file:///c:/Projekte/pyFarm/app/modules/insecthotel/planner.py)):**
+  - Dynamischer Kombinations- und Rotationsplaner.
+  - Erkennt gefährdete Bestände (`get_endangered_species`) und wechselt dynamisch zwischen:
+    - **Rettungs- & Twin-Wachstumsset (`RESCUE_TWIN_GROWTH_PIDS`):** `[34, 35, 33, 26, 31, 20, 19, 22]` mit Erdbeeren (PID 20) zur Rettung von Wildbienen (+0.4) und Stabilisierung von Ohrwürmern (0.0), während Schmetterlinge (+1.25) und Marienkäfer (+0.75) wachsen.
+    - **Triple-Wachstumsset (`TRIPLE_GROWTH_PIDS`):** `[34, 35, 33, 26, 31, 24, 19, 22]` mit Blumenkohl (PID 24) für gleichzeitiges Wachstum aller 3 Zielarten (Schmetterling +1.75, Marienkäfer +0.75, Schwebfliegen +0.50).
+- **Service ([`service.py`](file:///c:/Projekte/pyFarm/app/modules/insecthotel/service.py)):**
   - `InsectHotelService`:
-    - `init_remote(stock_service)`: Snapshot aus `insecthotel_init` aufbauen.
+    - `init_remote(stock_service)`: Snapshot aus `insecthotel_init` aufbauen und Zielplan berechnen.
+    - `rotate_slots(stock_service, force=False)`: Tauscht Futterfächer via `insecthotel_delete_stockslot` und belegt freie Fächer mit Ziel-Pflanzen.
     - `refill_stock(stock_service, force=False)`: Lagerslots auffüllen, wenn der Füllstand um >20% unter die Kapazität sinkt (oder bei `force=True`). Schützt einen Mindestpuffer von 50 Einheiten im Hauptlager (`min_stock_reserve`).
     - **Automatischer Futterzukauf (`auto_buy_feed`):** Reicht der Lagerbestand im Hauptlager nach Abzug der Reserve nicht aus, um ein Futterfach vollständig zu befüllen, beschafft der Service die Fehlmengen vollautomatisch via `stock_service.grasp_products(...)` über den Spielermarkt bzw. direkt beim NPC-Saatguthändler zum offiziellen Katalogpreis.
     - `collect_checkout(force=False)`: Kasse leeren, wenn Geld oder Punkte >= 50% des Limits erreichen (oder bei manuellem Aufruf).
-    - `serve(stock_service)`: Zyklus-Abarbeitung für den Scheduler.
+    - `serve(stock_service)`: Zyklus-Abarbeitung für den Scheduler (Init $\rightarrow$ Kasse $\rightarrow$ Rotation $\rightarrow$ Auffüllen).
 - **REST-API (`app/api/endpoints/insecthotel.py`):**
-  - `GET /api/v1/insecthotel`: Status und Snapshot.
-  - `GET/PUT /api/v1/insecthotel/settings`: Konfiguration (`enabled`, `auto_refill_stock`, `auto_collect_checkout`, `refill_threshold_percent`, `checkout_threshold_percent`, `min_stock_reserve`, `auto_buy_feed`).
+  - `GET /api/v1/insecthotel`: Status, Snapshot, Strategie und gefährdete Arten.
+  - `GET/PUT /api/v1/insecthotel/settings`: Konfiguration (`enabled`, `strategy`, `priority_species`, `auto_rotate_slots`, `min_safety_happiness`, `auto_refill_stock`, `auto_collect_checkout`, `refill_threshold_percent`, `checkout_threshold_percent`, `min_stock_reserve`, `auto_buy_feed`).
   - `POST /api/v1/insecthotel/action/checkout?force=true`: Manuelle Kassenleerung.
+  - `POST /api/v1/insecthotel/action/rotate?force=true`: Manuelle Futterplatz-Optimierung/Rotation.
   - `POST /api/v1/insecthotel/action/refill?force=true`: Manuelle Futterlager-Auffüllung.
 
 ---

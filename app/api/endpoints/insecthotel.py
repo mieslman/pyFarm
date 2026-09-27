@@ -75,6 +75,17 @@ async def update_insecthotel_settings(
             pass
     if "auto_buy_feed" in payload:
         cfg.auto_buy_feed = bool(payload["auto_buy_feed"])
+    if "strategy" in payload:
+        cfg.strategy = str(payload["strategy"])
+    if "priority_species" in payload and isinstance(payload["priority_species"], list):
+        cfg.priority_species = [str(x) for x in payload["priority_species"]]
+    if "auto_rotate_slots" in payload:
+        cfg.auto_rotate_slots = bool(payload["auto_rotate_slots"])
+    if "min_safety_happiness" in payload:
+        try:
+            cfg.min_safety_happiness = float(payload["min_safety_happiness"])
+        except (ValueError, TypeError):
+            pass
 
     settings_manager.save()
     logger.info(f"Insektenhotel: Konfiguration aktualisiert: {cfg.model_dump()}")
@@ -102,6 +113,28 @@ async def action_collect_checkout(
     return {
         "status": "success",
         "collected": collected,
+        "summary": ih_svc.get_summary().model_dump(),
+    }
+
+
+@insecthotel_router.post("/action/rotate", response_model=dict[str, Any])
+async def action_rotate_slots(
+    force: bool = False,
+    _: dict[str, Any] = Depends(get_current_user),
+):
+    """Trigger manual optimization and rotation of hotel feeding compartments."""
+    ih_svc = worker_scheduler.last_insecthotel_service
+    if not ih_svc:
+        raise HTTPException(
+            status_code=400,
+            detail="Insektenhotel-Service ist aktuell nicht initialisiert. Bitte erst einen Zyklus ausführen.",
+        )
+
+    stock_svc = worker_scheduler.last_stock_service
+    rotated_res = await ih_svc.rotate_slots(stock_service=stock_svc, force=force)
+    return {
+        "status": "success",
+        "result": rotated_res,
         "summary": ih_svc.get_summary().model_dump(),
     }
 

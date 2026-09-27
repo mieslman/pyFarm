@@ -215,6 +215,12 @@ class InsecthotelSettingsConfig(BaseModel):
     checkout_threshold_percent: float = 0.5
     min_stock_reserve: int = 50
     auto_buy_feed: bool = True
+    strategy: str = "dynamic_rotation"  # "dynamic_rotation", "prio_growth", "balanced", "fixed"
+    priority_species: list[str] = Field(
+        default_factory=lambda: ["Schmetterling", "Marienkäfer", "Schwebfliegen"]
+    )
+    auto_rotate_slots: bool = True
+    min_safety_happiness: float = 25.0
 
 
 class StallSettingsConfig(BaseModel):

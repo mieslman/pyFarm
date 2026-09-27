@@ -7,6 +7,11 @@ from app.modules.insecthotel.models import (
     InsectNicheSlot,
     InsectStockSlot,
 )
+from app.modules.insecthotel.planner import (
+    INSECT_PRODUCTS,
+    get_endangered_species,
+    plan_target_pids,
+)
 from app.modules.insecthotel.service import InsectHotelService
 
 __all__ = [
@@ -16,4 +21,7 @@ __all__ = [
     "InsectNicheSlot",
     "InsectStockSlot",
     "InsectCheckout",
+    "plan_target_pids",
+    "get_endangered_species",
+    "INSECT_PRODUCTS",
 ]
