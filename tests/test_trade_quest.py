@@ -98,7 +98,14 @@ async def test_trade_service_excludes_category_v(fast_client: MFFGameClient):
             "datablock": [1],
             "updateblock": {
                 "stock": {
-                    "stock": {"1": {"1": {"1": {"pid": 25, "amount": 1000}, "2": {"pid": 17, "amount": 1500}}}},
+                    "stock": {
+                        "1": {
+                            "1": {
+                                "1": {"pid": 25, "amount": 1000},
+                                "2": {"pid": 17, "amount": 1500},
+                            }
+                        }
+                    },
                     "tempstock": {},
                 },
                 "menue": {"bar": "990.00"},
@@ -359,6 +366,3 @@ async def test_trade_service_aborts_on_api_error(fast_client: MFFGameClient):
         # Should have failed on Wolle marketinit and immediately halted
         assert mock_route.call_count == 1
         assert "mode=marketinit" in str(mock_route.calls[0].request.url)
-
-
-

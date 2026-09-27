@@ -108,21 +108,23 @@ app = FastAPI(title="MyFreeFarm Companion API", version="2.0.0")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/login")
 
+
 class LoginRequest(BaseModel):
     username: str
     password: str
+
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
+
 @app.post("/api/v1/login", response_model=TokenResponse)
-async def login(credentials: LoginRequest):
-    ...
+async def login(credentials: LoginRequest): ...
+
 
 @app.get("/api/v1/plants")
-async def get_plants(category: Optional[str] = None, token: str = Depends(oauth2_scheme)):
-    ...
+async def get_plants(category: Optional[str] = None, token: str = Depends(oauth2_scheme)): ...
 ```
 - Automatische OpenAPI / Swagger Dokumentation unter `/docs`.
 - Strikte Validierung aller Eingabedaten über Pydantic Schemas.

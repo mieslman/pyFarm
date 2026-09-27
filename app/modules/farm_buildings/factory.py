@@ -170,9 +170,7 @@ class Factory:
                     continue
 
                 out_name = (
-                    catalog[out_pid].name
-                    if (catalog and out_pid in catalog)
-                    else str(out_pid)
+                    catalog[out_pid].name if (catalog and out_pid in catalog) else str(out_pid)
                 )
                 points = int(p_info[3]) if len(p_info) > 3 and str(p_info[3]).isdigit() else 0
                 duration = int(p_info[4]) if len(p_info) > 4 and str(p_info[4]).isdigit() else 0

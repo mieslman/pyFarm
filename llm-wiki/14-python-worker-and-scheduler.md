@@ -135,16 +135,14 @@ def mock_game_api():
         # 1. Login Token Mock
         respx_mock.post("https://www.myfreefarm.de/ajax/createtoken2.php").mock(
             return_value=httpx.Response(
-                200, 
-                json=[1, "https://s1.myfreefarm.de/login.php?token=test_token_123"]
+                200, json=[1, "https://s1.myfreefarm.de/login.php?token=test_token_123"]
             )
         )
 
         # 2. Login Redirect & RID Mock
         respx_mock.get("https://s1.myfreefarm.de/login.php?token=test_token_123").mock(
             return_value=httpx.Response(
-                200, 
-                text="<html><script>var rid = 'abc123def456';</script></html>"
+                200, text="<html><script>var rid = 'abc123def456';</script></html>"
             )
         )
 
@@ -158,12 +156,10 @@ def mock_game_api():
                         {
                             "1": {"phase": 4, "remain": 0, "iswater": 1, "harvest": 17},
                             "2": {"phase": 1, "remain": 300, "iswater": 0, "harvest": 17},
-                        }
+                        },
                     ],
-                    "updateblock": {
-                        "stock": {"stock": {1: {}}, "tempstock": {}}
-                    }
-                }
+                    "updateblock": {"stock": {"stock": {1: {}}, "tempstock": {}}},
+                },
             )
         )
         yield respx_mock

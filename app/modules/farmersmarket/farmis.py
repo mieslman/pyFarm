@@ -71,17 +71,21 @@ class MarketFarmisService:
 
             for item in farmi.cart:
                 in_stock = self.stock_service.get_amount(item.pid) if self.stock_service else 0
-                prod_info = self.stock_service.products.get(item.pid) if self.stock_service else None
+                prod_info = (
+                    self.stock_service.products.get(item.pid) if self.stock_service else None
+                )
                 category = getattr(prod_info, "category", "")
 
                 # If missing farm crops (category 'v'), attempt safe grasping from market/dealer
                 if in_stock < item.amount and category == "v" and self.stock_service:
                     missing = item.amount - in_stock
                     try:
-                        grasped = await self.stock_service.grasp_products([{"pid": item.pid, "amount": missing}])
+                        grasped = await self.stock_service.grasp_products(
+                            [{"pid": item.pid, "amount": missing}]
+                        )
                         if grasped:
                             in_stock = self.stock_service.get_amount(item.pid)
-                    except Exception as e:  # noqa: BLE001
+                    except Exception as e:
                         logger.debug(f"Farmis: Grasping für PID {item.pid} fehlgeschlagen: {e}")
 
                 if in_stock < item.amount:
@@ -113,7 +117,9 @@ class MarketFarmisService:
                     farmi.status = 1
                     if "updateblock" in res and self.stock_service:
                         self.stock_service.update(res)
-                except Exception as e:  # noqa: BLE001
-                    logger.warning(f"Blumenmarkt-Farmis: Fehler beim Bedienen von Farmi #{farmi.id}: {e}")
+                except Exception as e:
+                    logger.warning(
+                        f"Blumenmarkt-Farmis: Fehler beim Bedienen von Farmi #{farmi.id}: {e}"
+                    )
 
         return served_count

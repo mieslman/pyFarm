@@ -76,7 +76,7 @@ async def serve_factories(
                     "status": "success",
                 }
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             results.append(
                 {
                     "farm": factory.farm_id,

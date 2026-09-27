@@ -609,6 +609,3 @@ async def test_foodworld_service_aborts_export_on_market_full(fast_client: MFFGa
     # Should have stopped after first offer attempt (PID 131) and NOT proceeded to PID 132
     assert len(market_calls) == 1
     assert market_calls[0]["pid"] == 131
-
-
-

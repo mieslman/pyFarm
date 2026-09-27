@@ -1,4 +1,3 @@
-from typing import Optional
 from pydantic import BaseModel, Field
 
 
@@ -6,10 +5,10 @@ class StallSlot(BaseModel):
     """Represents an individual display slot in a market stall."""
 
     slot_id: str
-    pid: Optional[int] = None
+    pid: int | None = None
     product_name: str = "Leer"
     amount: int = 0
-    time: Optional[int] = None
+    time: int | None = None
 
     @property
     def is_empty(self) -> bool:
@@ -51,4 +50,4 @@ class StallSummary(BaseModel):
     total_slots: int = 0
     filled_slots: int = 0
     rewards_ready_count: int = 0
-    last_updated: Optional[str] = None
+    last_updated: str | None = None

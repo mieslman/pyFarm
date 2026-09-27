@@ -29,7 +29,9 @@ class FoodworldStartProductionTaskHandler(BaseTaskHandler):
                 # Produce requested dish if specified
                 demanded = {pid: self.task.count} if pid else {}
                 cooked = await kitchen.produce(demanded_cart=demanded)
-                self.logger.info(f"Seasonpass: Foodworld-Küche gestartet ({cooked} Gerichte gekocht).")
+                self.logger.info(
+                    f"Seasonpass: Foodworld-Küche gestartet ({cooked} Gerichte gekocht)."
+                )
                 return True
         except Exception as e:
             self.logger.warning(f"Seasonpass: Fehler bei FoodworldStartProduction-Task: {e}")
@@ -56,7 +58,9 @@ class FoodworldHarvestProductionTaskHandler(BaseTaskHandler):
                 kitchen = KitchenService(self.client, self.stock_service)
                 kitchen.update(db)
                 picked = await kitchen.pickup_products()
-                self.logger.info(f"Seasonpass: Foodworld-Küche geleert ({picked} Gerichte abgeholt).")
+                self.logger.info(
+                    f"Seasonpass: Foodworld-Küche geleert ({picked} Gerichte abgeholt)."
+                )
                 return True
         except Exception as e:
             self.logger.warning(f"Seasonpass: Fehler bei FoodworldHarvestProduction-Task: {e}")

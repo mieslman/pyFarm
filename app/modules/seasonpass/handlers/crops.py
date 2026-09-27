@@ -48,14 +48,22 @@ class PlantTaskHandler(BaseTaskHandler):
             planted = await field.plant(plant_obj)
             if planted:
                 await field.water()
-                self.logger.info(f"Seasonpass: Pflanze '{prod_name}' erfolgreich gesät und gegossen.")
+                self.logger.info(
+                    f"Seasonpass: Pflanze '{prod_name}' erfolgreich gesät und gegossen."
+                )
                 return True
             else:
                 # Direct autoplant fallback if tiles were already partially filled
                 try:
                     await self.client.api_call(
                         "farm",
-                        {"mode": "autoplant", "farm": farm_id, "position": pos, "id": pid, "product": pid},
+                        {
+                            "mode": "autoplant",
+                            "farm": farm_id,
+                            "position": pos,
+                            "id": pid,
+                            "product": pid,
+                        },
                     )
                     await field.water()
                     return True
@@ -94,7 +102,9 @@ class HarvestTaskHandler(BaseTaskHandler):
             self.logger.info(f"Seasonpass: Ernte auf Feld {farm_id}/{pos} durchgeführt.")
             return True
         else:
-            self.logger.debug(f"Seasonpass: Keine reifen Pflanzen auf Feld {farm_id}/{pos} zum Ernten.")
+            self.logger.debug(
+                f"Seasonpass: Keine reifen Pflanzen auf Feld {farm_id}/{pos} zum Ernten."
+            )
             return True
 
 

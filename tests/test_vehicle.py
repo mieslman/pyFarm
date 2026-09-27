@@ -1,4 +1,3 @@
-
 import httpx
 import pytest
 import respx
@@ -41,10 +40,34 @@ def mock_map_data():
         },
         "config": {
             "vehicles": {
-                "1": {"name": "Handwagen", "capacity": 100, "products": 1, "farms": [5], "duration": 7200},
-                "4": {"name": "Traktor", "capacity": 500, "products": 2, "farms": [5], "duration": 1800},
-                "9": {"name": "Pickup", "capacity": 1000, "products": 3, "farms": [6], "duration": 900},
-                "19": {"name": "Transporter", "capacity": 1500, "products": 3, "farms": [10], "duration": 600},
+                "1": {
+                    "name": "Handwagen",
+                    "capacity": 100,
+                    "products": 1,
+                    "farms": [5],
+                    "duration": 7200,
+                },
+                "4": {
+                    "name": "Traktor",
+                    "capacity": 500,
+                    "products": 2,
+                    "farms": [5],
+                    "duration": 1800,
+                },
+                "9": {
+                    "name": "Pickup",
+                    "capacity": 1000,
+                    "products": 3,
+                    "farms": [6],
+                    "duration": 900,
+                },
+                "19": {
+                    "name": "Transporter",
+                    "capacity": 1500,
+                    "products": 3,
+                    "farms": [10],
+                    "duration": 600,
+                },
             }
         },
     }
@@ -91,7 +114,9 @@ async def test_vehicle_main_to_outer_with_supplies(fast_client):
     stock = StockService(fast_client)
     kohlrabi = Product(pid=4, name="Kohlrabi", category="v", amount=1000, tmp_amount=0)
     stock.products = {4: kohlrabi}
-    stock.farm_temp_stocks = {5: {4: 100}}  # Outer farm has only 100 units (deficit: 500 - 100 = 400)
+    stock.farm_temp_stocks = {
+        5: {4: 100}
+    }  # Outer farm has only 100 units (deficit: 500 - 100 = 400)
 
     state = VehicleState(current=1, route=1, vehicle_type=4, remain=0)
     config = VehicleConfigData(name="Traktor", capacity=500, products=2, farms=[5], duration=1800)
@@ -103,7 +128,12 @@ async def test_vehicle_main_to_outer_with_supplies(fast_client):
         respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
             return_value=httpx.Response(
                 200,
-                json={"datablock": 1, "updateblock": {"map": {"vehicles": {"1": {"4": {"current": 5, "remain": 1800}}}}}},
+                json={
+                    "datablock": 1,
+                    "updateblock": {
+                        "map": {"vehicles": {"1": {"4": {"current": 5, "remain": 1800}}}}
+                    },
+                },
             )
         )
         res = await v.loop(stock)
@@ -178,8 +208,12 @@ async def test_vehicle_outer_to_main_farm10_only_milled_surplus(fast_client):
     stock.farm_temp_stocks = {10: {1100: 500, 1103: 300}}
 
     state = VehicleState(current=10, route=4, vehicle_type=19, remain=0)
-    config = VehicleConfigData(name="Transporter", capacity=1500, products=3, farms=[10], duration=600)
-    route_cfg = VehicleRouteConfig(farm_id=10, route=4, transport=True, send_partial=True, only_milled_surplus=True)
+    config = VehicleConfigData(
+        name="Transporter", capacity=1500, products=3, farms=[10], duration=600
+    )
+    route_cfg = VehicleRouteConfig(
+        farm_id=10, route=4, transport=True, send_partial=True, only_milled_surplus=True
+    )
 
     v = Vehicle(fast_client, state, config, route_cfg)
 
@@ -400,11 +434,12 @@ async def test_farm8_sushi_supply_threshold_500(fast_client):
             self.level = level
 
     class MockSushiBar:
-        level = 5
-        recipes = {
-            1: MockRecipe({12: 5, 17: 10}),
-            2: MockRecipe({9: 8}),
-        }
+        def __init__(self):
+            self.level = 5
+            self.recipes = {
+                1: MockRecipe({12: 5, 17: 10}),
+                2: MockRecipe({9: 8}),
+            }
 
     with respx.mock:
         respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
@@ -451,13 +486,15 @@ async def test_farm8_no_supply_when_all_above_500(fast_client):
     v = Vehicle(fast_client, state, config, route_cfg)
 
     class MockRecipe:
-        needs = {12: 5, 17: 10}
-        is_coin_recipe = False
-        level = 1
+        def __init__(self):
+            self.needs = {12: 5, 17: 10}
+            self.is_coin_recipe = False
+            self.level = 1
 
     class MockSushiBar:
-        level = 5
-        recipes = {1: MockRecipe()}
+        def __init__(self):
+            self.level = 5
+            self.recipes = {1: MockRecipe()}
 
     # No quest requirements
     res = await v.loop(stock, quest_requirements={}, sushibar_service=MockSushiBar())
@@ -493,7 +530,9 @@ async def test_farm8_never_loads_other_farm_products(fast_client):
     stock = StockService(fast_client)
     melisse = Product(pid=708, name="Melisse", category="alpin", amount=0, tmp_amount=30)
     enzian = Product(pid=705, name="Enzian", category="alpin", amount=0, tmp_amount=100)
-    brunnenkresse = Product(pid=957, name="Brunnenkresse", category="water", amount=0, tmp_amount=400)
+    brunnenkresse = Product(
+        pid=957, name="Brunnenkresse", category="water", amount=0, tmp_amount=400
+    )
     stock.products = {708: melisse, 705: enzian, 957: brunnenkresse}
     stock.farm_temp_stocks = {
         6: {708: 30, 705: 100},
@@ -537,7 +576,9 @@ async def test_farm8_never_loads_other_farm_products(fast_client):
 async def test_farm8_transports_quest5_water_products(fast_client):
     """Verify Farm 8 Wasserhelikopter transports water products needed for Questreihe 5 when surplus > 500."""
     stock = StockService(fast_client)
-    brunnenkresse = Product(pid=957, name="Brunnenkresse", category="water", size_x=1, size_y=1, amount=100)
+    brunnenkresse = Product(
+        pid=957, name="Brunnenkresse", category="water", size_x=1, size_y=1, amount=100
+    )
     reis = Product(pid=950, name="Reis", category="water", size_x=2, size_y=1, amount=500)
     stock.products = {957: brunnenkresse, 950: reis}
     stock.farm_temp_stocks = {
@@ -579,8 +620,12 @@ async def test_vehicle_quest_chronological_priority_order(fast_client):
     # PID 957: Brunnenkresse (Quest 68, smaller deficit: 1215)
     # PID 952: Wasserspinat (Quest 70, larger deficit: 3676)
     stock.products = {
-        957: Product(pid=957, name="Brunnenkresse", category="water", size_x=1, size_y=1, amount=6669),
-        952: Product(pid=952, name="Wasserspinat", category="water", size_x=1, size_y=1, amount=4323),
+        957: Product(
+            pid=957, name="Brunnenkresse", category="water", size_x=1, size_y=1, amount=6669
+        ),
+        952: Product(
+            pid=952, name="Wasserspinat", category="water", size_x=1, size_y=1, amount=4323
+        ),
     }
     # Both crops have surplus on Farm 8:
     # Brunnenkresse: 7169 - 500 = 6669 surplus
@@ -647,11 +692,15 @@ async def test_vehicle_route4_sushi_supply_does_not_block_water_quest_crop(fast_
     )
 
     from app.modules.sushibar.models import SushiRecipe
+
     class MockSushibar:
-        level = 14
-        recipes = {
-            984: SushiRecipe(pid=984, name="Taro-Dampfnudeln", level=13, needs={950: 8, 953: 7, 12: 5}),
-        }
+        def __init__(self):
+            self.level = 14
+            self.recipes = {
+                984: SushiRecipe(
+                    pid=984, name="Taro-Dampfnudeln", level=13, needs={950: 8, 953: 7, 12: 5}
+                ),
+            }
 
     v = Vehicle(fast_client, state, config, route_cfg)
     quest_requirements = {953: 6979}
@@ -684,7 +733,9 @@ async def test_vehicle_supplies_wollknaeuel_to_farm_5(fast_client):
     stock.farm_temp_stocks = {5: {153: 4080, 28: 0}}
 
     state = VehicleState(current=1, route=1, vehicle_type=4, remain=0)
-    config = VehicleConfigData(name="Sportwagen", capacity=1000, products=2, farms=[5], duration=900)
+    config = VehicleConfigData(
+        name="Sportwagen", capacity=1000, products=2, farms=[5], duration=900
+    )
     route_cfg = VehicleRouteConfig(
         farm_id=5,
         route=1,
@@ -701,7 +752,12 @@ async def test_vehicle_supplies_wollknaeuel_to_farm_5(fast_client):
         respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
             return_value=httpx.Response(
                 200,
-                json={"datablock": 1, "updateblock": {"map": {"vehicles": {"1": {"4": {"current": 5, "remain": 900}}}}}},
+                json={
+                    "datablock": 1,
+                    "updateblock": {
+                        "map": {"vehicles": {"1": {"4": {"current": 5, "remain": 900}}}}
+                    },
+                },
             )
         )
         res = await v.loop(stock)
@@ -720,7 +776,9 @@ async def test_vehicle_supplies_exact_remaining_delta_wollknaeuel(fast_client):
     stock.farm_temp_stocks = {5: {28: 350}}
 
     state = VehicleState(current=1, route=1, vehicle_type=4, remain=0)
-    config = VehicleConfigData(name="Sportwagen", capacity=1000, products=2, farms=[5], duration=900)
+    config = VehicleConfigData(
+        name="Sportwagen", capacity=1000, products=2, farms=[5], duration=900
+    )
     route_cfg = VehicleRouteConfig(
         farm_id=5,
         route=1,
@@ -737,7 +795,12 @@ async def test_vehicle_supplies_exact_remaining_delta_wollknaeuel(fast_client):
         respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
             return_value=httpx.Response(
                 200,
-                json={"datablock": 1, "updateblock": {"map": {"vehicles": {"1": {"4": {"current": 5, "remain": 900}}}}}},
+                json={
+                    "datablock": 1,
+                    "updateblock": {
+                        "map": {"vehicles": {"1": {"4": {"current": 5, "remain": 900}}}}
+                    },
+                },
             )
         )
         res = await v.loop(stock)
@@ -759,7 +822,9 @@ async def test_vehicle_outer_urgent_wollknaeuel_departure(fast_client):
     stock.farm_temp_stocks = {5: {351: 320, 28: 0}}
 
     state = VehicleState(current=5, route=1, vehicle_type=4, remain=0)
-    config = VehicleConfigData(name="Sportwagen", capacity=1000, products=2, farms=[5], duration=900)
+    config = VehicleConfigData(
+        name="Sportwagen", capacity=1000, products=2, farms=[5], duration=900
+    )
     route_cfg = VehicleRouteConfig(
         farm_id=5,
         route=1,
@@ -789,7 +854,9 @@ async def test_vehicle_supplies_wolle_batch_400_when_stock_zero(fast_client):
     stock.farm_temp_stocks = {5: {11: 0}}
 
     state = VehicleState(current=1, route=1, vehicle_type=4, remain=0)
-    config = VehicleConfigData(name="Sportwagen", capacity=1000, products=2, farms=[5], duration=900)
+    config = VehicleConfigData(
+        name="Sportwagen", capacity=1000, products=2, farms=[5], duration=900
+    )
     route_cfg = VehicleRouteConfig(
         farm_id=5,
         route=1,
@@ -808,7 +875,12 @@ async def test_vehicle_supplies_wolle_batch_400_when_stock_zero(fast_client):
         respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
             return_value=httpx.Response(
                 200,
-                json={"datablock": 1, "updateblock": {"map": {"vehicles": {"1": {"4": {"current": 5, "remain": 900}}}}}},
+                json={
+                    "datablock": 1,
+                    "updateblock": {
+                        "map": {"vehicles": {"1": {"4": {"current": 5, "remain": 900}}}}
+                    },
+                },
             )
         )
         res = await v.loop(stock)
@@ -827,7 +899,9 @@ async def test_vehicle_skips_wolle_supply_when_above_reorder_threshold(fast_clie
     stock.farm_temp_stocks = {5: {11: 392}}
 
     state = VehicleState(current=1, route=1, vehicle_type=4, remain=0)
-    config = VehicleConfigData(name="Sportwagen", capacity=1000, products=2, farms=[5], duration=900)
+    config = VehicleConfigData(
+        name="Sportwagen", capacity=1000, products=2, farms=[5], duration=900
+    )
     route_cfg = VehicleRouteConfig(
         farm_id=5,
         route=1,
@@ -851,9 +925,3 @@ async def test_vehicle_skips_wolle_supply_when_above_reorder_threshold(fast_clie
         # Empty cart because Wolle is above 50 (saves fuel and capacity!)
         assert v.last_sent_cart == ""
         assert stock.products[11].amount == 30000
-
-
-
-
-
-

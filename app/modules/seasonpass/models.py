@@ -1,4 +1,5 @@
 from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -7,7 +8,9 @@ class SeasonPassTask(BaseModel):
 
     id: str
     type: str
-    payload: dict[str, Any] = Field(default_factory=dict, description="Inner data payload (count, done, pid, etc.)")
+    payload: dict[str, Any] = Field(
+        default_factory=dict, description="Inner data payload (count, done, pid, etc.)"
+    )
     created_at: int | None = None
     finish_at: int | None = None
     points: int | None = None
@@ -17,9 +20,21 @@ class SeasonPassTask(BaseModel):
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "SeasonPassTask":
         payload = data.get("data", {}) if isinstance(data.get("data"), dict) else {}
-        created_at = int(data["createdate"]) if "createdate" in data and str(data["createdate"]).isdigit() else None
-        finish_at = int(data["finishdate"]) if "finishdate" in data and str(data["finishdate"]).isdigit() else None
-        points = int(payload["points"]) if "points" in payload and str(payload["points"]).isdigit() else None
+        created_at = (
+            int(data["createdate"])
+            if "createdate" in data and str(data["createdate"]).isdigit()
+            else None
+        )
+        finish_at = (
+            int(data["finishdate"])
+            if "finishdate" in data and str(data["finishdate"]).isdigit()
+            else None
+        )
+        points = (
+            int(payload["points"])
+            if "points" in payload and str(payload["points"]).isdigit()
+            else None
+        )
         remain = int(data["remain"]) if "remain" in data and str(data["remain"]).isdigit() else None
         unr = str(data.get("unr", "")) or None
 
@@ -131,8 +146,14 @@ class SeasonPassSnapshot(BaseModel):
                 if str(lvl_str).isdigit() and isinstance(lvl_data, dict):
                     lvl_num = int(lvl_str)
                     pts = int(lvl_data.get("points", 0))
-                    free_rw = lvl_data.get("free", {}) if isinstance(lvl_data.get("free"), dict) else {}
-                    prem_rw = lvl_data.get("premium", {}) if isinstance(lvl_data.get("premium"), dict) else {}
+                    free_rw = (
+                        lvl_data.get("free", {}) if isinstance(lvl_data.get("free"), dict) else {}
+                    )
+                    prem_rw = (
+                        lvl_data.get("premium", {})
+                        if isinstance(lvl_data.get("premium"), dict)
+                        else {}
+                    )
                     claimed = lvl_str in rewards_claimed and "free" in rewards_claimed[lvl_str]
                     levels[lvl_num] = SeasonPassLevel(
                         level=lvl_num,
@@ -158,7 +179,9 @@ class SeasonPassConfig(BaseModel):
     """Configuration settings for automated season pass handling."""
 
     enabled: bool = Field(default=True, description="Seasonpass-Automatisierung aktiv")
-    auto_claim_rewards: bool = Field(default=True, description="Freie Stufenbelohnungen automatisch abholen")
+    auto_claim_rewards: bool = Field(
+        default=True, description="Freie Stufenbelohnungen automatisch abholen"
+    )
     preferred_field_farm: int = Field(default=1, description="Farm-ID für Ackerbau-Tasks")
     preferred_field_pos: int = Field(default=1, description="Feldposition für Ackerbau-Tasks")
     preferred_forestry_pos: int = Field(default=1, description="Baumplatz-Position für Forst-Tasks")

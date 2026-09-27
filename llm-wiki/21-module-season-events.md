@@ -341,12 +341,12 @@ Erreicht das Punktekonto die Schwelle einer Stufe (`rewards`), kann die Stufe ko
 
 ---
 
-## 4. Python-Zielarchitektur (`myfreefarm_python`)
+## 4. Python-Architektur (`pyFarm`)
 
-Für das anstehende Python-Redesign wird folgende saubere Modulstruktur implementiert:
+Im Python-Backend ist folgende modulare Struktur implementiert:
 
 ```
-myfreefarm_python/app/modules/
+app/modules/
 ├── events/
 │   ├── __init__.py
 │   ├── manager.py               # Erkennt aktive Events via events.data Regex

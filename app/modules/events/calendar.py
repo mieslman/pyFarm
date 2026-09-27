@@ -1,4 +1,3 @@
-from typing import Any, Optional
 from loguru import logger
 
 from app.core.client import MFFGameClient
@@ -10,9 +9,9 @@ class CalendarEventService:
 
     def __init__(self, client: MFFGameClient):
         self.client = client
-        self.last_status: Optional[CalendarStatus] = None
+        self.last_status: CalendarStatus | None = None
 
-    async def get_status(self) -> Optional[CalendarStatus]:
+    async def get_status(self) -> CalendarStatus | None:
         """Fetch and parse calendar state from server."""
         try:
             res = await self.client.api_call("farm", {"mode": "calendar_init"})
@@ -27,12 +26,12 @@ class CalendarEventService:
 
             opened_day_numbers: set[int] = set()
             if isinstance(opened_days, dict):
-                opened_day_numbers = {int(k) for k in opened_days.keys() if str(k).isdigit()}
+                opened_day_numbers = {int(k) for k in opened_days if str(k).isdigit()}
             elif isinstance(opened_days, list):
                 opened_day_numbers = {int(x) for x in opened_days if str(x).isdigit()}
 
-            all_days = {int(k) for k in config_fields.keys() if str(k).isdigit()}
-            unopened = sorted(list(all_days - opened_day_numbers))
+            all_days = {int(k) for k in config_fields if str(k).isdigit()}
+            unopened = sorted(all_days - opened_day_numbers)
             is_opened_today = actual_day in opened_day_numbers
 
             status = CalendarStatus(
@@ -80,10 +79,14 @@ class CalendarEventService:
                     await self.get_status()
                     return True
                 else:
-                    logger.warning(f"CalendarEventService: Konnte Türchen {actual_day} nicht öffnen: {open_res}")
+                    logger.warning(
+                        f"CalendarEventService: Konnte Türchen {actual_day} nicht öffnen: {open_res}"
+                    )
                     return False
             else:
-                logger.debug(f"CalendarEventService: Türchen {actual_day} bereits geöffnet oder ungültig.")
+                logger.debug(
+                    f"CalendarEventService: Türchen {actual_day} bereits geöffnet oder ungültig."
+                )
                 return False
 
         except Exception as e:

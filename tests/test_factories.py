@@ -37,7 +37,18 @@ def mock_stock_service(mock_client):
     }
     # Setup farm racks: Farm 5 has 0 Wolle (11), but 50 Angorawolle (151)
     service.farm_stocks = {
-        1: {10: 100, 27: 20, 110: 100, 111: 80, 2: 5000, 116: 200, 43: 500, 121: 10, 11: 100, 28: 5},
+        1: {
+            10: 100,
+            27: 20,
+            110: 100,
+            111: 80,
+            2: 5000,
+            116: 200,
+            43: 500,
+            121: 10,
+            11: 100,
+            28: 5,
+        },
         5: {11: 0, 151: 50, 152: 0},
     }
     return service
@@ -166,7 +177,9 @@ def test_factory_recipe_selection_lowest_stock(mock_client, mock_stock_service):
 
 def test_factory_farm5_strict_local_shelf(mock_client, mock_stock_service):
     """Verify that for farm >= 5, ingredients must be present in that farm's rack (no Farm 1 fallback)."""
-    factory = Factory(client=mock_client, farm_id=5, position=5, building_id=9, name="Wollspinnerei")
+    factory = Factory(
+        client=mock_client, farm_id=5, position=5, building_id=9, name="Wollspinnerei"
+    )
 
     mock_data = {
         "datablock": [
@@ -196,9 +209,13 @@ def test_factory_farm5_strict_local_shelf(mock_client, mock_stock_service):
     assert chosen.item_id == "2"
 
 
-def test_factory_wollspinnerei_crafts_wollknaeuel_when_wolle_present(mock_client, mock_stock_service):
+def test_factory_wollspinnerei_crafts_wollknaeuel_when_wolle_present(
+    mock_client, mock_stock_service
+):
     """Verify that Wollspinnerei crafts Wollknäuel (PID 28) when Wolle (PID 11) is delivered to Farm 5."""
-    factory = Factory(client=mock_client, farm_id=5, position=5, building_id=9, name="Wollspinnerei")
+    factory = Factory(
+        client=mock_client, farm_id=5, position=5, building_id=9, name="Wollspinnerei"
+    )
 
     # Wolle 400 on Farm 5, Wollknäuel stock 5 < Angoragarn stock 100
     mock_stock_service.farm_stocks[5] = {11: 400, 151: 50, 28: 5, 152: 100}
@@ -289,7 +306,6 @@ async def test_factory_harvest_and_produce(mock_client, mock_stock_service):
         assert mock_stock_service.get_amount(43) == initial_walnuts - 100
 
 
-
 @pytest.mark.asyncio
 async def test_factories_api_endpoints():
     """Verify GET /api/v1/factories and settings endpoints."""
@@ -328,7 +344,12 @@ async def test_factories_api_endpoints():
     # 3. PUT /api/v1/factories/settings
     res_put = client.put(
         "/api/v1/factories/settings",
-        json={"enabled": True, "auto_harvest": False, "auto_produce": True, "coin_protection": True},
+        json={
+            "enabled": True,
+            "auto_harvest": False,
+            "auto_produce": True,
+            "coin_protection": True,
+        },
         headers={"Authorization": f"Bearer {token}"},
     )
     assert res_put.status_code == 200

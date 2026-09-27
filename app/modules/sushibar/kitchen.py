@@ -108,7 +108,7 @@ class SushiKitchenService:
                     harvested_count += 1
                     if update_callback and isinstance(res, dict):
                         await update_callback(res)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     logger.error(f"Sushi-Bar: Fehler beim Ernten von Slot {slot.slot}: {e}")
 
         return harvested_count
@@ -146,7 +146,9 @@ class SushiKitchenService:
             )
 
             if not recipe:
-                logger.debug("Sushi-Bar: Kein kochbares Rezept gefunden (Zutaten oder Level fehlen).")
+                logger.debug(
+                    "Sushi-Bar: Kein kochbares Rezept gefunden (Zutaten oder Level fehlen)."
+                )
                 break
 
             if coin_protection and recipe.is_coin_recipe:
@@ -179,7 +181,7 @@ class SushiKitchenService:
 
                 if update_callback and isinstance(res, dict):
                     await update_callback(res)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.error(f"Sushi-Bar: Fehler beim Starten von Slot {slot.slot}: {e}")
                 break
 

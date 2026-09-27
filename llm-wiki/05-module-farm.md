@@ -102,10 +102,12 @@ Dieses Modul verwaltet die Gebäude der Hauptfarmen: Fabriken (Weiterverarbeitun
       building_id: int
       name: str
 
+
   class ShedBuilding(BuildingBase):
       animal_type: str
       remain_seconds: Optional[int]
       current_production_pid: Optional[int]
+
 
   class FactoryBuilding(BuildingBase):
       slots: dict[int, FactorySlot]

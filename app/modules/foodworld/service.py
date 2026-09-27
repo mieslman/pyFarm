@@ -58,7 +58,7 @@ class FoodworldService:
                 {"action": "foodworld_init", "id": 0, "table": 0, "chair": 0},
             )
             db = res.get("datablock", {})
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning(f"FoodworldService: Fehler beim Abrufen der Foodworld-Daten: {e}")
             return results
 
@@ -77,7 +77,7 @@ class FoodworldService:
                 results["cashed_guests"] = cashed
                 results["revenue_kt"] = rev
                 self.total_revenue_kt += rev
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(f"FoodworldService: Fehler beim Abkassieren: {e}")
 
         # 4. Pick up finished dishes from kitchen slots
@@ -85,7 +85,7 @@ class FoodworldService:
             try:
                 picked = await self.kitchen.pickup_products()
                 results["picked_dishes"] = picked
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(f"FoodworldService: Fehler beim Abholen fertiger Speisen: {e}")
 
         # 5. Cook new dishes (prioritizing waiting farmi orders and dishes below buffer)
@@ -98,7 +98,7 @@ class FoodworldService:
                     auto_buy_ingredients=self.config.auto_buy_ingredients,
                 )
                 results["cooked_dishes"] = cooked
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(f"FoodworldService: Fehler beim Kochen: {e}")
 
         # 6. Seat waiting guests at free chairs
@@ -106,7 +106,7 @@ class FoodworldService:
             try:
                 seated = await self.tables.seat_guests()
                 results["seated_guests"] = seated
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(f"FoodworldService: Fehler beim Platzieren von Gästen: {e}")
 
         # 7. Market export: Sell surplus dishes strictly when no market offer exists
@@ -115,7 +115,7 @@ class FoodworldService:
                 exported = await self._export_surplus_dishes()
                 results["exported_dishes"] = exported
                 self.total_dishes_exported += exported
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(f"FoodworldService: Fehler beim Marktexport: {e}")
 
         logger.info(
@@ -160,7 +160,7 @@ class FoodworldService:
                             f"da bereits {len(offers)} Angebot(e) am Markt existieren."
                         )
                         continue
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     logger.debug(
                         f"Foodworld-Marktexport: Konnte Marktangebote für PID {pid} nicht prüfen: {e}"
                     )
@@ -188,7 +188,9 @@ class FoodworldService:
                     },
                 )
                 if res.get("datablock") == 1 or (
-                    isinstance(res.get("datablock"), list) and res.get("datablock") and res.get("datablock")[0] == 1
+                    isinstance(res.get("datablock"), list)
+                    and res.get("datablock")
+                    and res.get("datablock")[0] == 1
                 ):
                     exported_total += sell_amount
                     # Reactively update stock
@@ -200,13 +202,17 @@ class FoodworldService:
                 else:
                     logger.warning(f"Foodworld-Marktexport: Marktangebot abgewiesen: {res}")
                     block_msg = str(res).lower()
-                    if "20 angebote" in block_msg or "nicht möglich" in block_msg or "voll" in block_msg:
+                    if (
+                        "20 angebote" in block_msg
+                        or "nicht möglich" in block_msg
+                        or "voll" in block_msg
+                    ):
                         logger.warning(
                             "Foodworld-Marktexport: Maximales Marktlimit erreicht (20 Angebote). "
                             "Breche weitere Exporte für diesen Zyklus ab."
                         )
                         break
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(f"Foodworld-Marktexport: Fehler beim Einstellen von PID {pid}: {e}")
                 break
 

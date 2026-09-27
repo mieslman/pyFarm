@@ -176,9 +176,7 @@ class StockService:
         """Get stock of a product in main inventory (Farm 1)."""
         return self.get_farm_amount(farm_id=1, pid=pid, include_fallback=True)
 
-    def get_farm_amount(
-        self, farm_id: int | None, pid: int, include_fallback: bool = False
-    ) -> int:
+    def get_farm_amount(self, farm_id: int | None, pid: int, include_fallback: bool = False) -> int:
         """Get available stock of a product on a specific farm rack.
 
         If include_fallback is True and the product is not found on this farm rack,
@@ -199,7 +197,9 @@ class StockService:
             return amt
 
         if include_fallback:
-            main_amt = self.farm_stocks.get(1, {}).get(pid, 0) if hasattr(self, "farm_stocks") else 0
+            main_amt = (
+                self.farm_stocks.get(1, {}).get(pid, 0) if hasattr(self, "farm_stocks") else 0
+            )
             if main_amt > 0:
                 return main_amt
 
@@ -237,14 +237,20 @@ class StockService:
                 and farm_id in self.farm_temp_stocks
                 and pid in self.farm_temp_stocks[farm_id]
             ):
-                self.farm_temp_stocks[farm_id][pid] = max(0, self.farm_temp_stocks[farm_id][pid] - amount)
+                self.farm_temp_stocks[farm_id][pid] = max(
+                    0, self.farm_temp_stocks[farm_id][pid] - amount
+                )
         if pid in self.products:
             self.products[pid].amount = max(0, self.products[pid].amount - amount)
 
     def get_temp_amount(self, farm_id: int | None, pid: int) -> int:
         """Get temporary / shelf stock for a specific farm and product."""
         if farm_id is not None:
-            if hasattr(self, "farm_temp_stocks") and self.farm_temp_stocks and farm_id in self.farm_temp_stocks:
+            if (
+                hasattr(self, "farm_temp_stocks")
+                and self.farm_temp_stocks
+                and farm_id in self.farm_temp_stocks
+            ):
                 amt = self.farm_temp_stocks[farm_id].get(pid, 0)
                 if amt > 0:
                     return amt
@@ -272,9 +278,7 @@ class StockService:
                 and farm_id in self.farm_stocks
                 and pid in self.farm_stocks[farm_id]
             ):
-                self.farm_stocks[farm_id][pid] = max(
-                    0, self.farm_stocks[farm_id][pid] - amount
-                )
+                self.farm_stocks[farm_id][pid] = max(0, self.farm_stocks[farm_id][pid] - amount)
         if pid in self.products:
             self.products[pid].tmp_amount = max(0, self.products[pid].tmp_amount - amount)
 

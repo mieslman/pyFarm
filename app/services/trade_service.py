@@ -57,7 +57,10 @@ class TradeService:
         product = self.stock_service.get_product(pid)
         if product and (
             (product.category == "v" and not self.config.sell_category_v)
-            or (self.config.exclude_categories and product.category in self.config.exclude_categories)
+            or (
+                self.config.exclude_categories
+                and product.category in self.config.exclude_categories
+            )
         ):
             logger.warning(
                 f"TradeService: Erstellen von Marktangebot für {amount}x PID {pid} ('{product.name}') abgebrochen: "
@@ -94,7 +97,11 @@ class TradeService:
             else:
                 logger.warning(f"TradeService: Marktangebot abgewiesen: {res}")
                 block_msg = str(res).lower()
-                if "20 angebote" in block_msg or "nicht möglich" in block_msg or "voll" in block_msg:
+                if (
+                    "20 angebote" in block_msg
+                    or "nicht möglich" in block_msg
+                    or "voll" in block_msg
+                ):
                     logger.warning(
                         "TradeService: Maximale Anzahl an Marktangeboten erreicht (20 Angebote). "
                         "Breche weitere Marktverkäufe in diesem Zyklus ab."
@@ -145,7 +152,8 @@ class TradeService:
 
             # Verkaufe keine normalen Produkte (Kategorie "v") auf dem Markt
             if (product.category == "v" and not self.config.sell_category_v) or (
-                self.config.exclude_categories and product.category in self.config.exclude_categories
+                self.config.exclude_categories
+                and product.category in self.config.exclude_categories
             ):
                 logger.debug(
                     f"TradeService: Überspringe PID {pid} ('{product.name}'), "

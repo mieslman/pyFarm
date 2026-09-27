@@ -1,4 +1,3 @@
-from typing import Any, Optional
 from loguru import logger
 
 from app.core.client import MFFGameClient
@@ -10,9 +9,9 @@ class OlympiaEventService:
 
     def __init__(self, client: MFFGameClient):
         self.client = client
-        self.last_status: Optional[OlympiaStatus] = None
+        self.last_status: OlympiaStatus | None = None
 
-    async def get_status(self) -> Optional[OlympiaStatus]:
+    async def get_status(self) -> OlympiaStatus | None:
         """Fetch and parse Olympia event status."""
         try:
             res = await self.client.api_call("main", {"action": "olympia_init"})
@@ -77,7 +76,9 @@ class OlympiaEventService:
                     await self.get_status()
                     return True
                 else:
-                    logger.warning(f"OlympiaEventService: Fehler bei Olympia-Teilnahme: {entry_res}")
+                    logger.warning(
+                        f"OlympiaEventService: Fehler bei Olympia-Teilnahme: {entry_res}"
+                    )
                     return False
             else:
                 logger.debug(

@@ -1,6 +1,4 @@
-from typing import Any
 from pydantic import BaseModel, Field
-
 
 # Direct mapping: raw spice (spice) -> dried spice (spicedried)
 SPICE_RAW_TO_DRIED: dict[int, int] = {
@@ -11,9 +9,9 @@ SPICE_RAW_TO_DRIED: dict[int, int] = {
     1104: 1114,  # Nelke -> Nelke getrocknet
     1105: 1115,  # Piment -> Piment getrocknet
     1106: 1116,  # Sternanis -> Sternanis getrocknet
-    113: 1107,   # Chili -> Chili getrocknet
-    701: 1108,   # Salbei -> Salbei getrocknet
-    703: 1109,   # Kümmel -> Kümmel getrocknet
+    113: 1107,  # Chili -> Chili getrocknet
+    701: 1108,  # Salbei -> Salbei getrocknet
+    703: 1109,  # Kümmel -> Kümmel getrocknet
 }
 
 # Reverse mapping: dried spice -> raw spice
@@ -53,15 +51,23 @@ SPICE_MILL_DURATIONS: dict[int, int] = {
 
 class SpicehouseConfig(BaseModel):
     """Configuration settings for automated Gewürzhaus management."""
+
     enabled: bool = Field(default=True, description="Gewürzhaus-Automatisierung aktiv")
     auto_oven: bool = Field(default=True, description="Trockenofen automatisch leeren und befüllen")
-    auto_mill: bool = Field(default=True, description="Gewürzmühlen automatisch ernten und bestücken")
-    auto_customer: bool = Field(default=True, description="Kunden (Farmis) bei Deckung automatisch bedienen")
-    min_crop_reserve: int = Field(default=500, description="Sicherheitsreserve auf Farm 10 für Acker-Gewürze")
+    auto_mill: bool = Field(
+        default=True, description="Gewürzmühlen automatisch ernten und bestücken"
+    )
+    auto_customer: bool = Field(
+        default=True, description="Kunden (Farmis) bei Deckung automatisch bedienen"
+    )
+    min_crop_reserve: int = Field(
+        default=500, description="Sicherheitsreserve auf Farm 10 für Acker-Gewürze"
+    )
 
 
 class OvenSlotInfo(BaseModel):
     """Represents one oven line (Blech) in the drying oven."""
+
     line: int
     level: int = 1
     capacity: int = 10
@@ -79,6 +85,7 @@ class OvenSlotInfo(BaseModel):
 
 class MillSlotInfo(BaseModel):
     """Represents one spice mill in the Gewürzhaus."""
+
     slot: int
     level: int = 1
     capacity: int = 10
@@ -114,11 +121,16 @@ class MillSlotInfo(BaseModel):
     @property
     def is_ready(self) -> bool:
         """Alias for is_ready_to_harvest or finished milling."""
-        return self.output > 0 or (self.pid is not None and self.remain <= 0 and (self.amount > 0 or self.amount_original > 0))
+        return self.output > 0 or (
+            self.pid is not None
+            and self.remain <= 0
+            and (self.amount > 0 or self.amount_original > 0)
+        )
 
 
 class SpiceCustomer(BaseModel):
     """Represents a customer visiting the Gewürzhaus."""
+
     id: str
     slot: int
     data: dict[int, int] = Field(default_factory=dict, description="{pid: amount}")
@@ -136,6 +148,7 @@ class SpiceCustomer(BaseModel):
 
 class SpicehouseState(BaseModel):
     """Overall snapshot of the Gewürzhaus state."""
+
     level: int = 1
     points: int = 0
     oven_remain: int = 0

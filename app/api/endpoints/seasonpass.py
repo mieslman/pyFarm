@@ -15,15 +15,19 @@ seasonpass_router = APIRouter(prefix="/seasonpass", tags=["Seasonpass"])
 async def get_seasonpass_status(_: dict[str, Any] = Depends(get_current_user)):
     """Retrieve current Seasonpass status, pending/completed tasks, points, and tiers."""
     sp_svc = worker_scheduler.last_seasonpass_service
-    summary = sp_svc.get_summary() if sp_svc else {
-        "active": False,
-        "season_name": "",
-        "points": 0,
-        "remain": 0,
-        "pending_tasks": [],
-        "completed_tasks": [],
-        "levels": {},
-    }
+    summary = (
+        sp_svc.get_summary()
+        if sp_svc
+        else {
+            "active": False,
+            "season_name": "",
+            "points": 0,
+            "remain": 0,
+            "pending_tasks": [],
+            "completed_tasks": [],
+            "levels": {},
+        }
+    )
 
     return {
         "config": settings.seasonpass.model_dump(),
@@ -70,9 +74,15 @@ async def update_seasonpass_settings(
     if worker_scheduler.last_seasonpass_service:
         worker_scheduler.last_seasonpass_service.config.enabled = cfg.enabled
         worker_scheduler.last_seasonpass_service.config.auto_claim_rewards = cfg.auto_claim_rewards
-        worker_scheduler.last_seasonpass_service.config.preferred_field_farm = cfg.preferred_field_farm
-        worker_scheduler.last_seasonpass_service.config.preferred_field_pos = cfg.preferred_field_pos
-        worker_scheduler.last_seasonpass_service.config.preferred_forestry_pos = cfg.preferred_forestry_pos
+        worker_scheduler.last_seasonpass_service.config.preferred_field_farm = (
+            cfg.preferred_field_farm
+        )
+        worker_scheduler.last_seasonpass_service.config.preferred_field_pos = (
+            cfg.preferred_field_pos
+        )
+        worker_scheduler.last_seasonpass_service.config.preferred_forestry_pos = (
+            cfg.preferred_forestry_pos
+        )
 
     settings_manager.save()
     logger.info(f"Seasonpass: Konfiguration aktualisiert: {cfg.model_dump()}")

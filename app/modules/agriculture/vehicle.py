@@ -65,7 +65,7 @@ def get_sushibar_needed_ingredients(
         level = getattr(sushibar_service, "level", 1)
         for r in sushibar_service.recipes.values():
             if r.level <= level and not r.is_coin_recipe:
-                for nid in r.needs.keys():
+                for nid in r.needs:
                     pid_int = int(nid)
                     if stock_service:
                         prod = stock_service.get_product(pid_int)
@@ -77,7 +77,6 @@ def get_sushibar_needed_ingredients(
     if not ingredients:
         ingredients = set(FALLBACK_SUSHIBAR_INGREDIENTS)
     return ingredients
-
 
 
 def is_product_for_farm(product: Product, farm_id: int) -> bool:
@@ -304,7 +303,9 @@ class Vehicle:
                     load_amount = min(load_per_slot, target_amount)
                 else:
                     needed_amount = max(0, target_amount - outer_stock)
-                    load_amount = min(load_per_slot, needed_amount) if needed_amount > 0 else load_per_slot
+                    load_amount = (
+                        min(load_per_slot, needed_amount) if needed_amount > 0 else load_per_slot
+                    )
 
                 # Ensure stock is available on Farm 1 (grasps/buys if needed)
                 await stock_service.grasp_products([{"pid": pid, "amount": load_amount}])
@@ -342,13 +343,17 @@ class Vehicle:
                         if p.pid in quest_requirements:
                             target_demand = quest_requirements[p.pid]
                             if stock_service.get_amount(p.pid) < target_demand:
-                                outer_amt = stock_service.get_temp_amount(self.target_farm_id, p.pid)
+                                outer_amt = stock_service.get_temp_amount(
+                                    self.target_farm_id, p.pid
+                                )
                                 min_reserve = 0
                                 if p.category == farm_category or p.category == "water":
                                     if p.size_x and p.size_y:
                                         min_reserve = 120 // (p.size_x * p.size_y)
                                     if self.route_config.min_crop_reserve > 0:
-                                        min_reserve = max(min_reserve, self.route_config.min_crop_reserve)
+                                        min_reserve = max(
+                                            min_reserve, self.route_config.min_crop_reserve
+                                        )
                                 if outer_amt > min_reserve:
                                     has_outer_demand = True
                                     break
@@ -380,8 +385,7 @@ class Vehicle:
 
         # Required supply products must not be shipped back as harvest surplus
         required_pids = {
-            resolve_pid(req, stock_service)
-            for req in self.route_config.required_products
+            resolve_pid(req, stock_service) for req in self.route_config.required_products
         } - {None}
         if self.route_config.sushi_supply:
             required_pids.update(
@@ -453,7 +457,11 @@ class Vehicle:
                 continue
 
             needed_for_quest = False
-            if self.route_config.prioritize_quests and quest_requirements and p.pid in quest_requirements:
+            if (
+                self.route_config.prioritize_quests
+                and quest_requirements
+                and p.pid in quest_requirements
+            ):
                 target_demand = quest_requirements[p.pid]
                 current_main_stock = stock_service.get_amount(p.pid)
                 if current_main_stock < target_demand:
@@ -579,7 +587,9 @@ class Vehicle:
         )
 
         datablock = res.get("datablock")
-        success = datablock == 1 or datablock == [1] or (isinstance(datablock, list) and 1 in datablock)
+        success = (
+            datablock == 1 or datablock == [1] or (isinstance(datablock, list) and 1 in datablock)
+        )
 
         if success:
             logger.info(f"Fahrzeug '{self.name}' erfolgreich losgeschickt.")
@@ -686,11 +696,7 @@ class VehicleService:
                     if not str(v_id_raw).isdigit():
                         continue
                     v_id = int(v_id_raw)
-                    v_cfg_raw = (
-                        config_map.get(str(v_id))
-                        or config_map.get(v_id)
-                        or {}
-                    )
+                    v_cfg_raw = config_map.get(str(v_id)) or config_map.get(v_id) or {}
                     v_cfg = VehicleConfigData(
                         name=str(v_cfg_raw.get("name", f"Fahrzeug {v_id}")),
                         capacity=int(v_cfg_raw.get("capacity", 500)),
@@ -709,7 +715,9 @@ class VehicleService:
             if selected_v_id is None:
                 continue
 
-            v_state_raw = available_vehicles.get(str(selected_v_id)) or available_vehicles.get(selected_v_id)
+            v_state_raw = available_vehicles.get(str(selected_v_id)) or available_vehicles.get(
+                selected_v_id
+            )
             if not isinstance(v_state_raw, dict):
                 continue
 
@@ -763,7 +771,7 @@ class VehicleService:
                     quest_priority_order=quest_priority_order,
                     sushibar_service=sushibar_service,
                 )
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.opt(exception=True).error(
                     f"VehicleService: Fehler bei Fahrzeug auf Route {route_id}: {e}"
                 )
@@ -779,7 +787,9 @@ class VehicleService:
         if not vehicle:
             logger.warning(f"VehicleService: Route {route_id} nicht gefunden.")
             return False
-        cart_to_send = cart if (cart is not None and cart != "") else getattr(vehicle, "staged_cart", "")
+        cart_to_send = (
+            cart if (cart is not None and cart != "") else getattr(vehicle, "staged_cart", "")
+        )
         if (
             cart_to_send
             and cart_to_send == getattr(vehicle, "staged_cart", "")

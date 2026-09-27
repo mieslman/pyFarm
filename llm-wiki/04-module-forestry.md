@@ -94,6 +94,7 @@ Alle Anfragen gehen an den Service `forestry.php`:
   ```python
   from enum import IntEnum
 
+
   class ForestryStockCategory(IntEnum):
       SEEDLING = 1
       TRUNK = 2

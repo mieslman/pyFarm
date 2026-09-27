@@ -100,7 +100,7 @@ class SushiFarmiService:
                     collected_count += 1
                     if update_callback and isinstance(res, dict):
                         await update_callback(res)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     logger.error(f"Sushi-Bar: Fehler beim Kassieren von Gast {farmi.slot}: {e}")
 
         return collected_count

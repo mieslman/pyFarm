@@ -6,7 +6,9 @@ class VehicleState(BaseModel):
 
     current: int = Field(description="Current farm location (e.g. 1 for main farm, 5, 6, 8, 10)")
     route: int = Field(description="Assigned route ID")
-    vehicle_type: int = Field(alias="type", description="Vehicle type ID (e.g. 4 for tractor, 9 for pickup)")
+    vehicle_type: int = Field(
+        alias="type", description="Vehicle type ID (e.g. 4 for tractor, 9 for pickup)"
+    )
     remain: int = Field(default=0, description="Transit cooldown in seconds (0 = idle/ready)")
 
     model_config = {"populate_by_name": True}
@@ -28,9 +30,15 @@ class VehicleRouteConfig(BaseModel):
 
     farm_id: int = Field(description="Target outer farm ID (e.g. 5, 6, 8, 10)")
     route: int = Field(description="Route ID (e.g. 1, 2, 4)")
-    vehicle: int | None = Field(default=None, description="Specific vehicle type ID, or None for auto-fastest")
-    auto_fastest: bool = Field(default=True, description="Always select the fastest available vehicle on this route")
-    transport: bool = Field(default=True, description="Enable automatic transport to/from this farm")
+    vehicle: int | None = Field(
+        default=None, description="Specific vehicle type ID, or None for auto-fastest"
+    )
+    auto_fastest: bool = Field(
+        default=True, description="Always select the fastest available vehicle on this route"
+    )
+    transport: bool = Field(
+        default=True, description="Enable automatic transport to/from this farm"
+    )
     required_products: list[str | int] = Field(
         default_factory=list,
         description="Products to supply from main farm to this outer farm (names or PIDs)",
@@ -191,4 +199,3 @@ class VehicleInfo(BaseModel):
     last_sent_cart: str = ""
     only_quest_products: bool = False
     sushi_supply: bool = False
-

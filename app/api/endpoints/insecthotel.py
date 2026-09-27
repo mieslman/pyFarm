@@ -5,9 +5,7 @@ from loguru import logger
 
 from app.config import settings
 from app.core.auth import get_current_user
-from app.core.client import MFFGameClient
 from app.core.settings_manager import settings_manager
-from app.modules.insecthotel import InsectHotelService
 from app.worker.scheduler import worker_scheduler
 
 insecthotel_router = APIRouter(prefix="/insecthotel", tags=["Insektenhotel"])
@@ -17,18 +15,22 @@ insecthotel_router = APIRouter(prefix="/insecthotel", tags=["Insektenhotel"])
 async def get_insecthotel_status(_: dict[str, Any] = Depends(get_current_user)):
     """Retrieve current Insect Hotel status (populations, satisfaction, feeding slots, checkout)."""
     ih_svc = worker_scheduler.last_insecthotel_service
-    summary = ih_svc.get_summary().model_dump() if ih_svc else {
-        "active": False,
-        "hotel_id": "",
-        "total_population": 0,
-        "slots_count": 0,
-        "stock_slots_count": 0,
-        "checkout_money": 0.0,
-        "checkout_points": 0,
-        "checkout_money_limit": 0.0,
-        "checkout_points_limit": 0,
-        "last_updated": None,
-    }
+    summary = (
+        ih_svc.get_summary().model_dump()
+        if ih_svc
+        else {
+            "active": False,
+            "hotel_id": "",
+            "total_population": 0,
+            "slots_count": 0,
+            "stock_slots_count": 0,
+            "checkout_money": 0.0,
+            "checkout_points": 0,
+            "checkout_money_limit": 0.0,
+            "checkout_points_limit": 0,
+            "last_updated": None,
+        }
+    )
 
     snapshot_data = ih_svc.snapshot.model_dump() if (ih_svc and ih_svc.snapshot) else None
 

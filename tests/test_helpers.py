@@ -350,5 +350,3 @@ async def test_pet_parts_already_claimed(fast_client: MFFGameClient):
     fm_data = {"pets": {"daily": 0}}
     claimed = await helpers.handle_pet_parts(fm_data)
     assert claimed is False
-
-

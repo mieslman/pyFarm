@@ -16,7 +16,11 @@ farmersmarket_router = APIRouter(prefix="/farmersmarket", tags=["FarmersMarket"]
 async def get_farmersmarket_status(_: dict[str, Any] = Depends(get_current_user)):
     """Retrieve current state and summary of the Dorf 2 farmers market domains."""
     fm_svc = worker_scheduler.last_farmersmarket_service
-    if not fm_svc and worker_scheduler.last_stock_service and worker_scheduler.last_stock_service.client:
+    if (
+        not fm_svc
+        and worker_scheduler.last_stock_service
+        and worker_scheduler.last_stock_service.client
+    ):
         try:
             from app.modules.farmersmarket.service import FarmersMarketService
 

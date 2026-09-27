@@ -141,9 +141,7 @@ def test_offers_endpoints(auth_headers):
 def test_contracts_endpoints(auth_headers, mock_stock):
     """Test GET /contracts and PUT /contracts."""
     contracts_payload = {
-        "TestPartner": [
-            {"name": "Kornblumen", "pid": 8, "amount": 100, "min": 50, "price": 1.20}
-        ]
+        "TestPartner": [{"name": "Kornblumen", "pid": 8, "amount": 100, "min": 50, "price": 1.20}]
     }
     res_put = client.put("/api/v1/contracts", json=contracts_payload, headers=auth_headers)
     assert res_put.status_code == 200
@@ -244,5 +242,3 @@ def test_bot_circuit_breaker_endpoints(auth_headers):
         assert circuit_breaker.is_open is False
     finally:
         circuit_breaker.reset()
-
-

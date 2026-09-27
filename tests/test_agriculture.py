@@ -411,9 +411,7 @@ async def test_plant_strategy_solver_farm_rack_priority(fast_client):
     }
     # Global stock has 5000 Malve and 2000 Melisse.
     # But on Farm 6, Malve has 0 seeds in local rack, while Melisse has 300!
-    stock.farm_stocks = {
-        6: {705: 0, 708: 300}
-    }
+    stock.farm_stocks = {6: {705: 0, 708: 300}}
 
     quest_reqs = {705: 10000, 708: 5000}
     # Even though Malve has higher deficit (10000 - 5000 = 5000 vs 5000 - 2000 = 3000),
@@ -431,13 +429,15 @@ async def test_outer_farm_seed_requirement_filters_empty_stock(fast_client):
     """Test outer farm (e.g. Farm 5) excludes candidates with 0 seeds in local rack."""
     stock = StockService(fast_client)
     stock.products = {
-        360: Product(pid=360, name="Kokosnuss", price=80.0, category="ex", amount=211, size_x=2, size_y=2),
-        352: Product(pid=352, name="Limette", price=30.0, category="ex", amount=500, size_x=1, size_y=1),
+        360: Product(
+            pid=360, name="Kokosnuss", price=80.0, category="ex", amount=211, size_x=2, size_y=2
+        ),
+        352: Product(
+            pid=352, name="Limette", price=30.0, category="ex", amount=500, size_x=1, size_y=1
+        ),
     }
     # Local rack on Farm 5: Kokosnuss has 0 seeds, Limette has 150 seeds
-    stock.farm_stocks = {
-        5: {360: 0, 352: 150}
-    }
+    stock.farm_stocks = {5: {360: 0, 352: 150}}
 
     # Kokosnuss has lower total amount (211 < 500), but has 0 seeds on Farm 5.
     # Limette must be chosen!
@@ -459,15 +459,24 @@ async def test_field_plant_fallback_on_failure(fast_client):
 
     with respx.mock:
         # Mock gardeninit
-        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php", params__contains={"mode": "gardeninit"}).mock(
-            return_value=httpx.Response(200, json={"datablock": [1, {}]})
-        )
+        respx.get(
+            url__startswith="https://s1.myfreefarm.de/ajax/farm.php",
+            params__contains={"mode": "gardeninit"},
+        ).mock(return_value=httpx.Response(200, json={"datablock": [1, {}]}))
         # 1. autoplant Kokosnuss -> error
-        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php", params__contains={"mode": "autoplant", "id": 360}).mock(
-            return_value=httpx.Response(200, json={"datablock": [0, "In deinem Acker ist kein Platz mehr."]})
+        respx.get(
+            url__startswith="https://s1.myfreefarm.de/ajax/farm.php",
+            params__contains={"mode": "autoplant", "id": 360},
+        ).mock(
+            return_value=httpx.Response(
+                200, json={"datablock": [0, "In deinem Acker ist kein Platz mehr."]}
+            )
         )
         # 2. autoplant Limette -> success
-        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php", params__contains={"mode": "autoplant", "id": 352}).mock(
+        respx.get(
+            url__startswith="https://s1.myfreefarm.de/ajax/farm.php",
+            params__contains={"mode": "autoplant", "id": 352},
+        ).mock(
             return_value=httpx.Response(
                 200,
                 json={
@@ -479,7 +488,10 @@ async def test_field_plant_fallback_on_failure(fast_client):
             )
         )
         # 3. water -> success
-        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php", params__contains={"mode": "watergarden"}).mock(
+        respx.get(
+            url__startswith="https://s1.myfreefarm.de/ajax/farm.php",
+            params__contains={"mode": "watergarden"},
+        ).mock(
             return_value=httpx.Response(
                 200,
                 json={
@@ -505,7 +517,9 @@ async def test_field_multi_tile_crop_not_enough_tiles(fast_client):
     """Test plant aborts immediately if field does not have enough free tiles for multi-tile crop."""
     field = Field(fast_client, farm_id=1, position=1)
     # Simulate field with 118 planted tiles (only 2 free tiles left)
-    fake_tiles = {str(i): {"phase": 2, "remain": 100, "iswater": 1, "harvest": 1} for i in range(1, 119)}
+    fake_tiles = {
+        str(i): {"phase": 2, "remain": 100, "iswater": 1, "harvest": 1} for i in range(1, 119)
+    }
     await field.update({"datablock": [1, fake_tiles]})
     assert len(field.tiles) == 118
 
@@ -514,4 +528,3 @@ async def test_field_multi_tile_crop_not_enough_tiles(fast_client):
     planted = await field.plant(coconut)
     assert planted is False
     assert 360 in field.failed_pids
-

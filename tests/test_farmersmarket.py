@@ -26,7 +26,9 @@ class DummyStockService:
         self.products: dict[int, Product] = {}
         for pid, amt in self.inventory.items():
             cat = "fl" if 170 <= pid <= 199 else ("fla" if 200 <= pid <= 230 else "v")
-            self.products[pid] = Product(pid=pid, name=f"Product {pid}", category=cat, amount=amt, price=10.0)
+            self.products[pid] = Product(
+                pid=pid, name=f"Product {pid}", category=cat, amount=amt, price=10.0
+            )
 
     def get_amount(self, pid: int) -> int:
         return self.inventory.get(pid, 0)
@@ -103,7 +105,7 @@ async def test_flower_area_harvest_water_plant(fast_client: MFFGameClient):
     partial_data = {
         "flower_area": {
             "1": {"pid": "171", "remain": -100, "water_remain": 100},  # Ready (< 0)
-            "2": {"pid": "171", "remain": 500, "water_remain": 100},   # Growing (>= 0)
+            "2": {"pid": "171", "remain": 500, "water_remain": 100},  # Growing (>= 0)
         }
     }
     flower_area.update(partial_data)
@@ -121,9 +123,35 @@ async def test_flower_area_harvest_water_plant(fast_client: MFFGameClient):
     with respx.mock:
         respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
             side_effect=[
-                httpx.Response(200, json={"updateblock": {"farmersmarket": {"flower_area": []}}}),  # harvest_all
-                httpx.Response(200, json={"updateblock": {"farmersmarket": {"flower_area": {str(i): {"pid": "172", "remain": 14000, "water_remain": -10} for i in range(1, 37)}}}}),  # autoplant
-                httpx.Response(200, json={"updateblock": {"farmersmarket": {"flower_area": {str(i): {"pid": "172", "remain": 14000, "water_remain": 86400} for i in range(1, 37)}}}}),  # water_all
+                httpx.Response(
+                    200, json={"updateblock": {"farmersmarket": {"flower_area": []}}}
+                ),  # harvest_all
+                httpx.Response(
+                    200,
+                    json={
+                        "updateblock": {
+                            "farmersmarket": {
+                                "flower_area": {
+                                    str(i): {"pid": "172", "remain": 14000, "water_remain": -10}
+                                    for i in range(1, 37)
+                                }
+                            }
+                        }
+                    },
+                ),  # autoplant
+                httpx.Response(
+                    200,
+                    json={
+                        "updateblock": {
+                            "farmersmarket": {
+                                "flower_area": {
+                                    str(i): {"pid": "172", "remain": 14000, "water_remain": 86400}
+                                    for i in range(1, 37)
+                                }
+                            }
+                        }
+                    },
+                ),  # water_all
             ]
         )
 
@@ -307,7 +335,9 @@ async def test_farmersmarket_api_endpoints():
     """Test FastAPI REST endpoints for FarmersMarket."""
     from app.main import app
 
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as ac:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         # 1. Login to obtain JWT
         login_res = await ac.post(
             "/api/v1/login",

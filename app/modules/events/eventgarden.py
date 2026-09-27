@@ -1,8 +1,7 @@
-from typing import Any, Optional
 from loguru import logger
 
 from app.core.client import MFFGameClient
-from app.modules.events.models import EventGardenStatus, EventGardenTile
+from app.modules.events.models import EventGardenStatus
 
 
 class EventGardenService:
@@ -10,9 +9,9 @@ class EventGardenService:
 
     def __init__(self, client: MFFGameClient):
         self.client = client
-        self.last_status: Optional[EventGardenStatus] = None
+        self.last_status: EventGardenStatus | None = None
 
-    async def get_status(self) -> Optional[EventGardenStatus]:
+    async def get_status(self) -> EventGardenStatus | None:
         """Fetch and parse event garden state."""
         try:
             res = await self.client.api_call("farm", {"mode": "eventgarden_init"})
@@ -29,7 +28,9 @@ class EventGardenService:
                     ripe_count += 1
 
             available_seeds = {
-                int(pid): int(amt) for pid, amt in stock.items() if str(pid).isdigit() and int(amt) > 0
+                int(pid): int(amt)
+                for pid, amt in stock.items()
+                if str(pid).isdigit() and int(amt) > 0
             }
 
             status = EventGardenStatus(
@@ -64,8 +65,12 @@ class EventGardenService:
                 t for t in tiles.values() if isinstance(t, dict) and t.get("remain", 0) > 0
             ]
             if tiles and len(growing_tiles) == 0:
-                logger.info(f"EventGardenService: Ernte {len(tiles)} reife Beete im Event-Garten ab...")
-                harvest_res = await self.client.api_call("farm", {"mode": "eventgarden_harvest_all"})
+                logger.info(
+                    f"EventGardenService: Ernte {len(tiles)} reife Beete im Event-Garten ab..."
+                )
+                harvest_res = await self.client.api_call(
+                    "farm", {"mode": "eventgarden_harvest_all"}
+                )
                 if harvest_res.get("datablock", {}).get("data"):
                     logger.info("EventGardenService: Event-Garten erfolgreich abgeerntet.")
                     action_performed = True
@@ -100,7 +105,9 @@ class EventGardenService:
                         {"mode": "eventgarden_autoplant", "plant": best_pid},
                     )
                     if plant_res.get("datablock", {}).get("data"):
-                        logger.info(f"EventGardenService: Event-Garten erfolgreich bepflanzt mit {best_name}.")
+                        logger.info(
+                            f"EventGardenService: Event-Garten erfolgreich bepflanzt mit {best_name}."
+                        )
                         action_performed = True
                     else:
                         logger.warning(f"EventGardenService: Fehler beim Bepflanzen: {plant_res}")

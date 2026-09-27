@@ -133,7 +133,7 @@ class TableService:
 
                     if "updateblock" in res and self.stock_service:
                         self.stock_service.update(res)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     logger.warning(
                         f"Foodworld-Tische: Fehler beim Abkassieren von Tisch {table.table_id}, Stuhl {chair.chair_id}: {e}"
                     )
@@ -193,7 +193,7 @@ class TableService:
 
                 if "updateblock" in res and self.stock_service:
                     self.stock_service.update(res)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(
                     f"Foodworld-Tische: Fehler beim Platzieren von Gast #{farmi.id}: {e}"
                 )

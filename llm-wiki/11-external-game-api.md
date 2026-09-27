@@ -141,21 +141,30 @@ Die Spielserver antworten standardmäßig im JSON-Format mit folgender Grundstru
 import httpx
 import re
 
+
 class MFFGameClient:
     def __init__(self, server: int):
         self.server = server
         self.base_url = f"https://s{server}.myfreefarm.de"
-        self.client = httpx.AsyncClient(cookies=httpx.Cookies(), follow_redirects=True, timeout=30.0)
+        self.client = httpx.AsyncClient(
+            cookies=httpx.Cookies(), follow_redirects=True, timeout=30.0
+        )
         self.rid: str | None = None
 
     async def login(self, username: str, password: str) -> bool:
         # Step 1: Token
         resp = await self.client.post(
             f"https://www.myfreefarm.de/ajax/createtoken2.php?n={int(time.time())}",
-            data={"server": self.server, "username": username, "password": password, "ref": "frbek", "retid": ""}
+            data={
+                "server": self.server,
+                "username": username,
+                "password": password,
+                "ref": "frbek",
+                "retid": "",
+            },
         )
         token_url = resp.json()[1]
-        
+
         # Step 2: Session & RID
         login_resp = await self.client.get(token_url)
         match = re.search(r"var rid = '([a-f0-9]+)';", login_resp.text)

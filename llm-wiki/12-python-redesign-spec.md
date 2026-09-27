@@ -75,10 +75,10 @@ Die Anwendung ist in 5 klar voneinander entkoppelte Schichten unterteilt:
 
 ## 3. Projektstruktur
 
-Das Python-Projekt liegt isoliert im Unterordner [`myfreefarm_python/`](../myfreefarm_python/):
+Das Python-Projekt ist als eigenständiges Repository organisiert:
 
 ```
-myfreefarm_python/
+pyFarm/
 ├── pyproject.toml              # Build-Konfiguration & Abhängigkeiten (uv / pip)
 ├── README.md                   # Kurzanleitung für uv, Tests und Ausführung
 ├── config.yaml.example         # Beispielkonfiguration für Strategien & Limits

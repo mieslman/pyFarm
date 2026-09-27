@@ -1,4 +1,3 @@
-from typing import Any, Optional
 from loguru import logger
 
 from app.core.client import MFFGameClient
@@ -10,9 +9,9 @@ class DeliveryEventService:
 
     def __init__(self, client: MFFGameClient):
         self.client = client
-        self.last_status: Optional[DeliveryStatus] = None
+        self.last_status: DeliveryStatus | None = None
 
-    async def get_status(self) -> Optional[DeliveryStatus]:
+    async def get_status(self) -> DeliveryStatus | None:
         """Fetch and parse current delivery event state."""
         try:
             res = await self.client.api_call("farm", {"mode": "deliveryevent_init"})
@@ -24,7 +23,9 @@ class DeliveryEventService:
             actual_points = int(data_block.get("points", 0))
 
             current_tour = data_block.get("tour", {})
-            tour_remain = int(current_tour.get("remain", -1)) if isinstance(current_tour, dict) else -1
+            tour_remain = (
+                int(current_tour.get("remain", -1)) if isinstance(current_tour, dict) else -1
+            )
             tour_spot = str(current_tour.get("spot", "")) if isinstance(current_tour, dict) else ""
 
             status = DeliveryStatus(
@@ -91,7 +92,7 @@ class DeliveryEventService:
             top_candidates.sort(key=lambda s: s.points, reverse=True)
 
             # 3. Find the best affordable tour
-            chosen_spot: Optional[DeliverySpot] = None
+            chosen_spot: DeliverySpot | None = None
             for spot in top_candidates:
                 if spot.points <= actual_points:
                     chosen_spot = spot
@@ -121,7 +122,9 @@ class DeliveryEventService:
             )
 
             if "datablock" in start_res:
-                logger.info(f"DeliveryEventService: Tour #{chosen_spot.spot_id} erfolgreich gestartet.")
+                logger.info(
+                    f"DeliveryEventService: Tour #{chosen_spot.spot_id} erfolgreich gestartet."
+                )
                 await self.get_status()
                 return True
             else:

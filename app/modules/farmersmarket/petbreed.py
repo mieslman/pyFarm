@@ -112,11 +112,13 @@ class PetBreedService:
             await self.client.api_call("farm", {"mode": "pets_buy_parts", "id": 1, "amount": 1})
             open_res = await self.client.api_call("farm", {"mode": "pets_open_pack", "type": 1})
             self.state.daily = 0
-            logger.info("Tierzucht (PetBreed): Tägliches Bauteile-Päckchen erfolgreich abgeholt und geöffnet.")
+            logger.info(
+                "Tierzucht (PetBreed): Tägliches Bauteile-Päckchen erfolgreich abgeholt und geöffnet."
+            )
             if self.stock_service and "updateblock" in open_res:
                 self.stock_service.update(open_res)
             return True
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning(f"Tierzucht: Fehler beim Abholen des Bauteile-Päckchens: {e}")
             return False
 
@@ -126,7 +128,9 @@ class PetBreedService:
             await self.buy_daily_parts()
 
         if not self.enabled:
-            logger.debug("Tierzucht (PetBreed): Laut Konfiguration inaktiv - Zucht-Zyklus wird übersprungen.")
+            logger.debug(
+                "Tierzucht (PetBreed): Laut Konfiguration inaktiv - Zucht-Zyklus wird übersprungen."
+            )
             return 0
 
         logger.info("Tierzucht (PetBreed): Starte Zucht-Zyklus...")
@@ -153,6 +157,6 @@ class PetBreedService:
                     slot.gone = 0
                     if "updateblock" in res and self.stock_service:
                         self.stock_service.update(res)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     logger.warning(f"Tierzucht: Fehler beim Ernten von Slot #{slot.slot_id}: {e}")
         return harvested

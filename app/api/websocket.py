@@ -45,7 +45,7 @@ class ConnectionManager:
         for connection in self.active_connections:
             try:
                 await connection.send_text(payload)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 disconnected.append(connection)
 
         for conn in disconnected:
@@ -57,7 +57,7 @@ class ConnectionManager:
             return
         try:
             asyncio.run_coroutine_threadsafe(self.broadcast(message), self._loop)
-        except Exception:  # noqa: BLE001, S110
+        except Exception:  # noqa: S110
             pass
 
 
@@ -88,7 +88,7 @@ async def websocket_live_endpoint(websocket: WebSocket):
     if token:
         try:
             decode_access_token(token)
-        except Exception:  # noqa: BLE001
+        except Exception:
             await websocket.close(code=4001, reason="Ungültiges Authentifizierungs-Token")
             return
 
@@ -98,6 +98,7 @@ async def websocket_live_endpoint(websocket: WebSocket):
     next_seconds = None
     if worker_scheduler.next_run_time:
         import time
+
         now = time.time()
         next_seconds = max(0, int(worker_scheduler.next_run_time - now))
 
@@ -123,6 +124,6 @@ async def websocket_live_endpoint(websocket: WebSocket):
                 await websocket.send_text(json.dumps({"type": "pong"}))
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.debug(f"WebSocket Verbindung beendet: {e}")
         ws_manager.disconnect(websocket)

@@ -3,7 +3,6 @@ import pytest
 import respx
 from fastapi.testclient import TestClient
 
-from app.config import settings
 from app.core.auth import create_access_token
 from app.core.client import MFFGameClient
 from app.main import app
@@ -18,13 +17,10 @@ from app.modules.spicehouse.models import (
     MillSlotInfo,
     OvenSlotInfo,
     SpiceCustomer,
-    SpicehouseConfig,
 )
 from app.modules.spicehouse.oven import SpiceOvenService
-from app.modules.spicehouse.service import SpicehouseService
 from app.modules.spicehouse.solver import SpiceQuestSolver
 from app.services.stock_service import StockService
-from app.worker.scheduler import worker_scheduler
 
 
 def test_spicehouse_models():
@@ -140,7 +136,7 @@ async def test_oven_priority_and_fallback():
     )
     # All lines should bake Pfeffer (1100) because 1120 is missing and Pfeffer has surplus
     assert len(plan) == 3
-    for line_nr, slot_map in plan.items():
+    for slot_map in plan.values():
         assert slot_map["1"]["pid"] == 1100
         assert slot_map["1"]["amount"] == 10
 
@@ -153,7 +149,7 @@ async def test_oven_priority_and_fallback():
     )
     # Zimt (1101) has 1200 units, so it must be selected for all lines!
     assert len(plan_fallback) == 3
-    for line_nr, slot_map in plan_fallback.items():
+    for slot_map in plan_fallback.values():
         assert slot_map["1"]["pid"] == 1101
         assert slot_map["1"]["amount"] == 10
 
@@ -179,7 +175,9 @@ async def test_oven_harvest_and_produce_execution():
     with respx.mock:
         # Mock harvest call
         respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
-            return_value=httpx.Response(200, json={"status": "ok", "datablock": 1, "updateblock": {}})
+            return_value=httpx.Response(
+                200, json={"status": "ok", "datablock": 1, "updateblock": {}}
+            )
         )
 
         harvested = await oven.harvest()
@@ -232,7 +230,9 @@ async def test_mill_priority_and_fallback():
 
     with respx.mock:
         respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
-            return_value=httpx.Response(200, json={"status": "ok", "datablock": 1, "updateblock": {}})
+            return_value=httpx.Response(
+                200, json={"status": "ok", "datablock": 1, "updateblock": {}}
+            )
         )
 
         # Scenario A: Quest 6 demands Pfeffer gemahlen (1120)
@@ -282,7 +282,9 @@ async def test_customer_collection():
 
     with respx.mock:
         respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
-            return_value=httpx.Response(200, json={"status": "ok", "datablock": 1, "updateblock": {}})
+            return_value=httpx.Response(
+                200, json={"status": "ok", "datablock": 1, "updateblock": {}}
+            )
         )
 
         accepted = await cust_svc.collect(stock_service=stock_svc)

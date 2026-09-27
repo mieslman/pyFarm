@@ -88,7 +88,9 @@ class Field:
                 if len(datablock) > 1 and isinstance(datablock[1], dict)
                 else (
                     datablock[3][1]
-                    if len(datablock) > 3 and isinstance(datablock[3], list) and len(datablock[3]) > 1
+                    if len(datablock) > 3
+                    and isinstance(datablock[3], list)
+                    and len(datablock[3]) > 1
                     else {}
                 )
             )
@@ -97,7 +99,12 @@ class Field:
                 raw_tiles = datablock["1"]
             elif 1 in datablock and isinstance(datablock[1], dict):
                 raw_tiles = datablock[1]
-            elif "5" in datablock and isinstance(datablock["5"], list) and len(datablock["5"]) > 1 and isinstance(datablock["5"][1], dict):
+            elif (
+                "5" in datablock
+                and isinstance(datablock["5"], list)
+                and len(datablock["5"]) > 1
+                and isinstance(datablock["5"][1], dict)
+            ):
                 raw_tiles = datablock["5"][1]
 
         self.tiles = []

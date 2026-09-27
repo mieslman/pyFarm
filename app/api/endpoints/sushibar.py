@@ -21,18 +21,20 @@ async def get_sushibar_status(_: dict[str, Any] = Depends(get_current_user)):
     recipes_list = []
     if sb_svc and sb_svc.recipes:
         for pid, r in sorted(sb_svc.recipes.items(), key=lambda x: x[1].level):
-            recipes_list.append({
-                "pid": r.pid,
-                "name": r.name,
-                "level": r.level,
-                "category": r.category,
-                "costMoney": r.cost_money,
-                "costCoins": r.cost_coins,
-                "isCoinRecipe": r.is_coin_recipe,
-                "duration": r.duration,
-                "amount": r.amount,
-                "needs": r.needs,
-            })
+            recipes_list.append(
+                {
+                    "pid": r.pid,
+                    "name": r.name,
+                    "level": r.level,
+                    "category": r.category,
+                    "costMoney": r.cost_money,
+                    "costCoins": r.cost_coins,
+                    "isCoinRecipe": r.is_coin_recipe,
+                    "duration": r.duration,
+                    "amount": r.amount,
+                    "needs": r.needs,
+                }
+            )
 
     return {
         "config": settings.sushibar.model_dump(),

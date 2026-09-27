@@ -48,9 +48,13 @@ async def update_forestry_orders(
     if "autoPlant" in payload or "auto_plant" in payload:
         settings.forestry.auto_plant = bool(payload.get("autoPlant", payload.get("auto_plant")))
     if "autoProduce" in payload or "auto_produce" in payload:
-        settings.forestry.auto_produce = bool(payload.get("autoProduce", payload.get("auto_produce")))
+        settings.forestry.auto_produce = bool(
+            payload.get("autoProduce", payload.get("auto_produce"))
+        )
     if "serveFarmis" in payload or "serve_farmis" in payload:
-        settings.forestry.serve_farmis = bool(payload.get("serveFarmis", payload.get("serve_farmis")))
+        settings.forestry.serve_farmis = bool(
+            payload.get("serveFarmis", payload.get("serve_farmis"))
+        )
 
     settings_manager.save()
     logger.info(f"API: Forstwirtschafts-Konfiguration aktualisiert: {settings.forestry}")

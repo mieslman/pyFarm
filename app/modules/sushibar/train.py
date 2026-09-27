@@ -87,9 +87,7 @@ class SushiTrainService:
                 if f.have.get(cat, 0) < amt:
                     needed_cats.add(cat)
 
-        candidate_pids.sort(
-            key=lambda pid: 0 if recipes[pid].category in needed_cats else 1
-        )
+        candidate_pids.sort(key=lambda pid: 0 if recipes[pid].category in needed_cats else 1)
 
         for slot in free_slots:
             if not candidate_pids:
@@ -111,7 +109,7 @@ class SushiTrainService:
                 stock_service.deduct_stock(target_pid, 1, farm_id=8)
                 if update_callback and isinstance(res, dict):
                     await update_callback(res)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.error(f"Sushi-Bar: Fehler beim Beladen von Laufband-Slot {slot.slot}: {e}")
 
         return filled_count

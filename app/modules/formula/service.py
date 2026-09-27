@@ -96,7 +96,9 @@ class FormulaDealerService:
                         if self.stock_service and "updateblock" in res:
                             self.stock_service.update(res)
                     else:
-                        logger.warning(f"FormulaDealer: Unerwartete Antwort bei Powerup '{name}': {res}")
+                        logger.warning(
+                            f"FormulaDealer: Unerwartete Antwort bei Powerup '{name}': {res}"
+                        )
                         break
                 except UpstreamAPIError as e:
                     logger.warning(f"FormulaDealer: Fehler beim Zünden von Powerup '{name}': {e}")
@@ -117,7 +119,9 @@ class FormulaDealerService:
 
         datablock = res.get("datablock", [])
         if not isinstance(datablock, list) or len(datablock) < 3:
-            logger.warning(f"FormulaDealer: Ungültige Datenstruktur von initformuladealer: {datablock}")
+            logger.warning(
+                f"FormulaDealer: Ungültige Datenstruktur von initformuladealer: {datablock}"
+            )
             return {}
 
         offers = datablock[1]
@@ -136,7 +140,9 @@ class FormulaDealerService:
                     pass
 
         bought: dict[str, int] = {}
-        target_formulas = set(self.config.required_formulas) if self.config.required_formulas else None
+        target_formulas = (
+            set(self.config.required_formulas) if self.config.required_formulas else None
+        )
 
         for offer in offers:
             if not isinstance(offer, dict):
@@ -173,9 +179,15 @@ class FormulaDealerService:
                         },
                     )
                     datablock_buy = buy_res.get("datablock", [])
-                    if isinstance(datablock_buy, list) and len(datablock_buy) > 0 and datablock_buy[0] == 1:
+                    if (
+                        isinstance(datablock_buy, list)
+                        and len(datablock_buy) > 0
+                        and datablock_buy[0] == 1
+                    ):
                         bought[name] = amount_to_buy
-                        logger.info(f"FormulaDealer: {amount_to_buy}x Bauplan '{name}' erfolgreich gekauft.")
+                        logger.info(
+                            f"FormulaDealer: {amount_to_buy}x Bauplan '{name}' erfolgreich gekauft."
+                        )
                         if self.stock_service and "updateblock" in buy_res:
                             self.stock_service.update(buy_res)
                     else:
@@ -200,16 +212,14 @@ class FormulaDealerService:
         # 1. Activate ready powerups
         powerups_data = {}
         if farm_data:
-            powerups_data = (
-                farm_data.get("updateblock", {}).get("farms", {}).get("powerups", {})
-            )
+            powerups_data = farm_data.get("updateblock", {}).get("farms", {}).get("powerups", {})
 
         if not powerups_data:
             try:
-                res = await self.client.api_call("farm", {"mode": "getfarms", "farm": 1, "position": 0})
-                powerups_data = (
-                    res.get("updateblock", {}).get("farms", {}).get("powerups", {})
+                res = await self.client.api_call(
+                    "farm", {"mode": "getfarms", "farm": 1, "position": 0}
                 )
+                powerups_data = res.get("updateblock", {}).get("farms", {}).get("powerups", {})
             except UpstreamAPIError as e:
                 logger.warning(f"FormulaDealer: Konnte Powerup-Status nicht abrufen: {e}")
 

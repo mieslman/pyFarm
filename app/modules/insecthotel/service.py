@@ -1,5 +1,6 @@
-from datetime import datetime
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
+
 from loguru import logger
 
 from app.config import settings
@@ -23,15 +24,17 @@ class InsectHotelService:
 
     def __init__(self, client: MFFGameClient):
         self.client = client
-        self.snapshot: Optional[InsectHotelSnapshot] = None
+        self.snapshot: InsectHotelSnapshot | None = None
 
-    async def init_remote(self, stock_service: Optional[Any] = None) -> Optional[InsectHotelSnapshot]:
+    async def init_remote(self, stock_service: Any | None = None) -> InsectHotelSnapshot | None:
         """Fetch current state from game server and construct snapshot."""
         try:
             res = await self.client.api_call("farm", {"mode": "insecthotel_init"})
             hotel_data = res.get("updateblock", {}).get("map", {}).get("insecthotel", {})
             if not hotel_data or "data" not in hotel_data:
-                logger.debug("InsectHotelService: Kein Insektenhotel vorhanden oder freigeschaltet.")
+                logger.debug(
+                    "InsectHotelService: Kein Insektenhotel vorhanden oder freigeschaltet."
+                )
                 return None
 
             data = hotel_data.get("data", {})
@@ -127,7 +130,7 @@ class InsectHotelService:
                 stock_slots=stock_slots_map,
                 checkout=checkout,
                 total_population=total_pop,
-                last_updated=datetime.now().isoformat(),
+                last_updated=datetime.now(UTC).isoformat(),
             )
 
             # Compute target plan
@@ -157,9 +160,7 @@ class InsectHotelService:
         threshold = settings.insecthotel.checkout_threshold_percent
 
         should_collect = (
-            force
-            or chk.fill_ratio_money >= threshold
-            or chk.fill_ratio_points >= threshold
+            force or chk.fill_ratio_money >= threshold or chk.fill_ratio_points >= threshold
         )
 
         if not should_collect:
@@ -187,7 +188,9 @@ class InsectHotelService:
             logger.error(f"InsectHotelService: Fehler beim Kassenleeren: {e}")
             return False
 
-    async def rotate_slots(self, stock_service: Optional[Any] = None, force: bool = False) -> dict[str, Any]:
+    async def rotate_slots(
+        self, stock_service: Any | None = None, force: bool = False
+    ) -> dict[str, Any]:
         """Align food stock compartments with optimal target PIDs based on current strategy and species health."""
         if not self.snapshot:
             return {"rotated": 0, "swapped": []}
@@ -206,7 +209,9 @@ class InsectHotelService:
         self.snapshot.target_pids = target_pids
 
         current_slots = self.snapshot.stock_slots
-        assigned_pids = {slot.pid for slot in current_slots.values() if slot.pid and slot.pid in target_pids}
+        assigned_pids = {
+            slot.pid for slot in current_slots.values() if slot.pid and slot.pid in target_pids
+        }
         missing_pids = [p for p in target_pids if p not in assigned_pids]
 
         if not missing_pids:
@@ -221,7 +226,9 @@ class InsectHotelService:
 
         candidates_empty = [s for s in current_slots.values() if not s.pid or s.amount <= 0]
         candidates_unneeded = [
-            s for s in current_slots.values() if s.pid and s.pid not in target_pids and s not in candidates_empty
+            s
+            for s in current_slots.values()
+            if s.pid and s.pid not in target_pids and s not in candidates_empty
         ]
         slots_to_change = candidates_empty + candidates_unneeded
 
@@ -245,14 +252,20 @@ class InsectHotelService:
                         {"mode": "insecthotel_delete_stockslot", "slot": slot.slot_id},
                     )
                     datablock = res.get("datablock")
-                    if datablock == 1 or (isinstance(datablock, list) and datablock and datablock[0] == 1):
-                        logger.info(f"InsectHotelService: Lagerslot {slot.slot_id} erfolgreich freigegeben.")
+                    if datablock == 1 or (
+                        isinstance(datablock, list) and datablock and datablock[0] == 1
+                    ):
+                        logger.info(
+                            f"InsectHotelService: Lagerslot {slot.slot_id} erfolgreich freigegeben."
+                        )
                     else:
                         logger.warning(
                             f"InsectHotelService: Unerwartete Antwort bei delete_stockslot {slot.slot_id}: {res}"
                         )
                 except Exception as e:
-                    logger.error(f"InsectHotelService: Fehler bei delete_stockslot {slot.slot_id}: {e}")
+                    logger.error(
+                        f"InsectHotelService: Fehler bei delete_stockslot {slot.slot_id}: {e}"
+                    )
                     continue
 
             # Update slot representation
@@ -260,19 +273,21 @@ class InsectHotelService:
             slot.product_name = INSECT_PRODUCTS.get(new_pid, f"PID {new_pid}")
             slot.amount = 0  # will be filled by refill_stock
 
-            swapped.append({
-                "slot_id": slot.slot_id,
-                "old_pid": old_pid,
-                "new_pid": new_pid,
-                "new_name": slot.product_name,
-            })
+            swapped.append(
+                {
+                    "slot_id": slot.slot_id,
+                    "old_pid": old_pid,
+                    "new_pid": new_pid,
+                    "new_name": slot.product_name,
+                }
+            )
             logger.info(
                 f"InsectHotelService: Lagerslot {slot.slot_id} neu zugewiesen an '{slot.product_name}' (PID {new_pid})."
             )
 
         return {"rotated": len(swapped), "swapped": swapped}
 
-    async def refill_stock(self, stock_service: Optional[Any] = None, force: bool = False) -> int:
+    async def refill_stock(self, stock_service: Any | None = None, force: bool = False) -> int:
         """Refill feeding compartments if stock dropped below threshold, or if force is True."""
         if not self.snapshot:
             return 0
@@ -297,10 +312,12 @@ class InsectHotelService:
                 avail = stock_service.get_stock(slot.pid)
                 usable = max(0, avail - reserve)
                 if usable < slot.missing_amount:
-                    missing_requirements.append({
-                        "pid": slot.pid,
-                        "amount": slot.missing_amount - usable,
-                    })
+                    missing_requirements.append(
+                        {
+                            "pid": slot.pid,
+                            "amount": slot.missing_amount - usable,
+                        }
+                    )
 
             if missing_requirements:
                 logger.info(
@@ -309,7 +326,9 @@ class InsectHotelService:
                 try:
                     await stock_service.grasp_products(missing_requirements)
                 except Exception as e:
-                    logger.error(f"InsectHotelService: Fehler bei der Futterbeschaffung (grasp_products): {e}")
+                    logger.error(
+                        f"InsectHotelService: Fehler bei der Futterbeschaffung (grasp_products): {e}"
+                    )
 
         for slot_id, slot in self.snapshot.stock_slots.items():
             if not slot.pid:
@@ -354,7 +373,9 @@ class InsectHotelService:
                     },
                 )
                 datablock = res.get("datablock")
-                if datablock == 1 or (isinstance(datablock, list) and datablock and datablock[0] == 1):
+                if datablock == 1 or (
+                    isinstance(datablock, list) and datablock and datablock[0] == 1
+                ):
                     slot.amount += amount_to_refill
                     refilled_count += 1
                     logger.info(f"InsectHotelService: Lagerslot {slot_id} erfolgreich aufgefüllt.")
@@ -363,15 +384,19 @@ class InsectHotelService:
                         if hasattr(stock_service, "deduct_stock"):
                             stock_service.deduct_stock(slot.pid, amount_to_refill, farm_id=1)
                         elif hasattr(stock_service, "main_stock"):
-                            stock_service.main_stock[slot.pid] = max(0, available_stock - amount_to_refill)
+                            stock_service.main_stock[slot.pid] = max(
+                                0, available_stock - amount_to_refill
+                            )
                 else:
-                    logger.warning(f"InsectHotelService: Fehler beim Auffüllen von Slot {slot_id}: {res}")
+                    logger.warning(
+                        f"InsectHotelService: Fehler beim Auffüllen von Slot {slot_id}: {res}"
+                    )
             except Exception as e:
                 logger.error(f"InsectHotelService: Fehler beim Auffüllen von Slot {slot_id}: {e}")
 
         return refilled_count
 
-    async def serve(self, stock_service: Optional[Any] = None) -> dict[str, Any]:
+    async def serve(self, stock_service: Any | None = None) -> dict[str, Any]:
         """Orchestrate regular inspection, checkout collection, dynamic slot rotation, and stock refilling."""
         if not settings.insecthotel.enabled:
             logger.debug("InsectHotelService: Modul ist in Konfiguration deaktiviert.")

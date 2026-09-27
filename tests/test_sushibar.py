@@ -55,7 +55,9 @@ def test_sushibar_models():
     assert slot_ready.is_ready
     assert slot_ready.is_active
 
-    slot_busy = SushiProductionSlot(slot=2, pid=984, remain=500, duration=10800, gone=10300, block=0)
+    slot_busy = SushiProductionSlot(
+        slot=2, pid=984, remain=500, duration=10800, gone=10300, block=0
+    )
     assert not slot_busy.is_ready
     assert slot_busy.is_active
 
@@ -120,14 +122,20 @@ async def test_quest_solver_priority_and_field_reserve():
     # Setup dummy stock and catalog
     # PID 957 (Brunnenkresse) size 1x1, PID 17 (Karotten) size 1x1, PID 19 (Salat) size 1x1
     catalog = {
-        957: Product(pid=957, name="Brunnenkresse", price=1.0, size_x=1, size_y=1, category="water"),
+        957: Product(
+            pid=957, name="Brunnenkresse", price=1.0, size_x=1, size_y=1, category="water"
+        ),
         17: Product(pid=17, name="Karotten", price=1.0, size_x=1, size_y=1, category="v"),
         19: Product(pid=19, name="Salat", price=1.0, size_x=1, size_y=1, category="v"),
         950: Product(pid=950, name="Reis", price=1.0, size_x=1, size_y=1, category="water"),
         953: Product(pid=953, name="Taro", price=1.0, size_x=1, size_y=1, category="water"),
         12: Product(pid=12, name="Honig", price=1.0, size_x=1, size_y=1, category="prod"),
-        978: Product(pid=978, name="Brunnenkressensalat", price=5.0, size_x=1, size_y=1, category="sushi"),
-        984: Product(pid=984, name="Taro-Dampfnudeln", price=5.0, size_x=1, size_y=1, category="sushi"),
+        978: Product(
+            pid=978, name="Brunnenkressensalat", price=5.0, size_x=1, size_y=1, category="sushi"
+        ),
+        984: Product(
+            pid=984, name="Taro-Dampfnudeln", price=5.0, size_x=1, size_y=1, category="sushi"
+        ),
     }
     stock_svc.catalog = catalog
 
@@ -204,7 +212,16 @@ async def test_kitchen_harvest_and_produce():
 
     # Set up slots: Slot 1 is ready to harvest, Slot 2 is empty
     kitchen.slots = [
-        SushiProductionSlot(slot=1, pid=984, product_name="Taro-Dampfnudeln", amount=4, remain=0, duration=10800, gone=10800, block=0),
+        SushiProductionSlot(
+            slot=1,
+            pid=984,
+            product_name="Taro-Dampfnudeln",
+            amount=4,
+            remain=0,
+            duration=10800,
+            gone=10800,
+            block=0,
+        ),
         SushiProductionSlot(slot=2, pid=None, block=0),
     ]
 
@@ -228,7 +245,13 @@ async def test_kitchen_harvest_and_produce():
             19: Product(pid=19, name="Salat", amount=200),
         }
         recipes = {
-            978: SushiRecipe(pid=978, name="Brunnenkressensalat", level=11, cost_money=2300, needs={957: 14, 17: 11, 19: 12}),
+            978: SushiRecipe(
+                pid=978,
+                name="Brunnenkressensalat",
+                level=11,
+                cost_money=2300,
+                needs={957: 14, 17: 11, 19: 12},
+            ),
         }
 
         started = await kitchen.produce(
@@ -274,6 +297,7 @@ def test_train_inactive_by_default():
     recipes = {978: SushiRecipe(pid=978, name="Test")}
 
     import asyncio
+
     filled = asyncio.run(train_svc.fill(stock_svc, [], recipes, auto_train=False))
     assert filled == 0
 
@@ -523,6 +547,3 @@ async def test_quest5_water_requirements_logistics_vs_planting():
     assert 957 in logistics_pids
     assert logistics_candidates[1][0] == 957
     assert logistics_candidates[1][2] == 68  # Priority is Quest 68!
-
-
-

@@ -27,13 +27,15 @@ async def get_offers(_: dict[str, Any] = Depends(get_current_user)):
                     "price": p.price,
                     "amount": p.amount,
                 }
-        result.append({
-            "pid": rule.pid,
-            "minReserve": rule.min_reserve,
-            "sellBatch": rule.sell_batch,
-            "targetPrice": rule.target_price,
-            "plant": plant_info,
-        })
+        result.append(
+            {
+                "pid": rule.pid,
+                "minReserve": rule.min_reserve,
+                "sellBatch": rule.sell_batch,
+                "targetPrice": rule.target_price,
+                "plant": plant_info,
+            }
+        )
     return result
 
 
@@ -52,7 +54,9 @@ async def update_offers(
                         pid=int(item["pid"]),
                         min_reserve=int(item.get("minReserve") or item.get("min_reserve", 1000)),
                         sell_batch=int(item.get("sellBatch") or item.get("sell_batch", 100)),
-                        target_price=float(item["targetPrice"]) if item.get("targetPrice") else None,
+                        target_price=float(item["targetPrice"])
+                        if item.get("targetPrice")
+                        else None,
                     )
                 )
         settings.trade.sell_rules = new_rules
@@ -60,11 +64,19 @@ async def update_offers(
         if "enabled" in payload:
             settings.trade.enabled = bool(payload["enabled"])
         if "minCreditKt" in payload or "min_credit_kt" in payload:
-            settings.trade.min_credit_kt = float(payload.get("minCreditKt") or payload.get("min_credit_kt"))
+            settings.trade.min_credit_kt = float(
+                payload.get("minCreditKt") or payload.get("min_credit_kt")
+            )
         if "autoSellSurplus" in payload or "auto_sell_surplus" in payload:
-            settings.trade.auto_sell_surplus = bool(payload.get("autoSellSurplus") or payload.get("auto_sell_surplus"))
+            settings.trade.auto_sell_surplus = bool(
+                payload.get("autoSellSurplus") or payload.get("auto_sell_surplus")
+            )
         if "sellCategoryV" in payload or "sell_category_v" in payload:
-            val = payload.get("sellCategoryV") if "sellCategoryV" in payload else payload.get("sell_category_v")
+            val = (
+                payload.get("sellCategoryV")
+                if "sellCategoryV" in payload
+                else payload.get("sell_category_v")
+            )
             settings.trade.sell_category_v = bool(val)
         if "excludeCategories" in payload or "exclude_categories" in payload:
             cats = payload.get("excludeCategories") or payload.get("exclude_categories")

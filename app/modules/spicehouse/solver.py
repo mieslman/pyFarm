@@ -1,4 +1,5 @@
 from typing import Any
+
 from loguru import logger
 
 from app.modules.spicehouse.models import (
@@ -135,14 +136,13 @@ class SpiceQuestSolver:
             if raw_pid and missing > 0:
                 avail_raw = stock_service.get_farm_amount(self.farm_id, raw_pid)
                 usable_surplus = max(0, avail_raw - min_crop_reserve)
-                if usable_surplus > 0:
-                    if (raw_pid, missing) not in priorities:
-                        priorities.append((raw_pid, missing))
-                        logger.debug(
-                            f"SpiceQuestSolver (Ofen): Quest 6 verlangt PID {req_pid} "
-                            f"(Fehlmenge: {missing}). Trockne Rohgewürz PID {raw_pid} "
-                            f"(Vorrat auf Farm {self.farm_id}: {avail_raw}, Überschuss: {usable_surplus})."
-                        )
+                if usable_surplus > 0 and (raw_pid, missing) not in priorities:
+                    priorities.append((raw_pid, missing))
+                    logger.debug(
+                        f"SpiceQuestSolver (Ofen): Quest 6 verlangt PID {req_pid} "
+                        f"(Fehlmenge: {missing}). Trockne Rohgewürz PID {raw_pid} "
+                        f"(Vorrat auf Farm {self.farm_id}: {avail_raw}, Überschuss: {usable_surplus})."
+                    )
 
         return priorities
 

@@ -1,6 +1,7 @@
 import re
-from datetime import datetime
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
+
 from loguru import logger
 
 from app.config import settings
@@ -27,9 +28,9 @@ class EventManager:
         self.olympia = OlympiaEventService(client)
 
         self.last_detected_events: list[str] = []
-        self.last_run_timestamp: Optional[str] = None
+        self.last_run_timestamp: str | None = None
 
-    async def detect_active_events(self, html_content: Optional[str] = None) -> list[str]:
+    async def detect_active_events(self, html_content: str | None = None) -> list[str]:
         """Detect active seasonal events from the JavaScript configuration on main.php."""
         if html_content is None:
             if not self.client.rid:
@@ -40,7 +41,9 @@ class EventManager:
                 res = await self.client.client.get(url)
                 html_content = res.text
             except Exception as e:
-                logger.warning(f"EventManager: Fehler beim Laden von main.php für Event-Erkennung: {e}")
+                logger.warning(
+                    f"EventManager: Fehler beim Laden von main.php für Event-Erkennung: {e}"
+                )
                 return self.last_detected_events
 
         # Regex to find events.data = [...]
@@ -55,7 +58,9 @@ class EventManager:
         name_regex = re.compile(r'["\']name["\']\s*:\s*["\']([a-zA-Z0-9_-]+)["\']')
         detected_names = name_regex.findall(events_str)
 
-        logger.info(f"EventManager: Erkannte aktive Events auf Server {self.client.server}: {detected_names}")
+        logger.info(
+            f"EventManager: Erkannte aktive Events auf Server {self.client.server}: {detected_names}"
+        )
         self.last_detected_events = detected_names
         return detected_names
 
@@ -76,10 +81,10 @@ class EventManager:
         }
         return mapping.get(event_name.lower(), True)
 
-    async def serve(self, html_content: Optional[str] = None) -> dict[str, Any]:
+    async def serve(self, html_content: str | None = None) -> dict[str, Any]:
         """Execute a service cycle for all currently active seasonal events."""
         results: dict[str, Any] = {}
-        self.last_run_timestamp = datetime.now().isoformat()
+        self.last_run_timestamp = datetime.now(UTC).isoformat()
 
         if not settings.events.enabled:
             logger.debug("EventManager: Saisonevents sind global deaktiviert.")
@@ -89,11 +94,20 @@ class EventManager:
 
         # If no events auto-detected, but user configured specific events without auto_detect
         if not active_events and not settings.events.auto_detect:
-            possible_events = ["calendar", "deliveryevent", "eventgarden", "oktoberfest", "pentecostevent", "olympia"]
+            possible_events = [
+                "calendar",
+                "deliveryevent",
+                "eventgarden",
+                "oktoberfest",
+                "pentecostevent",
+                "olympia",
+            ]
             active_events = [e for e in possible_events if self.is_event_enabled(e)]
             logger.debug(f"EventManager: Verwende manuell aktivierte Events: {active_events}")
 
-        logger.info(f"========== EventManager: Starte Zyklus für {len(active_events)} aktive(s) Event(s) ==========")
+        logger.info(
+            f"========== EventManager: Starte Zyklus für {len(active_events)} aktive(s) Event(s) =========="
+        )
 
         for event in active_events:
             event_clean = event.lower()

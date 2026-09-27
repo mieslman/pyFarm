@@ -34,7 +34,9 @@ class StartProductionTaskHandler(BaseTaskHandler):
         if self.stock_service:
             fed = await matched_shed.feed(self.stock_service)
             if fed:
-                self.logger.info(f"Seasonpass: Stall {matched_shed.farm_id}/{matched_shed.position} erfolgreich gefüttert.")
+                self.logger.info(
+                    f"Seasonpass: Stall {matched_shed.farm_id}/{matched_shed.position} erfolgreich gefüttert."
+                )
                 return True
 
         return False
@@ -58,7 +60,9 @@ class HarvestProductionTaskHandler(BaseTaskHandler):
                     await shed.update()
                     if shed.barn and shed.barn.is_ready:
                         await shed.crop()
-                        self.logger.info(f"Seasonpass: Stall {shed.farm_id}/{shed.position} erfolgreich abgeerntet.")
+                        self.logger.info(
+                            f"Seasonpass: Stall {shed.farm_id}/{shed.position} erfolgreich abgeerntet."
+                        )
                         return True
 
         return True

@@ -27,35 +27,41 @@ async def get_fuelstation(_: dict[str, Any] = Depends(get_current_user)):
                     p_obj = stock_svc.get_product(pid) if stock_svc else None
                     p_name = p_obj.name if p_obj else f"PID {pid}"
                     p_stock = p_obj.total_amount if p_obj else 0
-                    accepted_list.append({
-                        "pid": pid,
-                        "name": p_name,
-                        "points": pts,
-                        "stock": p_stock,
-                    })
+                    accepted_list.append(
+                        {
+                            "pid": pid,
+                            "name": p_name,
+                            "points": pts,
+                            "stock": p_stock,
+                        }
+                    )
 
-                slots_data.append({
-                    "slotId": slot_id,
-                    "level": slot.level,
-                    "productionLimit": slot.production_limit,
-                    "currentPoints": slot.current_points,
-                    "pointsNeeded": slot.points_needed,
-                    "levelPointsLeft": slot.level_points_left,
-                    "busy": slot.busy,
-                    "remain": slot.remain,
-                    "isBlocked": slot.is_blocked,
-                    "isFinished": slot.is_finished,
-                    "isWaitingForRefill": slot.is_waiting_for_refill,
-                    "acceptedProducts": accepted_list,
-                })
+                slots_data.append(
+                    {
+                        "slotId": slot_id,
+                        "level": slot.level,
+                        "productionLimit": slot.production_limit,
+                        "currentPoints": slot.current_points,
+                        "pointsNeeded": slot.points_needed,
+                        "levelPointsLeft": slot.level_points_left,
+                        "busy": slot.busy,
+                        "remain": slot.remain,
+                        "isBlocked": slot.is_blocked,
+                        "isFinished": slot.is_finished,
+                        "isWaitingForRefill": slot.is_waiting_for_refill,
+                        "acceptedProducts": accepted_list,
+                    }
+                )
 
-            fs_states.append({
-                "farmId": fs.farm_id,
-                "position": fs.position,
-                "level": fs.level,
-                "tokens": fs.tokens,
-                "slots": slots_data,
-            })
+            fs_states.append(
+                {
+                    "farmId": fs.farm_id,
+                    "position": fs.position,
+                    "level": fs.level,
+                    "tokens": fs.tokens,
+                    "slots": slots_data,
+                }
+            )
 
     return {
         "config": settings.fuelstation.model_dump(),
@@ -72,12 +78,18 @@ async def update_fuelstation_config(
     if "enabled" in payload:
         settings.fuelstation.enabled = bool(payload["enabled"])
     if "auto_harvest" in payload or "autoHarvest" in payload:
-        settings.fuelstation.auto_harvest = bool(payload.get("auto_harvest", payload.get("autoHarvest")))
+        settings.fuelstation.auto_harvest = bool(
+            payload.get("auto_harvest", payload.get("autoHarvest"))
+        )
     if "auto_refill" in payload or "autoRefill" in payload:
-        settings.fuelstation.auto_refill = bool(payload.get("auto_refill", payload.get("autoRefill")))
+        settings.fuelstation.auto_refill = bool(
+            payload.get("auto_refill", payload.get("autoRefill"))
+        )
     if "min_reserve" in payload or "minReserve" in payload:
         try:
-            settings.fuelstation.min_reserve = int(payload.get("min_reserve", payload.get("minReserve")))
+            settings.fuelstation.min_reserve = int(
+                payload.get("min_reserve", payload.get("minReserve"))
+            )
         except (ValueError, TypeError):
             pass
     if "preferred_pids" in payload or "preferredPids" in payload:

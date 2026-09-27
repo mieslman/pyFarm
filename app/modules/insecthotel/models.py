@@ -1,9 +1,9 @@
-from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
 class InsectNicheSlot(BaseModel):
     """Represents a living niche/slot for a specific insect species in the hotel."""
+
     slot_id: str
     name: str = ""
     level: int = 1
@@ -21,9 +21,10 @@ class InsectNicheSlot(BaseModel):
 
 class InsectStockSlot(BaseModel):
     """Represents a feeding stock compartment in the hotel's food storage."""
+
     slot_id: str
     level: int = 1
-    pid: Optional[int] = None
+    pid: int | None = None
     product_name: str = ""
     amount: int = 0
     capacity: int = 0
@@ -45,6 +46,7 @@ class InsectStockSlot(BaseModel):
 
 class InsectCheckout(BaseModel):
     """The hotel's cash register collecting earned kT and XP."""
+
     level: int = 1
     money: float = 0.0
     points: int = 0
@@ -70,18 +72,20 @@ class InsectCheckout(BaseModel):
 
 class InsectHotelSnapshot(BaseModel):
     """Complete runtime state snapshot of the Insect Hotel."""
+
     id: str = ""
     slots: dict[str, InsectNicheSlot] = Field(default_factory=dict)
     stock_slots: dict[str, InsectStockSlot] = Field(default_factory=dict)
     checkout: InsectCheckout = Field(default_factory=InsectCheckout)
     total_population: int = 0
-    last_updated: Optional[str] = None
+    last_updated: str | None = None
     target_pids: list[int] = Field(default_factory=list)
     current_strategy: str = ""
 
 
 class InsectHotelSummary(BaseModel):
     """Consolidated summary for dashboard and REST API reporting."""
+
     active: bool = False
     hotel_id: str = ""
     total_population: int = 0
@@ -94,4 +98,4 @@ class InsectHotelSummary(BaseModel):
     strategy: str = ""
     target_pids: list[int] = Field(default_factory=list)
     endangered_species: list[str] = Field(default_factory=list)
-    last_updated: Optional[str] = None
+    last_updated: str | None = None

@@ -21,7 +21,9 @@ async def bot_status(_: dict[str, Any] = Depends(get_current_user)):
     return {
         "is_running": worker_scheduler.is_running,
         "state": worker_scheduler.current_state,
-        "last_run": worker_scheduler.last_run_time.isoformat() if worker_scheduler.last_run_time else None,
+        "last_run": worker_scheduler.last_run_time.isoformat()
+        if worker_scheduler.last_run_time
+        else None,
         "next_run_timestamp": worker_scheduler.next_run_time,
         "next_run_seconds": next_seconds,
         "last_error": worker_scheduler.last_error,

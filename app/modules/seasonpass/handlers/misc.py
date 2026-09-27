@@ -1,4 +1,5 @@
 from typing import Any
+
 from app.modules.helpers.helpers_service import HelpersService
 from app.modules.seasonpass.handlers.base import BaseTaskHandler
 from app.modules.seasonpass.task_registry import register_task
@@ -11,7 +12,9 @@ class WeatherTaskHandler(BaseTaskHandler):
     task_type = "weather"
 
     async def run(self) -> bool:
-        self.logger.info(f"Seasonpass: Starte Weather-Task {self.task.id} (Wetterstation aufrufen)...")
+        self.logger.info(
+            f"Seasonpass: Starte Weather-Task {self.task.id} (Wetterstation aufrufen)..."
+        )
         try:
             await self.client.api_call("farm", {"mode": "weather_init", "farm": 2, "position": 0})
             self.logger.info("Seasonpass: Wetterstation erfolgreich aufgerufen.")
@@ -28,7 +31,9 @@ class FriendVisitTaskHandler(BaseTaskHandler):
     task_type = "friendvisit"
 
     async def run(self) -> bool:
-        self.logger.info(f"Seasonpass: Starte FriendVisit-Task {self.task.id} (Freundesliste abrufen)...")
+        self.logger.info(
+            f"Seasonpass: Starte FriendVisit-Task {self.task.id} (Freundesliste abrufen)..."
+        )
         friend_unr: str | None = None
 
         # 1. Fetch friends list from game server
@@ -94,7 +99,13 @@ class FarmiTaskHandler(BaseTaskHandler):
             res = await self.client.api_call("farm", {"mode": "getfarms", "farm": 1, "position": 0})
             updateblock = res.get("updateblock", {})
             farmis_block = updateblock.get("farmis", [])
-            offers = farmis_block[0] if isinstance(farmis_block, list) and len(farmis_block) > 0 and isinstance(farmis_block[0], list) else []
+            offers = (
+                farmis_block[0]
+                if isinstance(farmis_block, list)
+                and len(farmis_block) > 0
+                and isinstance(farmis_block[0], list)
+                else []
+            )
 
             for offer in offers:
                 if not isinstance(offer, dict):
@@ -112,13 +123,14 @@ class FarmiTaskHandler(BaseTaskHandler):
                     if p_key in offer and a_key in offer:
                         pid = int(offer[p_key]) if str(offer[p_key]).isdigit() else 0
                         amt = int(offer[a_key]) if str(offer[a_key]).isdigit() else 0
-                        if pid > 0 and amt > 0:
-                            if self.stock_service.get_amount(pid) < amt:
-                                can_fulfill = False
-                                break
+                        if pid > 0 and amt > 0 and self.stock_service.get_amount(pid) < amt:
+                            can_fulfill = False
+                            break
 
                 if can_fulfill:
-                    self.logger.info(f"Seasonpass: Bediente Farmi {offer_id} (Preis: {offer.get('price')} kT)...")
+                    self.logger.info(
+                        f"Seasonpass: Bediente Farmi {offer_id} (Preis: {offer.get('price')} kT)..."
+                    )
                     await self.client.api_call(
                         "farm",
                         {
@@ -133,7 +145,9 @@ class FarmiTaskHandler(BaseTaskHandler):
                     self.logger.info(f"Seasonpass: Farmi {offer_id} erfolgreich bedient.")
                     return True
 
-            self.logger.debug("Seasonpass: Kein Farmi-Auftrag mit aktuellem Lagerbestand erfüllbar.")
+            self.logger.debug(
+                "Seasonpass: Kein Farmi-Auftrag mit aktuellem Lagerbestand erfüllbar."
+            )
             return True
         except Exception as e:
             self.logger.warning(f"Seasonpass: Fehler bei Farmi-Task: {e}")

@@ -63,7 +63,7 @@ class FarmersMarketService:
         try:
             res = await self.client.api_call("farm", {"mode": "getfarms", "farm": 1, "position": 0})
             fm_data = res.get("updateblock", {}).get("farmersmarket", {})
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning(f"FarmersMarketService: Fehler beim Laden der Marktdaten: {e}")
             return results
 
@@ -86,7 +86,7 @@ class FarmersMarketService:
             try:
                 served = await self.farmis.serve_and_collect_orders(self.order_manager)
                 results["farmis_served"] = served
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(f"FarmersMarketService: Fehler bei Farmis: {e}")
 
         # 4. Gärtnerei (Nursery): harvest ready and craft demanded arrangements
@@ -96,7 +96,7 @@ class FarmersMarketService:
                 produced = await self.nursery.produce(self.order_manager)
                 results["nursery_harvested"] = harvested
                 results["nursery_produced"] = produced
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(f"FarmersMarketService: Fehler in Gärtnerei: {e}")
 
         # 5. Blumenwiese (FlowerArea): harvest, plant empty beds, then water all
@@ -108,7 +108,7 @@ class FarmersMarketService:
                 results["flowers_harvested"] = f_harvested
                 results["flowers_planted"] = f_planted
                 results["flowers_watered"] = f_watered
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(f"FarmersMarketService: Fehler auf Blumenwiese: {e}")
 
         # 6. Schau-Slots (FlowerSlots): maintain display
@@ -120,7 +120,7 @@ class FarmersMarketService:
                 results["slots_removed"] = s_removed
                 results["slots_watered"] = s_watered
                 results["slots_planted"] = s_planted
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(f"FarmersMarketService: Fehler bei Schau-Slots: {e}")
 
         # 7. Tierzucht (PetBreed): strictly checks config flag
@@ -128,7 +128,7 @@ class FarmersMarketService:
             try:
                 pb_harvested = await self.pet_breed.run_cycle()
                 results["pet_breed_harvested"] = pb_harvested
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(f"FarmersMarketService: Fehler in Tierzucht: {e}")
         else:
             logger.debug("Tierzucht (PetBreed) ist laut Konfiguration inaktiv - wird übersprungen.")
@@ -144,7 +144,9 @@ class FarmersMarketService:
     def get_summary(self) -> FarmersMarketSummary:
         """Return a structured live summary for REST API and Web Dashboard."""
         nursery_ready = sum(1 for s in self.nursery.state.slots.values() if s.is_ready)
-        nursery_active = sum(1 for s in self.nursery.state.slots.values() if not s.is_free and not s.is_blocked)
+        nursery_active = sum(
+            1 for s in self.nursery.state.slots.values() if not s.is_free and not s.is_blocked
+        )
 
         fields = list(self.flower_area.state.fields.values())
         f_ready = sum(1 for f in fields if f.is_ready)

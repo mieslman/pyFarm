@@ -112,10 +112,10 @@ class FuelstationConfig(BaseModel):
     preferred_pids: list[int] = Field(default_factory=lambda: [2, 18, 17, 1])
     slot_preferred_pids: dict[int, list[int]] = Field(
         default_factory=lambda: {
-            1: [2, 18, 17, 1],   # Slot 1 (Stufe 5): Mais (2) bevorzugt, dann Gurken (18)
-            2: [18, 17, 1],       # Slot 2 (Stufe 3): Gurken (18) bevorzugt (Mais erst ab Stufe 5)
-            3: [17, 113, 33, 31], # Slot 3 (Stufe 1): Karotten (17), Chili, Himbeeren, Zucchini
-            4: [17, 113, 33, 31], # Slot 4 (Stufe 1)
+            1: [2, 18, 17, 1],  # Slot 1 (Stufe 5): Mais (2) bevorzugt, dann Gurken (18)
+            2: [18, 17, 1],  # Slot 2 (Stufe 3): Gurken (18) bevorzugt (Mais erst ab Stufe 5)
+            3: [17, 113, 33, 31],  # Slot 3 (Stufe 1): Karotten (17), Chili, Himbeeren, Zucchini
+            4: [17, 113, 33, 31],  # Slot 4 (Stufe 1)
         }
     )
 
@@ -145,7 +145,6 @@ class FoodworldConfig(BaseModel):
     market_export_enabled: bool = True  # Überschuss (> 50) am Markt anbieten
     only_empty_market: bool = True  # Nur anbieten, wenn bisher kein Angebot dafür vorhanden ist
     auto_unlock_tables: bool = False  # Keine automatischen Tischkäufe tätigen
-
 
 
 class SushibarConfig(BaseModel):
@@ -295,7 +294,6 @@ class Settings(BaseSettings):
     insecthotel: InsecthotelSettingsConfig = Field(default_factory=InsecthotelSettingsConfig)
     stall: StallSettingsConfig = Field(default_factory=StallSettingsConfig)
     vehicles: VehiclesConfig = Field(default_factory=VehiclesConfig)
-
 
     model_config = SettingsConfigDict(
         env_file=".env",

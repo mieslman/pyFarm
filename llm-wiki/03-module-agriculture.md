@@ -52,7 +52,7 @@ Das `agriculture`-Modul steuert den Ackerbau, die Sushibar-Produktion sowie den 
 ### `SushiBar.js` (Spezialfabrik SushiBar - Altsystem) & Python-Modul `app/modules/sushibar/` ✅
 - **Altsystem:** Node.js-Klasse `SushiBar` mit einfacher Schleife (`update`, `harvest`, `produce`, `fillTrain`, `collectFarmi`).
 - **Python-Redesign (Vollständig implementiert):**
-  - Eigenständiges Modul [`app/modules/sushibar/`](../myfreefarm_python/app/modules/sushibar/) mit Pydantic v2 Datenmodellen.
+  - Eigenständiges Modul [`app/modules/sushibar/`](../app/modules/sushibar/) mit Pydantic v2 Datenmodellen.
   - Ausrichtung an **Hauptquestreihe 5 (Wasserschutz)** via `SushiQuestSolver` (ab Quest 64 bis 100).
   - Strikter **Coin-Schutz** (keine Coin-Rezepte, keine bezahlten Slot-Käufe oder Speedups).
   - **Feld-Bepflanzungsreserve:** Mindestens 120 Einheiten (bzw. $120 / (x \times y)$) bleiben für den Wasser-Ackerbau unangetastet.
@@ -64,8 +64,8 @@ Das `agriculture`-Modul steuert den Ackerbau, die Sushibar-Produktion sowie den 
 ### `Vehicle.js` (Altsystem) & Python-Modul `app/modules/agriculture/vehicle.py` ✅
 - **Altsystem:** Node.js-Klasse `Vehicle` mit einfacher Schleife (`loop(plants, requirements)` und `sendVehicle(cart)`).
 - **Python-Redesign (Vollständig implementiert):**
-  - Eigenständige Klassen `Vehicle` und `VehicleService` in [`app/modules/agriculture/vehicle.py`](../myfreefarm_python/app/modules/agriculture/vehicle.py).
-  - Pydantic v2 DTOs in [`app/models/vehicle.py`](../myfreefarm_python/app/models/vehicle.py) (`VehicleState`, `VehicleConfigData`, `VehicleRouteConfig`, `VehicleInfo`).
+  - Eigenständige Klassen `Vehicle` und `VehicleService` in [`app/modules/agriculture/vehicle.py`](../app/modules/agriculture/vehicle.py).
+  - Pydantic v2 DTOs in [`app/models/vehicle.py`](../app/models/vehicle.py) (`VehicleState`, `VehicleConfigData`, `VehicleRouteConfig`, `VehicleInfo`).
   - **Automatische Wahl des schnellsten Transportmittels (`auto_fastest: True`):**
     - Scanned alle auf der Route freigeschalteten Fahrzeuge (`updateblock.map.vehicles[route_id]`).
     - Ermittelt automatisch das Transportmittel mit der geringsten Fahrzeit (`duration`), höchsten Geschwindigkeit oder höchsten Fahrzeugstufe/Kapazität (z. B. Traktor vor Handwagen, Pickup vor Traktor).
@@ -108,12 +108,14 @@ Das `agriculture`-Modul steuert den Ackerbau, die Sushibar-Produktion sowie den 
    from pydantic import BaseModel
    from typing import Optional, List
 
+
    class PlantSlot(BaseModel):
        slot_id: int
        pid: int
        phase: int  # 4 = reif
        remain: int
        iswater: bool
+
 
    class FieldModel(BaseModel):
        farm_id: int

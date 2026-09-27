@@ -1,4 +1,5 @@
 from typing import Any
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -6,7 +7,6 @@ from app.core.auth import create_access_token
 from app.core.client import MFFGameClient
 from app.main import app
 from app.models.product import Product
-from app.modules.stall.models import MarketStall, StallSlot
 from app.modules.stall.service import FruitStallService
 from app.worker.scheduler import worker_scheduler
 
@@ -51,8 +51,11 @@ MOCK_STALL_INIT = {
                         "farmi_count": 420,
                         "reward": {"money": 250.0, "points": 500},
                         "slots": {
-                            "1": {"pid": 352, "amount": 80},  # Limette: 80 / 280 (< 50% = 140 -> should be cleared)
-                            "2": {"pid": 354, "amount": 250}, # Papaya: 250 / 280 (>= 50% -> keep)
+                            "1": {
+                                "pid": 352,
+                                "amount": 80,
+                            },  # Limette: 80 / 280 (< 50% = 140 -> should be cleared)
+                            "2": {"pid": 354, "amount": 250},  # Papaya: 250 / 280 (>= 50% -> keep)
                         },
                     },
                     "2": {
@@ -62,8 +65,8 @@ MOCK_STALL_INIT = {
                         "farmi_count": 310,
                         "reward": None,
                         "slots": {
-                            "1": [],                           # Free slot -> should be filled
-                            "2": {"time": 1661748302},         # Free slot -> should be filled
+                            "1": [],  # Free slot -> should be filled
+                            "2": {"time": 1661748302},  # Free slot -> should be filled
                         },
                     },
                 },
@@ -151,7 +154,9 @@ async def test_stall_collect_rewards(dummy_client: MFFGameClient, monkeypatch: p
 # 3. Clearing Depleted Slots
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_stall_clear_depleted_slots(dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch):
+async def test_stall_clear_depleted_slots(
+    dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch
+):
     service = FruitStallService(dummy_client)
     calls = []
 
@@ -180,7 +185,9 @@ async def test_stall_clear_depleted_slots(dummy_client: MFFGameClient, monkeypat
 # 4. Slot Replenishment with Reserve Protection
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_stall_fill_free_slots_with_reserve(dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch):
+async def test_stall_fill_free_slots_with_reserve(
+    dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch
+):
     service = FruitStallService(dummy_client)
     calls = []
 
@@ -191,11 +198,13 @@ async def test_stall_fill_free_slots_with_reserve(dummy_client: MFFGameClient, m
     # - PID 351 (Ananas): amount 1200 -> usable = 1200 - 500 = 700 >= 280 (Valid)
     # - PID 353 (Litschi): amount 900 -> usable = 900 - 500 = 400 >= 280 (Valid)
     # - PID 355 (Maracuja): amount 650 -> usable = 650 - 500 = 150 < 280 (Too low, protected!)
-    mock_stock = MockStockForStall({
-        351: Product(pid=351, name="Ananas", price=10.0, category="ex", amount=1200),
-        353: Product(pid=353, name="Litschi", price=12.0, category="ex", amount=900),
-        355: Product(pid=355, name="Maracuja", price=15.0, category="ex", amount=650),
-    })
+    mock_stock = MockStockForStall(
+        {
+            351: Product(pid=351, name="Ananas", price=10.0, category="ex", amount=1200),
+            353: Product(pid=353, name="Litschi", price=12.0, category="ex", amount=900),
+            355: Product(pid=355, name="Maracuja", price=15.0, category="ex", amount=650),
+        }
+    )
 
     async def mock_api_call(endpoint: str, params: dict[str, Any], **kwargs):
         calls.append((endpoint, params))
@@ -213,8 +222,14 @@ async def test_stall_fill_free_slots_with_reserve(dummy_client: MFFGameClient, m
 
     assert filled == 2
     # Chosen fruits should be 351 (highest usable) and 353
-    assert ("farm", {"mode": "stall_fill_slot", "position": "2", "slot": "1", "pid": 351, "amount": 280}) in calls
-    assert ("farm", {"mode": "stall_fill_slot", "position": "2", "slot": "2", "pid": 353, "amount": 280}) in calls
+    assert (
+        "farm",
+        {"mode": "stall_fill_slot", "position": "2", "slot": "1", "pid": 351, "amount": 280},
+    ) in calls
+    assert (
+        "farm",
+        {"mode": "stall_fill_slot", "position": "2", "slot": "2", "pid": 353, "amount": 280},
+    ) in calls
     # PID 355 was not used because usable (150) < 280
     assert not any(p.get("pid") == 355 for _, p in calls)
     # Stock deducted
@@ -228,11 +243,13 @@ async def test_stall_fill_free_slots_with_reserve(dummy_client: MFFGameClient, m
 @pytest.mark.asyncio
 async def test_stall_serve(dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch):
     service = FruitStallService(dummy_client)
-    mock_stock = MockStockForStall({
-        351: Product(pid=351, name="Ananas", price=10.0, category="ex", amount=1500),
-        353: Product(pid=353, name="Litschi", price=12.0, category="ex", amount=1400),
-        356: Product(pid=356, name="Banane", price=11.0, category="ex", amount=1300),
-    })
+    mock_stock = MockStockForStall(
+        {
+            351: Product(pid=351, name="Ananas", price=10.0, category="ex", amount=1500),
+            353: Product(pid=353, name="Litschi", price=12.0, category="ex", amount=1400),
+            356: Product(pid=356, name="Banane", price=11.0, category="ex", amount=1300),
+        }
+    )
 
     async def mock_api_call(endpoint: str, params: dict[str, Any], **kwargs):
         mode = params.get("mode")
@@ -257,11 +274,15 @@ async def test_stall_serve(dummy_client: MFFGameClient, monkeypatch: pytest.Monk
 # 6. REST API Endpoints
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_stall_api(dummy_client: MFFGameClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch):
+async def test_stall_api(
+    dummy_client: MFFGameClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+):
     st_service = FruitStallService(dummy_client)
-    mock_stock = MockStockForStall({
-        351: Product(pid=351, name="Ananas", price=10.0, category="ex", amount=1500),
-    })
+    mock_stock = MockStockForStall(
+        {
+            351: Product(pid=351, name="Ananas", price=10.0, category="ex", amount=1500),
+        }
+    )
 
     async def mock_api_call(endpoint: str, params: dict[str, Any], **kwargs):
         mode = params.get("mode")

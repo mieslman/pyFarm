@@ -18,7 +18,9 @@ class FlowerOrderManager:
         """Register a demand for a specific flower arrangement."""
         current = self._orders.get(pid, 0)
         self._orders[pid] = current + amount
-        logger.debug(f"FlowerOrderManager: Bedarf registriert für PID {pid} (+{amount}, gesamt: {self._orders[pid]})")
+        logger.debug(
+            f"FlowerOrderManager: Bedarf registriert für PID {pid} (+{amount}, gesamt: {self._orders[pid]})"
+        )
 
     def get_orders(self) -> list[int]:
         """Return list of arrangement PIDs currently demanded."""

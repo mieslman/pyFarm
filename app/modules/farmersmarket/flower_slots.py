@@ -53,7 +53,9 @@ class FlowerSlotsService:
         removed_count = 0
         for slot in self.state.slots.values():
             if slot.is_expired:
-                logger.info(f"Schau-Slots: Entferne abgelaufenes Gesteck aus Slot #{slot.slot_id}...")
+                logger.info(
+                    f"Schau-Slots: Entferne abgelaufenes Gesteck aus Slot #{slot.slot_id}..."
+                )
                 try:
                     res = await self.client.api_call(
                         "farm",
@@ -69,8 +71,10 @@ class FlowerSlotsService:
                     slot.remain = 0
                     if "updateblock" in res and self.stock_service:
                         self.stock_service.update(res)
-                except Exception as e:  # noqa: BLE001
-                    logger.warning(f"Schau-Slots: Fehler beim Entfernen aus Slot #{slot.slot_id}: {e}")
+                except Exception as e:
+                    logger.warning(
+                        f"Schau-Slots: Fehler beim Entfernen aus Slot #{slot.slot_id}: {e}"
+                    )
 
         return removed_count
 
@@ -94,7 +98,7 @@ class FlowerSlotsService:
                     slot.waterremain = 86400
                     if "updateblock" in res and self.stock_service:
                         self.stock_service.update(res)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     logger.warning(f"Schau-Slots: Fehler beim Gießen von Slot #{slot.slot_id}: {e}")
 
         return watered_count
@@ -134,6 +138,6 @@ class FlowerSlotsService:
             if "updateblock" in res and self.stock_service:
                 self.stock_service.update(res)
             return True
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning(f"Schau-Slots: Fehler beim Ausstellen von PID {best_pid}: {e}")
             return False

@@ -34,6 +34,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class UpstreamPlantTile(BaseModel):
     """Einzelnes Ackerfeld aus dem datablock."""
+
     phase: int
     remain: int = 0
     iswater: Union[bool, int] = False
@@ -46,6 +47,7 @@ class UpstreamPlantTile(BaseModel):
 
 class UpstreamGardenInit(BaseModel):
     """Antwort auf mode=gardeninit."""
+
     datablock: List[Any]
 
     def extract_tiles(self) -> Dict[int, UpstreamPlantTile]:
@@ -68,6 +70,7 @@ class UpstreamGardenInit(BaseModel):
 ```python
 class Product(BaseModel):
     """Zentrales Produkt- und Warenmodell."""
+
     pid: int
     name: str
     price: float = 0.0
@@ -88,15 +91,17 @@ class Product(BaseModel):
 
 class PlantTile(BaseModel):
     """Zustand einer Kachel auf einem Acker."""
+
     tile_id: int  # 1 .. 120
     pid: int
-    phase: int    # 1..3: Wachsend, 4: Erntereif
+    phase: int  # 1..3: Wachsend, 4: Erntereif
     remain_seconds: int = 0
     is_watered: bool = False
 
 
 class FarmField(BaseModel):
     """Repräsentation eines Ackerbaubetriebs (12x10 = 120 Kacheln)."""
+
     farm_id: int
     position: int
     name: str = "Acker"
@@ -226,12 +231,12 @@ async def grasp_products(self, requirements: List[Dict[str, int]]) -> bool:
 
         if available < needed:
             to_buy = needed - available + self.config.safety_buffer
-            
+
             # 1. Marktplatz prüfen
             bought = await self.market_service.buy(
-                pid=pid, 
-                amount=to_buy, 
-                max_price=self.products[pid].price * self.config.max_price_factor
+                pid=pid,
+                amount=to_buy,
+                max_price=self.products[pid].price * self.config.max_price_factor,
             )
             to_buy -= bought
 
@@ -241,7 +246,9 @@ async def grasp_products(self, requirements: List[Dict[str, int]]) -> bool:
                 to_buy -= dealer_bought
 
             if to_buy > 0:
-                logger.warning(f"Konnte benötigte Menge für PID {pid} nicht vollständig beschaffen.")
+                logger.warning(
+                    f"Konnte benötigte Menge für PID {pid} nicht vollständig beschaffen."
+                )
                 return False
     return True
 ```

@@ -1,9 +1,10 @@
+import contextlib
 import json
 import os
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from loguru import logger
 from pydantic import BaseModel
@@ -66,7 +67,7 @@ class SettingsManager:
     and automatic synchronization with in-memory application settings.
     """
 
-    def __init__(self, config_path: Optional[Path] = None):
+    def __init__(self, config_path: Path | None = None):
         if config_path is not None:
             self._config_path = config_path
         else:
@@ -79,8 +80,8 @@ class SettingsManager:
                 self._config_path = base_dir / "data" / "user_config.json"
 
         self._lock = threading.Lock()
-        self._last_loaded_at: Optional[str] = None
-        self._last_saved_at: Optional[str] = None
+        self._last_loaded_at: str | None = None
+        self._last_saved_at: str | None = None
         self._contracts: dict[str, Any] = {}
 
     @property
@@ -142,7 +143,7 @@ class SettingsManager:
             if "contracts" in data and isinstance(data["contracts"], dict):
                 self._contracts = data["contracts"]
 
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now_iso = datetime.now(UTC).isoformat()
             self._last_loaded_at = now_iso
             logger.info(
                 f"SettingsManager: {len(loaded_sections)} Sektionen erfolgreich geladen aus {self._config_path}."
@@ -191,7 +192,7 @@ class SettingsManager:
             exists = self._config_path.exists()
             size = self._config_path.stat().st_size if exists else 0
             mtime = (
-                datetime.fromtimestamp(self._config_path.stat().st_mtime, tz=timezone.utc).isoformat()
+                datetime.fromtimestamp(self._config_path.stat().st_mtime, tz=UTC).isoformat()
                 if exists
                 else None
             )
@@ -238,7 +239,7 @@ class SettingsManager:
         self._config_path.parent.mkdir(parents=True, exist_ok=True)
 
         doc = self._export_dict_unlocked()
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         doc["_last_saved"] = now_iso
 
         tmp_file = self._config_path.with_name(f"{self._config_path.name}.tmp")
@@ -251,16 +252,16 @@ class SettingsManager:
             # Atomic replace
             os.replace(tmp_file, self._config_path)
             self._last_saved_at = now_iso
-            logger.debug(f"SettingsManager: Konfiguration atomar gespeichert nach {self._config_path}")
+            logger.debug(
+                f"SettingsManager: Konfiguration atomar gespeichert nach {self._config_path}"
+            )
         except Exception as e:
             logger.opt(exception=True).error(
                 f"SettingsManager: Fehler beim Speichern nach {self._config_path}: {e}"
             )
             if tmp_file.exists():
-                try:
+                with contextlib.suppress(Exception):
                     tmp_file.unlink()
-                except Exception:
-                    pass
             raise
 
         return doc

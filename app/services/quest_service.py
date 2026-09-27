@@ -124,7 +124,9 @@ class QuestService:
         if target_nr is not None and target_nr in self.active_quests:
             self.current_quest = self.active_quests[target_nr]
         elif self.active_quests:
-            self.current_quest = self.active_quests.get(1) or next(iter(self.active_quests.values()))
+            self.current_quest = self.active_quests.get(1) or next(
+                iter(self.active_quests.values())
+            )
         else:
             self.current_quest = None
 
@@ -133,8 +135,7 @@ class QuestService:
             return None
 
         campaign_summaries = [
-            f"Kampagne {cid}: Q#{q.quest_nr} ('{q.title}')"
-            for cid, q in self.active_quests.items()
+            f"Kampagne {cid}: Q#{q.quest_nr} ('{q.title}')" for cid, q in self.active_quests.items()
         ]
         logger.info(
             f"QuestService: {len(self.active_quests)} aktive Kampagne(n) geladen: "

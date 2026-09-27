@@ -48,7 +48,7 @@ class SushiQuestSolver:
 
             content = data[1].get("content", "")
             return self.parse_quests_html(content)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.opt(exception=True).error(f"Fehler beim Laden von Questreihe 5: {e}")
             return {}
 
@@ -76,7 +76,9 @@ class SushiQuestSolver:
                 catalog[q_nr] = requirements
 
         self._quests5_cache = catalog
-        logger.info(f"SushiQuestSolver: {len(catalog)} Quests für Questreihe 5 erfolgreich geladen.")
+        logger.info(
+            f"SushiQuestSolver: {len(catalog)} Quests für Questreihe 5 erfolgreich geladen."
+        )
         return catalog
 
     def check_ingredients(
@@ -300,7 +302,9 @@ class SushiQuestSolver:
                                 )
                                 if is_water and ingr_pid not in seen_pids:
                                     needed_water = crafts_needed * per_craft
-                                    current_water = stock_service.get_farm_amount(self.farm_id, ingr_pid)
+                                    current_water = stock_service.get_farm_amount(
+                                        self.farm_id, ingr_pid
+                                    )
 
                                     # Reserve check: 120 // (sx * sy)
                                     prod = (

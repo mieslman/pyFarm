@@ -1,4 +1,3 @@
-from typing import Any, Optional
 from loguru import logger
 
 from app.core.client import MFFGameClient
@@ -10,9 +9,9 @@ class PentecostEventService:
 
     def __init__(self, client: MFFGameClient):
         self.client = client
-        self.last_status: Optional[PentecostStatus] = None
+        self.last_status: PentecostStatus | None = None
 
-    async def get_status(self) -> Optional[PentecostStatus]:
+    async def get_status(self) -> PentecostStatus | None:
         """Fetch and parse Pentecost event status."""
         try:
             res = await self.client.api_call("farm", {"mode": "pentecostevent_init"})

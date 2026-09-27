@@ -1,8 +1,9 @@
-from typing import Any, Optional
+from typing import Any
+
 from loguru import logger
 
 from app.core.client import MFFGameClient
-from app.modules.events.models import OktoberfestSheep, OktoberfestStatus
+from app.modules.events.models import OktoberfestStatus
 
 
 class OktoberfestEventService:
@@ -10,7 +11,7 @@ class OktoberfestEventService:
 
     def __init__(self, client: MFFGameClient):
         self.client = client
-        self.last_status: Optional[OktoberfestStatus] = None
+        self.last_status: OktoberfestStatus | None = None
 
     @staticmethod
     def have_common_interest(person1: dict[str, Any], person2: dict[str, Any]) -> bool:
@@ -20,7 +21,7 @@ class OktoberfestEventService:
     @classmethod
     def is_valid(
         cls,
-        seating: list[Optional[dict[str, Any]]],
+        seating: list[dict[str, Any] | None],
         index: int,
         person: dict[str, Any],
     ) -> bool:
@@ -45,7 +46,7 @@ class OktoberfestEventService:
     @classmethod
     def backtrack(
         cls,
-        seating: list[Optional[dict[str, Any]]],
+        seating: list[dict[str, Any] | None],
         people: list[dict[str, Any]],
         index: int,
     ) -> bool:
@@ -66,7 +67,7 @@ class OktoberfestEventService:
         return False
 
     @classmethod
-    def solve_seating(cls, sheeps_dict: dict[str, Any]) -> Optional[list[dict[str, Any]]]:
+    def solve_seating(cls, sheeps_dict: dict[str, Any]) -> list[dict[str, Any]] | None:
         """Prepare sheep data and run the backtracking solver."""
         people: list[dict[str, Any]] = []
         for s_id, s_data in sheeps_dict.items():
@@ -75,13 +76,13 @@ class OktoberfestEventService:
             item["seated"] = False
             people.append(item)
 
-        seating: list[Optional[dict[str, Any]]] = [None] * len(people)
+        seating: list[dict[str, Any] | None] = [None] * len(people)
         if cls.backtrack(seating, people, 0):
             # Assert all seats are filled
             return [s for s in seating if s is not None]
         return None
 
-    async def get_status(self) -> Optional[OktoberfestStatus]:
+    async def get_status(self) -> OktoberfestStatus | None:
         """Fetch current status of the Oktoberfest event."""
         try:
             res = await self.client.api_call("farm", {"mode": "oktoberfest_init"})
@@ -117,7 +118,9 @@ class OktoberfestEventService:
             data_block = datablock.get("data", {})
             cooldown = data_block.get("cooldown_remain", 0)
             if cooldown is not None and int(cooldown) > 0:
-                logger.debug(f"OktoberfestEventService: Cooldown läuft noch ({cooldown}s verbleibend).")
+                logger.debug(
+                    f"OktoberfestEventService: Cooldown läuft noch ({cooldown}s verbleibend)."
+                )
                 return False
 
             sheeps = data_block.get("sheeps", {})
@@ -136,10 +139,14 @@ class OktoberfestEventService:
                 )
                 return False
 
-            logger.info("OktoberfestEventService: Gültige Sitzordnung gefunden! Platziere Schafe...")
+            logger.info(
+                "OktoberfestEventService: Gültige Sitzordnung gefunden! Platziere Schafe..."
+            )
             for seat_idx, sheep in enumerate(solution, start=1):
                 sheep_id = sheep["sheep"]
-                logger.debug(f"Platz {seat_idx}: Platziere Schaf #{sheep_id} (Interessen: {sheep.get('interests')})")
+                logger.debug(
+                    f"Platz {seat_idx}: Platziere Schaf #{sheep_id} (Interessen: {sheep.get('interests')})"
+                )
                 set_res = await self.client.api_call(
                     "farm",
                     {"mode": "oktoberfest_set_sheep", "slot": seat_idx, "sheep": sheep_id},
@@ -150,14 +157,20 @@ class OktoberfestEventService:
                     )
                     return False
 
-            logger.info("OktoberfestEventService: Alle Schafe platziert. Schließe Runde ab (oktoberfest_finish)...")
+            logger.info(
+                "OktoberfestEventService: Alle Schafe platziert. Schließe Runde ab (oktoberfest_finish)..."
+            )
             finish_res = await self.client.api_call("farm", {"mode": "oktoberfest_finish"})
             if finish_res.get("datablock", {}).get("data"):
-                logger.info("OktoberfestEventService: Oktoberfest-Runde erfolgreich abgeschlossen und Belohnung erhalten!")
+                logger.info(
+                    "OktoberfestEventService: Oktoberfest-Runde erfolgreich abgeschlossen und Belohnung erhalten!"
+                )
                 await self.get_status()
                 return True
             else:
-                logger.warning(f"OktoberfestEventService: Fehler beim Abschließen der Runde: {finish_res}")
+                logger.warning(
+                    f"OktoberfestEventService: Fehler beim Abschließen der Runde: {finish_res}"
+                )
                 return False
 
         except Exception as e:

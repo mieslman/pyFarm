@@ -23,7 +23,9 @@ def _format_product(p: Any) -> dict[str, Any]:
 
 @plants_router.get("", response_model=list[dict[str, Any]])
 async def get_plants(
-    category: str | None = Query(default=None, description="Kategorie-Filter (z.B. 'v', 't', 'ex')"),
+    category: str | None = Query(
+        default=None, description="Kategorie-Filter (z.B. 'v', 't', 'ex')"
+    ),
     search: str | None = Query(default=None, description="Suchbegriff für Produktname"),
     _: dict[str, Any] = Depends(get_current_user),
 ):
@@ -50,7 +52,9 @@ async def get_plant_by_id(
     """Retrieve single product by PID."""
     stock = worker_scheduler.last_stock_service
     if not stock:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lager nicht initialisiert.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Lager nicht initialisiert."
+        )
 
     product = stock.get_product(pid)
     if not product:

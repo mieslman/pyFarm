@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 # Gärtnerei (Nursery) Models
 # ---------------------------------------------------------------------------
 
+
 class NurserySlot(BaseModel):
     """A production slot in the flower arrangement nursery."""
 
@@ -61,6 +62,7 @@ class NurseryState(BaseModel):
 # Blumenwiese (Flower Area) Models
 # ---------------------------------------------------------------------------
 
+
 class FlowerField(BaseModel):
     """A single flower bed on the 36-field flower area."""
 
@@ -96,6 +98,7 @@ class FlowerAreaState(BaseModel):
 # ---------------------------------------------------------------------------
 # Schau-Slots (Flower Slots) Models
 # ---------------------------------------------------------------------------
+
 
 class FlowerSlotItem(BaseModel):
     """An arrangement placed on display in Dorf 2."""
@@ -133,6 +136,7 @@ class FlowerSlotsState(BaseModel):
 # Farmis (Kunden am Bauernmarkt) Models
 # ---------------------------------------------------------------------------
 
+
 class CartItem(BaseModel):
     """A product demanded by a Farmi customer."""
 
@@ -154,6 +158,7 @@ class MarketFarmi(BaseModel):
 # Tierzucht (Pet Breed) Models
 # ---------------------------------------------------------------------------
 
+
 class PetBreedSlot(BaseModel):
     """A breeding slot."""
 
@@ -170,7 +175,12 @@ class PetBreedSlot(BaseModel):
 
     @property
     def is_ready(self) -> bool:
-        return not self.is_blocked and self.tool_id is not None and self.duration > 0 and self.gone >= self.duration
+        return (
+            not self.is_blocked
+            and self.tool_id is not None
+            and self.duration > 0
+            and self.gone >= self.duration
+        )
 
 
 class PetBreedTool(BaseModel):
@@ -201,6 +211,7 @@ class PetBreedState(BaseModel):
 # ---------------------------------------------------------------------------
 # Aggregated Summary (API & Dashboard)
 # ---------------------------------------------------------------------------
+
 
 class FarmersMarketSummary(BaseModel):
     """Live summary of all farmersmarket domains for REST API & Dashboard."""

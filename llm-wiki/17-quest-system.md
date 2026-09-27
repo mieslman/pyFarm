@@ -176,7 +176,7 @@ Neben den 6 Hauptquestreihen existieren in MyFreeFarm weitere Quest-Mechanismen:
 
 ## 5. Python-Architektur & Solver-Integration
 
-In `myfreefarm_python` ist das Questsystem wie folgt verankert:
+In `pyFarm` ist das Questsystem wie folgt verankert:
 
 1. **Modelle (`app/models/quest.py`):**
    - `QuestRequirement`: PID, Name, benötigte Menge, aktueller Lagerbestand, noch fehlende Menge (`missing`).

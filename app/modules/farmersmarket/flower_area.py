@@ -63,7 +63,9 @@ class FlowerAreaService:
 
         # Check if ALL planted fields are ready (remain < 0)
         if not all(f.is_ready for f in planted_fields):
-            logger.debug("Blumenwiese: Nicht alle bepflanzten Beete sind erntereif (remain < 0). Ernte wird zurückgestellt.")
+            logger.debug(
+                "Blumenwiese: Nicht alle bepflanzten Beete sind erntereif (remain < 0). Ernte wird zurückgestellt."
+            )
             return 0
 
         logger.info(f"Blumenwiese: Ernte gesamte Blumenwiese ({len(planted_fields)} Beete)...")
@@ -95,7 +97,7 @@ class FlowerAreaService:
                     f.water_remain = 0
 
             return count
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning(f"Blumenwiese: Fehler beim Gesamternten: {e}")
             return 0
 
@@ -131,7 +133,7 @@ class FlowerAreaService:
                         f.water_remain = 86400
 
             return True
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning(f"Blumenwiese: Fehler beim Bewässern: {e}")
             return False
 
@@ -149,7 +151,9 @@ class FlowerAreaService:
             logger.debug("Blumenwiese: Keine Blumensamen (Kategorie 'fl') im Lager vorrätig.")
             return 0
 
-        logger.info(f"Blumenwiese: Bepflanze Blumenwiese mit PID {best_pid} (geringster Bestand via flowerarea_autoplant)...")
+        logger.info(
+            f"Blumenwiese: Bepflanze Blumenwiese mit PID {best_pid} (geringster Bestand via flowerarea_autoplant)..."
+        )
         try:
             res = await self.client.api_call(
                 "farm",
@@ -177,7 +181,7 @@ class FlowerAreaService:
                     f.remain = 18000
 
             return len([f for f in self.state.fields.values() if f.pid == best_pid])
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning(f"Blumenwiese: Fehler beim Bepflanzen: {e}")
             return 0
 

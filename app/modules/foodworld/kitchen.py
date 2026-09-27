@@ -136,7 +136,7 @@ class KitchenService:
                     slot.remain = 0
                     if "updateblock" in res and self.stock_service:
                         self.stock_service.update(res)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     logger.warning(
                         f"Foodworld-Küche: Fehler beim Abholen aus {building.name}, Slot #{slot.slot_id}: {e}"
                     )
@@ -196,8 +196,8 @@ class KitchenService:
             if not self.stock_service:
                 return True
             for ing_pid, needed_amt in recipe.requirements.items():
-                available = (
-                    self.stock_service.get_amount(ing_pid) - used_ingredients.get(ing_pid, 0)
+                available = self.stock_service.get_amount(ing_pid) - used_ingredients.get(
+                    ing_pid, 0
                 )
                 if available < needed_amt:
                     return False
@@ -332,9 +332,7 @@ class KitchenService:
 
                     # Deduct ingredients in simulated tracker
                     for ing_pid, req_amt in candidate.requirements.items():
-                        used_ingredients[ing_pid] = (
-                            used_ingredients.get(ing_pid, 0) + req_amt
-                        )
+                        used_ingredients[ing_pid] = used_ingredients.get(ing_pid, 0) + req_amt
 
                     # Update in-production and net deficit
                     produced_amt = candidate.output_amount if candidate.output_amount > 0 else 1
@@ -348,7 +346,7 @@ class KitchenService:
 
                     if "updateblock" in res and self.stock_service:
                         self.stock_service.update(res)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     logger.warning(
                         f"Foodworld-Küche: Fehler beim Starten von '{pname}' in {building.name}: {e}"
                     )

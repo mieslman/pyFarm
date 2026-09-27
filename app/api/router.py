@@ -51,5 +51,3 @@ api_router.include_router(factories_router)
 api_router.include_router(vehicles_router)
 api_router.include_router(bot_router)
 api_router.include_router(config_router)
-
-

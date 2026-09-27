@@ -45,11 +45,11 @@ tags: [module, stall, fruit, marketstand, interfaces]
 Das Obststand-Modul wurde vollständig in modernem Python implementiert und im WorkerScheduler integriert.
 
 ### 3.1 Klassen- & Modulaufbau
-- **Modelle ([`models.py`](file:///c:/Projekte/MyFreeFarm/myfreefarm/myfreefarm_python/app/modules/stall/models.py)):**
+- **Modelle ([`models.py`](file:///c:/Projekte/pyFarm/app/modules/stall/models.py)):**
   - `StallSlot`: Repräsentiert einen Slot (`slot_id`, `pid`, `product_name`, `amount`, `time`, `is_empty`).
   - `MarketStall`: Repräsentiert eine Marktbude (`position`, `level`, `fillsum`, `reward_ready`, `points`, `farmi_count`, `slots`).
   - `StallSnapshot` & `StallSummary`: Runtime-Zustand und DTOs für Dashboard und REST-API.
-- **Service ([`service.py`](file:///c:/Projekte/MyFreeFarm/myfreefarm/myfreefarm_python/app/modules/stall/service.py)):**
+- **Service ([`service.py`](file:///c:/Projekte/pyFarm/app/modules/stall/service.py)):**
   - `FruitStallService`:
     - `init_remote(stock_service)`: Lädt `stall_init`, ermittelt dynamisch `fillsum` für das jeweilige Standlevel und baut den Snapshot auf.
     - `collect_rewards()`: Holt für alle Stände mit `reward_ready == True` die Belohnungen via `mode=stall_get_reward` ab.
@@ -60,7 +60,7 @@ Das Obststand-Modul wurde vollständig in modernem Python implementiert und im W
       - Verhindert Doppelbelegungen derselben Frucht im selben Stand.
       - Befüllt freie Slots via `mode=stall_fill_slot&position={pos}&slot={slot}&pid={pid}&amount={fillsum}`.
     - `serve(stock_service)`: Orchestriert den gesamten Wartungszyklus im Worker.
-- **REST-API ([`app/api/endpoints/stall.py`](file:///c:/Projekte/MyFreeFarm/myfreefarm/myfreefarm_python/app/api/endpoints/stall.py)):**
+- **REST-API ([`app/api/endpoints/stall.py`](file:///c:/Projekte/pyFarm/app/api/endpoints/stall.py)):**
   - `GET /api/v1/stall`: Live-Status, Stände, Slots und Belohnungen.
   - `GET/PUT /api/v1/stall/settings`: Konfigurationsverwaltung (`enabled`, `auto_clear_depleted`, `clear_threshold_percent`, `auto_fill_slots`, `auto_collect_reward`, `min_stock_reserve`).
   - `POST /api/v1/stall/action/collect`: Manuelles Abholen der Belohnungen.

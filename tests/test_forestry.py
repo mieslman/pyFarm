@@ -228,9 +228,7 @@ async def test_carpentry_demand_driven_only(fast_client: MFFGameClient):
     service = ForestryService(fast_client)
 
     # Farmi requests PID 104 (Holzrechen)
-    raw_farmis = [
-        {"farmiid": 1, "position": 1, "products": [{"product": 104, "amount": 1}]}
-    ]
+    raw_farmis = [{"farmiid": 1, "position": 1, "products": [{"product": 104, "amount": 1}]}]
     service.farmis.update(raw_farmis)
 
     # In stock: Bretter (PID 55) available to make anything.

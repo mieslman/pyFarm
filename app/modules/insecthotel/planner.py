@@ -1,6 +1,7 @@
 """Optimization planner and dynamic rotation engine for Insect Hotel feeding."""
 
-from typing import Any, Optional
+from typing import Any
+
 from loguru import logger
 
 from app.modules.insecthotel.models import InsectHotelSnapshot, InsectNicheSlot
@@ -83,7 +84,7 @@ RESCUE_TWIN_GROWTH_PIDS = [34, 35, 33, 26, 31, 20, 19, 22]
 def calculate_species_net_happiness(
     species_id: str,
     available_pids: set[int],
-    slot: Optional[InsectNicheSlot] = None,
+    slot: InsectNicheSlot | None = None,
 ) -> float:
     """Calculate net happiness change (sum of provided happiness minus decay) per 4h cycle."""
     plants: dict[int, float] = {}
@@ -112,7 +113,9 @@ def get_endangered_species(
             continue
 
         cfg = DEFAULT_SPECIES_CONFIG.get(str(slot_id), {})
-        min_limit = slot.min_happiness if slot.min_happiness > 0 else cfg.get("limits", (25.0, 50.0))[0]
+        min_limit = (
+            slot.min_happiness if slot.min_happiness > 0 else cfg.get("limits", (25.0, 50.0))[0]
+        )
         # Safety buffer of 5.0 above the loss limit
         threshold = max(min_safety_happiness, min_limit + 5.0)
 
@@ -126,7 +129,7 @@ def plan_target_pids(
     snapshot: InsectHotelSnapshot,
     max_slots: int = 8,
     strategy: str = "dynamic_rotation",
-    priority_species: Optional[list[str]] = None,
+    priority_species: list[str] | None = None,
     min_safety_happiness: float = 25.0,
 ) -> list[int]:
     """Compute the optimal ordered list of target crop PIDs for the hotel's food slots.

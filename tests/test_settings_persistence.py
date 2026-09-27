@@ -1,6 +1,7 @@
 """
 Tests für die Konfigurations-Persistenz (SettingsManager + /api/v1/config Endpoints).
 """
+
 import json
 from pathlib import Path
 
@@ -49,6 +50,7 @@ def sm(tmp_config: Path) -> SettingsManager:
 
 
 # ── SettingsManager Unit Tests ─────────────────────────────────────────────────
+
 
 class TestSettingsManagerUnit:
     def test_initial_save_creates_file(self, sm: SettingsManager, tmp_config: Path):
@@ -168,6 +170,7 @@ class TestSettingsManagerUnit:
     def test_export_dict_contains_all_sections(self, sm: SettingsManager):
         """get_export_data() should include all registered sections."""
         from app.core.settings_manager import SECTION_MODELS
+
         export = sm.get_export_data()
         for section in SECTION_MODELS:
             assert section in export, f"Section '{section}' missing from export"
@@ -182,6 +185,7 @@ class TestSettingsManagerUnit:
 
 
 # ── /api/v1/config REST Endpoint Tests ────────────────────────────────────────
+
 
 class TestConfigEndpoints:
     def test_get_config_returns_sections(self, auth_headers):
@@ -215,8 +219,10 @@ class TestConfigEndpoints:
             res = client.put("/api/v1/config", headers=auth_headers, json=payload)
             assert res.status_code == 200
             data = res.json()
-            assert "poll_interval_seconds" in data.get("updated_scalars", []) or \
-                   data.get("config", {}).get("poll_interval_seconds") == 600
+            assert (
+                "poll_interval_seconds" in data.get("updated_scalars", [])
+                or data.get("config", {}).get("poll_interval_seconds") == 600
+            )
             assert settings.poll_interval_seconds == 600
             assert settings.anti_detection_min_delay_ms == 1500
         finally:
@@ -259,6 +265,7 @@ class TestConfigEndpoints:
 
 # ── Persistence Integration via PUT Module Endpoints ──────────────────────────
 
+
 class TestPutEndpointsPersistence:
     def test_put_fuelstation_persists(self, auth_headers):
         """PUT /api/v1/fuelstation should update fuelstation settings in memory."""
@@ -288,6 +295,7 @@ class TestPutEndpointsPersistence:
     def test_put_contracts_updates_contracts(self, auth_headers):
         """PUT /api/v1/contracts should store and return contract data."""
         from app.core.settings_manager import settings_manager as global_sm
+
         payload = {"Bob": [{"pid": 25, "amount": 200, "min": 100}]}
         res = client.put("/api/v1/contracts", headers=auth_headers, json=payload)
         assert res.status_code == 200

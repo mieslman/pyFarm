@@ -91,7 +91,9 @@ class NurseryService:
         harvested_count = 0
         for slot in self.state.slots.values():
             if slot.is_ready:
-                logger.info(f"Gärtnerei: Ernte fertiges Gesteck aus Slot #{slot.slot_id} (PID {slot.pid})...")
+                logger.info(
+                    f"Gärtnerei: Ernte fertiges Gesteck aus Slot #{slot.slot_id} (PID {slot.pid})..."
+                )
                 try:
                     res = await self.client.api_call(
                         "farm",
@@ -109,7 +111,7 @@ class NurseryService:
                     slot.remain = 0
                     if "updateblock" in res and self.stock_service:
                         self.stock_service.update(res)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     logger.warning(f"Gärtnerei: Fehler beim Ernten von Slot #{slot.slot_id}: {e}")
 
         return harvested_count
@@ -117,7 +119,9 @@ class NurseryService:
     async def produce(self, order_manager: FlowerOrderManager) -> int:
         """Craft flower arrangements in available, unblocked slots strictly according to demand."""
         if not order_manager.has_orders:
-            logger.debug("Gärtnerei: Keine Aufträge im OrderManager vorhanden - keine Neuproduktion.")
+            logger.debug(
+                "Gärtnerei: Keine Aufträge im OrderManager vorhanden - keine Neuproduktion."
+            )
             return 0
 
         started_count = 0
@@ -170,7 +174,7 @@ class NurseryService:
 
                 if "updateblock" in res and self.stock_service:
                     self.stock_service.update(res)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(f"Gärtnerei: Fehler beim Starten von PID {recipe_to_start.pid}: {e}")
 
         return started_count

@@ -226,4 +226,3 @@ async def test_fuelstation_refill_production_limit_and_entries(fast_client: MFFG
         assert slot1.current_points >= slot1.production_limit
         assert slot1.points_needed == 0
         assert slot1.busy is True
-

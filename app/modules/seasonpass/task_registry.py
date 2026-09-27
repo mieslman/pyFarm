@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING, Callable, TypeVar
+from collections.abc import Callable
+from typing import TYPE_CHECKING, TypeVar
 
 if TYPE_CHECKING:
     from app.modules.seasonpass.handlers.base import BaseTaskHandler

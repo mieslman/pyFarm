@@ -1,4 +1,5 @@
 from typing import Any
+
 from loguru import logger
 
 from app.core.client import MFFGameClient
@@ -37,7 +38,9 @@ class SpiceCustomerService:
                 reward = c_data.get("reward", {})
                 reward_pts = int(reward.get("points", 0)) if isinstance(reward, dict) else 0
                 reward_money = float(reward.get("money", 0.0)) if isinstance(reward, dict) else 0.0
-                reward_streuer = int(reward.get("spicehouse_points", 0)) if isinstance(reward, dict) else 0
+                reward_streuer = (
+                    int(reward.get("spicehouse_points", 0)) if isinstance(reward, dict) else 0
+                )
 
                 self.customers[slot_nr] = SpiceCustomer(
                     id=c_id,
@@ -75,11 +78,13 @@ class SpiceCustomerService:
                         {"mode": "spicehouse_accept_customer", "slot": slot_nr},
                     )
                     datablock = res.get("datablock")
-                    success = datablock == 1 or datablock == [1] or (isinstance(datablock, list) and 1 in datablock)
+                    success = (
+                        datablock == 1
+                        or datablock == [1]
+                        or (isinstance(datablock, list) and 1 in datablock)
+                    )
                     if success:
-                        logger.info(
-                            f"Gewürzhaus: Kunde an Slot {slot_nr} erfolgreich bedient."
-                        )
+                        logger.info(f"Gewürzhaus: Kunde an Slot {slot_nr} erfolgreich bedient.")
                         for pid, needed_amt in customer.data.items():
                             stock_service.deduct_stock(pid, needed_amt, farm_id=self.farm_id)
                         del self.customers[slot_nr]

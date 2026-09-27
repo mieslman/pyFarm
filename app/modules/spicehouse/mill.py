@@ -1,12 +1,13 @@
 import time
 from typing import Any
+
 from loguru import logger
 
 from app.core.client import MFFGameClient
 from app.modules.spicehouse.models import (
-    MillSlotInfo,
     SPICE_DRIED_TO_GROUND,
     SPICE_MILL_DURATIONS,
+    MillSlotInfo,
 )
 from app.modules.spicehouse.solver import SpiceQuestSolver
 from app.services.stock_service import StockService
@@ -52,7 +53,11 @@ class SpiceMillService:
                     cap = max(10, lvl * 10)
 
                 raw_pid = slot_data.get("pid")
-                pid = int(raw_pid) if raw_pid and str(raw_pid).isdigit() and int(raw_pid) > 0 else None
+                pid = (
+                    int(raw_pid)
+                    if raw_pid and str(raw_pid).isdigit() and int(raw_pid) > 0
+                    else None
+                )
                 amt = int(slot_data.get("amount", 0))
                 amt_orig = int(slot_data.get("amount_original", 0))
                 start = int(slot_data.get("start", 0))
@@ -119,7 +124,9 @@ class SpiceMillService:
                         datablock == 1
                         or datablock == [1]
                         or (isinstance(datablock, list) and 1 in datablock)
-                        or (isinstance(datablock, dict) and any(str(k).isdigit() for k in datablock))
+                        or (
+                            isinstance(datablock, dict) and any(str(k).isdigit() for k in datablock)
+                        )
                     )
                     if success:
                         logger.info(f"Gewürzhaus: Mühle {slot.slot} erfolgreich abgeerntet.")
@@ -135,7 +142,10 @@ class SpiceMillService:
                                             if self.farm_id not in stock_service.farm_stocks:
                                                 stock_service.farm_stocks[self.farm_id] = {}
                                             stock_service.farm_stocks[self.farm_id][h_pid] = (
-                                                stock_service.farm_stocks[self.farm_id].get(h_pid, 0) + h_amt
+                                                stock_service.farm_stocks[self.farm_id].get(
+                                                    h_pid, 0
+                                                )
+                                                + h_amt
                                             )
                                             if h_pid in stock_service.products:
                                                 stock_service.products[h_pid].amount += h_amt
@@ -146,8 +156,16 @@ class SpiceMillService:
                             stock_service.update(res)
 
                         updateblock = res.get("updateblock", {})
-                        sh_data = updateblock.get("spicehouse", {}) if isinstance(updateblock, dict) else {}
-                        sh_mills = sh_data.get("data", {}).get("mill_slots", {}) if isinstance(sh_data, dict) else {}
+                        sh_data = (
+                            updateblock.get("spicehouse", {})
+                            if isinstance(updateblock, dict)
+                            else {}
+                        )
+                        sh_mills = (
+                            sh_data.get("data", {}).get("mill_slots", {})
+                            if isinstance(sh_data, dict)
+                            else {}
+                        )
                         slot_upd = sh_mills.get(str(slot.slot))
 
                         if slot_upd and isinstance(slot_upd, dict):
@@ -205,13 +223,14 @@ class SpiceMillService:
 
         ordered_candidates = quest_pids_order + fallback_pids_order
         if not ordered_candidates:
-            logger.debug(f"Gewürzhaus: Keine getrockneten Gewürze auf Farm {self.farm_id} zum Mahlen vorhanden.")
+            logger.debug(
+                f"Gewürzhaus: Keine getrockneten Gewürze auf Farm {self.farm_id} zum Mahlen vorhanden."
+            )
             return 0
 
         # Local tracking of remaining stock
         remaining_stock = {
-            pid: stock_service.get_farm_amount(self.farm_id, pid)
-            for pid in ordered_candidates
+            pid: stock_service.get_farm_amount(self.farm_id, pid) for pid in ordered_candidates
         }
 
         started_count = 0

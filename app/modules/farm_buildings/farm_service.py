@@ -164,7 +164,6 @@ class FarmService:
             f"{len(self.sushibars)} Sushi-Bar(s) und {len(self.spicehouses)} Gewürzhaus/häuser aufgefunden."
         )
 
-
     async def loop(
         self,
         stock_service: StockService,
@@ -213,8 +212,10 @@ class FarmService:
                         f"FarmService: {len(quest5_water_candidates)} Quest-5-Bedarfe für Farm 8 identifiziert "
                         f"(Top: PID {quest5_water_candidates[0][0]}, {quest5_water_candidates[0][3]})."
                     )
-            except Exception as e:  # noqa: BLE001
-                logger.warning(f"FarmService: Konnte Quest-5-Bedarfe für Farm 8 nicht ermitteln: {e}")
+            except Exception as e:
+                logger.warning(
+                    f"FarmService: Konnte Quest-5-Bedarfe für Farm 8 nicht ermitteln: {e}"
+                )
 
         # 1. Äcker bewirtschaften
         for field in self.fields:
@@ -235,7 +236,7 @@ class FarmService:
                 primary = plant_candidates[0] if plant_candidates else None
                 fallbacks = plant_candidates[1:] if len(plant_candidates) > 1 else []
                 await field.serve(primary, fallback_candidates=fallbacks)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.opt(exception=True).error(
                     f"FarmService: Fehler bei Feld {field.farm_id}/{field.position}: {e}"
                 )
@@ -244,7 +245,7 @@ class FarmService:
         for shed in self.sheds:
             try:
                 await shed.serve(stock_service)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.opt(exception=True).error(
                     f"FarmService: Fehler bei Stall {shed.farm_id}/{shed.position}: {e}"
                 )
@@ -253,7 +254,7 @@ class FarmService:
         for fuelstation in self.fuelstations:
             try:
                 await fuelstation.serve(stock_service)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.opt(exception=True).error(
                     f"FarmService: Fehler bei Biosprit-Anlage {fuelstation.farm_id}/{fuelstation.position}: {e}"
                 )
@@ -266,7 +267,7 @@ class FarmService:
                     quest_status_main=quest_status_main,
                     catalog=catalog,
                 )
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.opt(exception=True).error(
                     f"FarmService: Fehler bei Sushi-Bar {sushibar.farm_id}/{sushibar.position}: {e}"
                 )
@@ -280,7 +281,7 @@ class FarmService:
                     quest_requirements=quest_requirements,
                     catalog=catalog,
                 )
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.opt(exception=True).error(
                     f"FarmService: Fehler bei Fabrik {factory.name} {factory.farm_id}/{factory.position}: {e}"
                 )
@@ -294,7 +295,7 @@ class FarmService:
                     quest_requirements=quest_requirements,
                     catalog=catalog,
                 )
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.opt(exception=True).error(
                     f"FarmService: Fehler bei Gewürzhaus {spicehouse.farm_id}/{spicehouse.position}: {e}"
                 )
@@ -350,10 +351,7 @@ class FarmService:
                     quest_priority_order=quest_priority_order,
                     sushibar_service=self.sushibars[0] if self.sushibars else None,
                 )
-            except Exception as e:  # noqa: BLE001
-                logger.opt(exception=True).error(
-                    f"FarmService: Fehler bei Fahrzeuglogistik: {e}"
-                )
+            except Exception as e:
+                logger.opt(exception=True).error(f"FarmService: Fehler bei Fahrzeuglogistik: {e}")
 
         logger.info("========== FarmService: Zyklus beendet ==========")
-

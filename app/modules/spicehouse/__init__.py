@@ -8,10 +8,10 @@ from app.modules.spicehouse.models import (
 from app.modules.spicehouse.service import SpicehouseService
 
 __all__ = [
+    "MillSlotInfo",
+    "OvenSlotInfo",
+    "SpiceCustomer",
     "SpicehouseConfig",
     "SpicehouseService",
     "SpicehouseState",
-    "OvenSlotInfo",
-    "MillSlotInfo",
-    "SpiceCustomer",
 ]

@@ -15,14 +15,18 @@ stall_router = APIRouter(prefix="/stall", tags=["Obststand / Marktbude"])
 async def get_stall_status(_: dict[str, Any] = Depends(get_current_user)):
     """Retrieve current Obststand / Marktbude status (stands, display slots, rewards)."""
     st_svc = worker_scheduler.last_stall_service
-    summary = st_svc.get_summary().model_dump() if st_svc else {
-        "active": False,
-        "stalls_count": 0,
-        "total_slots": 0,
-        "filled_slots": 0,
-        "rewards_ready_count": 0,
-        "last_updated": None,
-    }
+    summary = (
+        st_svc.get_summary().model_dump()
+        if st_svc
+        else {
+            "active": False,
+            "stalls_count": 0,
+            "total_slots": 0,
+            "filled_slots": 0,
+            "rewards_ready_count": 0,
+            "last_updated": None,
+        }
+    )
 
     snapshot_data = st_svc.snapshot.model_dump() if (st_svc and st_svc.snapshot) else None
 

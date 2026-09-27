@@ -63,7 +63,9 @@ async def send_vehicle_manual(
 
     success = await v_svc.send_manual(route_id=route, cart=cart)
     if not success:
-        raise HTTPException(status_code=400, detail=f"Senden von Fahrzeug auf Route {route} fehlgeschlagen.")
+        raise HTTPException(
+            status_code=400, detail=f"Senden von Fahrzeug auf Route {route} fehlgeschlagen."
+        )
 
     return {"status": "ok", "message": f"Fahrzeug auf Route {route} erfolgreich losgeschickt."}
 
@@ -110,13 +112,19 @@ async def update_vehicle_config(
             if config_update["reorder_threshold"] is not None
             else None
         )
-    if "required_products" in config_update and isinstance(config_update["required_products"], list):
+    if "required_products" in config_update and isinstance(
+        config_update["required_products"], list
+    ):
         route_cfg.required_products = config_update["required_products"]
-    if "required_product_targets" in config_update and isinstance(config_update["required_product_targets"], dict):
+    if "required_product_targets" in config_update and isinstance(
+        config_update["required_product_targets"], dict
+    ):
         route_cfg.required_product_targets = {
             str(k): int(v) for k, v in config_update["required_product_targets"].items()
         }
-    if "required_reorder_thresholds" in config_update and isinstance(config_update["required_reorder_thresholds"], dict):
+    if "required_reorder_thresholds" in config_update and isinstance(
+        config_update["required_reorder_thresholds"], dict
+    ):
         route_cfg.required_reorder_thresholds = {
             str(k): int(v) for k, v in config_update["required_reorder_thresholds"].items()
         }
@@ -129,4 +137,8 @@ async def update_vehicle_config(
 
     settings_manager.save()
     logger.info(f"Fahrzeug-Konfiguration für Farm {farm_id} aktualisiert: {route_cfg.model_dump()}")
-    return {"status": "ok", "route_config": route_cfg.model_dump(), "config": route_cfg.model_dump()}
+    return {
+        "status": "ok",
+        "route_config": route_cfg.model_dump(),
+        "config": route_cfg.model_dump(),
+    }

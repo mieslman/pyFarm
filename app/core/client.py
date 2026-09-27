@@ -240,9 +240,7 @@ class MFFGameClient:
                 self.circuit_breaker.trip(
                     f"Upstream Server meldete 'failed' auf {endpoint}.php (Rate-Limit/Session-Block)"
                 )
-                raise UpstreamAPIError(
-                    f"Kein valides JSON von {endpoint}.php erhalten: failed"
-                )
+                raise UpstreamAPIError(f"Kein valides JSON von {endpoint}.php erhalten: failed")
             else:
                 self.circuit_breaker.record_failure(f"Kein valides JSON von {endpoint}.php")
                 raise UpstreamAPIError(

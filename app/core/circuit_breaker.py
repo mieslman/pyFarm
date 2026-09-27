@@ -28,7 +28,9 @@ class CircuitBreaker:
     def is_open(self) -> bool:
         """Check if circuit is currently open without raising exception."""
         if self.state == "OPEN":
-            if self.last_tripped_at and (time.time() - self.last_tripped_at > self.recovery_timeout_s):
+            if self.last_tripped_at and (
+                time.time() - self.last_tripped_at > self.recovery_timeout_s
+            ):
                 self.state = "HALF_OPEN"
                 logger.info("CircuitBreaker: Cooldown abgelaufen. Übergang in Zustand 'HALF_OPEN'.")
                 return False
@@ -42,7 +44,9 @@ class CircuitBreaker:
             CircuitBreakerOpenError: If the circuit is currently OPEN and within recovery cooldown.
         """
         if self.state == "OPEN":
-            if self.last_tripped_at and (time.time() - self.last_tripped_at > self.recovery_timeout_s):
+            if self.last_tripped_at and (
+                time.time() - self.last_tripped_at > self.recovery_timeout_s
+            ):
                 self.state = "HALF_OPEN"
                 logger.info(
                     "CircuitBreaker: Cooldown abgelaufen. Erlaube einzelnen Testaufruf (HALF_OPEN)."
@@ -51,7 +55,9 @@ class CircuitBreaker:
 
             remaining = 0
             if self.last_tripped_at:
-                remaining = max(0, int(self.recovery_timeout_s - (time.time() - self.last_tripped_at)))
+                remaining = max(
+                    0, int(self.recovery_timeout_s - (time.time() - self.last_tripped_at))
+                )
 
             msg = (
                 f"Circuit-Breaker ist AKTIV ({self.trip_reason or 'Upstream-Blockade'}). "
@@ -62,7 +68,9 @@ class CircuitBreaker:
     def record_success(self) -> None:
         """Record a successful API response and heal circuit if in HALF_OPEN."""
         if self.state == "HALF_OPEN":
-            logger.info("CircuitBreaker: Testaufruf erfolgreich. Schließe Circuit-Breaker (CLOSED).")
+            logger.info(
+                "CircuitBreaker: Testaufruf erfolgreich. Schließe Circuit-Breaker (CLOSED)."
+            )
             self.reset()
         else:
             self.failure_count = 0
@@ -105,7 +113,9 @@ class CircuitBreaker:
         """Return structured status for API and Web Dashboard."""
         remaining_s = 0
         if self.state == "OPEN" and self.last_tripped_at:
-            remaining_s = max(0, int(self.recovery_timeout_s - (time.time() - self.last_tripped_at)))
+            remaining_s = max(
+                0, int(self.recovery_timeout_s - (time.time() - self.last_tripped_at))
+            )
 
         return {
             "state": self.state,

@@ -39,7 +39,6 @@ class FuelstationSlot(BaseModel):
         return not self.busy and not self.is_blocked and self.points_needed > 0 and self.remain <= 0
 
 
-
 class FuelstationState(BaseModel):
     """Overall state of the Biosprit-Anlage."""
 

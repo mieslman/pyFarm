@@ -22,12 +22,7 @@ class WindmillFormula:
             # PHP json_encode serializes arrays with custom properties (e.g. 'amount') as objects with string keys "0", "1", "2", "3"
             raw_id = raw.get("id") or raw.get("0") or raw.get(0) or 0
             self.id = int(raw_id)
-            self.name = str(
-                raw.get("name")
-                or raw.get("2")
-                or raw.get(2)
-                or f"Rezept {self.id}"
-            )
+            self.name = str(raw.get("name") or raw.get("2") or raw.get(2) or f"Rezept {self.id}")
             self.amount = int(raw.get("amount", 1))
             raw_reqs = raw.get("requirements") or raw.get("3") or raw.get(3) or []
         else:
@@ -295,9 +290,7 @@ class HelpersService:
                 if isinstance(res, dict) and "updateblock" in res:
                     self.stock_service.update(res)
             except UpstreamAPIError as e:
-                logger.warning(
-                    f"Helpers: Fehler beim Abholen des Loginbonus für Tag {day_id}: {e}"
-                )
+                logger.warning(f"Helpers: Fehler beim Abholen des Loginbonus für Tag {day_id}: {e}")
 
         return claimed_days
 
@@ -316,9 +309,7 @@ class HelpersService:
             remain = gh_data.get("remain", 999999)
             if remain <= 0:
                 logger.info("Helpers: Gewächshaus-Ertragsbonus ist bereit. Hole Bonus ab...")
-                bonus_res = await self.client.api_call(
-                    "farm", {"mode": "greenhouse_get_bonus"}
-                )
+                bonus_res = await self.client.api_call("farm", {"mode": "greenhouse_get_bonus"})
                 logger.info("Helpers: Gewächshaus-Ertragsbonus erfolgreich abgeholt.")
                 if isinstance(bonus_res, dict) and "updateblock" in bonus_res:
                     self.stock_service.update(bonus_res)
@@ -349,7 +340,9 @@ class HelpersService:
         try:
             await self.client.api_call("farm", {"mode": "pets_buy_parts", "id": 1, "amount": 1})
             open_res = await self.client.api_call("farm", {"mode": "pets_open_pack", "type": 1})
-            logger.info("Helpers: Tägliches Haustier-Zucht Bauteile-Päckchen erfolgreich abgeholt und geöffnet.")
+            logger.info(
+                "Helpers: Tägliches Haustier-Zucht Bauteile-Päckchen erfolgreich abgeholt und geöffnet."
+            )
             if isinstance(open_res, dict) and "updateblock" in open_res:
                 self.stock_service.update(open_res)
             return True

@@ -9,7 +9,7 @@ from app.modules.seasonpass.service import SeasonPassService
 __all__ = [
     "SeasonPassConfig",
     "SeasonPassLevel",
+    "SeasonPassService",
     "SeasonPassSnapshot",
     "SeasonPassTask",
-    "SeasonPassService",
 ]

@@ -2,8 +2,8 @@
 
 from app.modules.stall.models import (
     MarketStall,
-    StallSnapshot,
     StallSlot,
+    StallSnapshot,
     StallSummary,
 )
 from app.modules.stall.service import FruitStallService
@@ -11,7 +11,7 @@ from app.modules.stall.service import FruitStallService
 __all__ = [
     "FruitStallService",
     "MarketStall",
-    "StallSnapshot",
     "StallSlot",
+    "StallSnapshot",
     "StallSummary",
 ]

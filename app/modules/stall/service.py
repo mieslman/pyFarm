@@ -1,13 +1,14 @@
-from datetime import datetime
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
+
 from loguru import logger
 
 from app.config import settings
 from app.core.client import MFFGameClient
 from app.modules.stall.models import (
     MarketStall,
-    StallSnapshot,
     StallSlot,
+    StallSnapshot,
     StallSummary,
 )
 
@@ -17,9 +18,9 @@ class FruitStallService:
 
     def __init__(self, client: MFFGameClient):
         self.client = client
-        self.snapshot: Optional[StallSnapshot] = None
+        self.snapshot: StallSnapshot | None = None
 
-    async def init_remote(self, stock_service: Optional[Any] = None) -> Optional[StallSnapshot]:
+    async def init_remote(self, stock_service: Any | None = None) -> StallSnapshot | None:
         """Fetch market stalls state from game server and construct snapshot."""
         try:
             res = await self.client.api_call("farm", {"mode": "stall_init"})
@@ -52,9 +53,9 @@ class FruitStallService:
 
                 for slot_key, slot_val in raw_slots.items():
                     s_id = str(slot_key)
-                    pid: Optional[int] = None
+                    pid: int | None = None
                     amount = 0
-                    time_val: Optional[int] = None
+                    time_val: int | None = None
 
                     if isinstance(slot_val, dict):
                         raw_pid = slot_val.get("pid")
@@ -93,7 +94,7 @@ class FruitStallService:
 
             snapshot = StallSnapshot(
                 stalls=stalls_map,
-                last_updated=datetime.now().isoformat(),
+                last_updated=datetime.now(UTC).isoformat(),
             )
             self.snapshot = snapshot
             return snapshot
@@ -126,15 +127,21 @@ class FruitStallService:
                 if datablock:
                     stall.reward_ready = False
                     collected_count += 1
-                    logger.info(f"FruitStallService: Belohnung für Stand #{stall.position} erfolgreich abgeholt.")
+                    logger.info(
+                        f"FruitStallService: Belohnung für Stand #{stall.position} erfolgreich abgeholt."
+                    )
                 else:
-                    logger.warning(f"FruitStallService: Unerwartete Antwort beim Belohnung-Abholen: {res}")
+                    logger.warning(
+                        f"FruitStallService: Unerwartete Antwort beim Belohnung-Abholen: {res}"
+                    )
             except Exception as e:
-                logger.error(f"FruitStallService: Fehler beim Abholen der Belohnung für Stand #{stall.position}: {e}")
+                logger.error(
+                    f"FruitStallService: Fehler beim Abholen der Belohnung für Stand #{stall.position}: {e}"
+                )
 
         return collected_count
 
-    async def clear_depleted_slots(self, stock_service: Optional[Any] = None) -> int:
+    async def clear_depleted_slots(self, stock_service: Any | None = None) -> int:
         """Clear slots whose fruit quantity dropped below the configured threshold percentage."""
         if not self.snapshot:
             return 0
@@ -163,7 +170,9 @@ class FruitStallService:
                             },
                         )
                         datablock = res.get("datablock")
-                        if datablock == 1 or (isinstance(datablock, list) and datablock and datablock[0] == 1):
+                        if datablock == 1 or (
+                            isinstance(datablock, list) and datablock and datablock[0] == 1
+                        ):
                             slot.pid = None
                             slot.amount = 0
                             slot.product_name = "Leer"
@@ -172,13 +181,17 @@ class FruitStallService:
                                 f"FruitStallService: Slot {slot.slot_id} an Stand #{stall.position} erfolgreich geräumt."
                             )
                         else:
-                            logger.warning(f"FruitStallService: Fehler beim Räumen von Slot {slot.slot_id}: {res}")
+                            logger.warning(
+                                f"FruitStallService: Fehler beim Räumen von Slot {slot.slot_id}: {res}"
+                            )
                     except Exception as e:
-                        logger.error(f"FruitStallService: Fehler beim Räumen von Slot {slot.slot_id}: {e}")
+                        logger.error(
+                            f"FruitStallService: Fehler beim Räumen von Slot {slot.slot_id}: {e}"
+                        )
 
         return cleared_count
 
-    async def fill_free_slots(self, stock_service: Optional[Any] = None) -> int:
+    async def fill_free_slots(self, stock_service: Any | None = None) -> int:
         """Fill empty display slots with available exotic fruits (category 'ex') from warehouse stock."""
         if not self.snapshot or not stock_service:
             return 0
@@ -203,7 +216,11 @@ class FruitStallService:
                     if prod.pid in fruits_in_stall:
                         continue
 
-                    available = stock_service.get_stock(prod.pid) if hasattr(stock_service, "get_stock") else prod.amount
+                    available = (
+                        stock_service.get_stock(prod.pid)
+                        if hasattr(stock_service, "get_stock")
+                        else prod.amount
+                    )
                     usable = max(0, available - reserve)
                     if usable >= stall.fillsum:
                         candidates.append((usable, prod))
@@ -237,7 +254,9 @@ class FruitStallService:
                         },
                     )
                     datablock = res.get("datablock")
-                    if datablock == 1 or (isinstance(datablock, list) and datablock and datablock[0] == 1):
+                    if datablock == 1 or (
+                        isinstance(datablock, list) and datablock and datablock[0] == 1
+                    ):
                         slot.pid = chosen_prod.pid
                         slot.amount = stall.fillsum
                         slot.product_name = chosen_prod.name
@@ -261,7 +280,7 @@ class FruitStallService:
 
         return filled_count
 
-    async def serve(self, stock_service: Optional[Any] = None) -> dict[str, Any]:
+    async def serve(self, stock_service: Any | None = None) -> dict[str, Any]:
         """Execute full fruit stall maintenance cycle: snapshot -> rewards -> clearing -> replenishment."""
         if not settings.stall.enabled:
             logger.debug("FruitStallService: Modul ist in Konfiguration deaktiviert.")

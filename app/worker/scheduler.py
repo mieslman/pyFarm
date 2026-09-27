@@ -82,7 +82,7 @@ class WorkerScheduler:
                     },
                 }
             )
-        except Exception:  # noqa: BLE001, S110
+        except Exception:  # noqa: S110
             pass
 
     async def run_cycle(self) -> dict[str, Any]:
@@ -164,7 +164,7 @@ class WorkerScheduler:
                             logger.info(
                                 f"WorkerScheduler: Quest-Bedarfe für Ackerbau: {quest_requirements}"
                             )
-                    except Exception as e:  # noqa: BLE001
+                    except Exception as e:
                         logger.warning(f"WorkerScheduler: Fehler bei Quest-Prüfung: {e}")
 
                 await asyncio.sleep(random.uniform(0.5, 1.2))
@@ -213,7 +213,7 @@ class WorkerScheduler:
                         await forestry_service.serve()
                         self.last_forestry_service = forestry_service
                         results["forestry"] = True
-                    except Exception as e:  # noqa: BLE001
+                    except Exception as e:
                         logger.warning(f"WorkerScheduler: Fehler in Forstwirtschaft: {e}")
 
                 await asyncio.sleep(random.uniform(0.5, 1.5))
@@ -224,7 +224,7 @@ class WorkerScheduler:
                         helpers_service = HelpersService(client, stock_service)
                         helpers_res = await helpers_service.serve()
                         results["helpers"] = helpers_res
-                    except Exception as e:  # noqa: BLE001
+                    except Exception as e:
                         logger.warning(f"WorkerScheduler: Fehler bei täglichen Helfern: {e}")
 
                 await asyncio.sleep(random.uniform(0.5, 1.2))
@@ -239,7 +239,7 @@ class WorkerScheduler:
                         )
                         fd_res = await fd_service.run_cycle()
                         results["formula_dealer"] = fd_res
-                    except Exception as e:  # noqa: BLE001
+                    except Exception as e:
                         logger.warning(f"WorkerScheduler: Fehler beim FormulaDealer: {e}")
 
                 await asyncio.sleep(random.uniform(0.5, 1.2))
@@ -253,7 +253,7 @@ class WorkerScheduler:
                         fm_res = await fm_service.run_cycle()
                         self.last_farmersmarket_service = fm_service
                         results["farmersmarket"] = fm_res
-                    except Exception as e:  # noqa: BLE001
+                    except Exception as e:
                         logger.warning(f"WorkerScheduler: Fehler im Bauernmarkt: {e}")
 
                 await asyncio.sleep(random.uniform(0.5, 1.2))
@@ -267,7 +267,7 @@ class WorkerScheduler:
                         fw_res = await fw_service.run_cycle()
                         self.last_foodworld_service = fw_service
                         results["foodworld"] = fw_res
-                    except Exception as e:  # noqa: BLE001
+                    except Exception as e:
                         logger.warning(f"WorkerScheduler: Fehler in Foodworld: {e}")
 
                 await asyncio.sleep(random.uniform(0.5, 1.2))
@@ -291,7 +291,7 @@ class WorkerScheduler:
                         )
                         self.last_seasonpass_service = sp_service
                         results["seasonpass"] = sp_res
-                    except Exception as e:  # noqa: BLE001
+                    except Exception as e:
                         logger.warning(f"WorkerScheduler: Fehler beim Seasonpass: {e}")
 
                 await asyncio.sleep(random.uniform(0.5, 1.2))
@@ -303,7 +303,7 @@ class WorkerScheduler:
                         ev_res = await event_manager.serve()
                         self.last_event_manager = event_manager
                         results["events"] = ev_res
-                    except Exception as e:  # noqa: BLE001
+                    except Exception as e:
                         logger.warning(f"WorkerScheduler: Fehler bei Saisonevents: {e}")
 
                 await asyncio.sleep(random.uniform(0.5, 1.2))
@@ -315,7 +315,7 @@ class WorkerScheduler:
                         ih_res = await ih_service.serve(stock_service=stock_service)
                         self.last_insecthotel_service = ih_service
                         results["insecthotel"] = ih_res
-                    except Exception as e:  # noqa: BLE001
+                    except Exception as e:
                         logger.warning(f"WorkerScheduler: Fehler beim Insektenhotel: {e}")
 
                 await asyncio.sleep(random.uniform(0.5, 1.2))
@@ -327,7 +327,7 @@ class WorkerScheduler:
                         stall_res = await stall_service.serve(stock_service=stock_service)
                         self.last_stall_service = stall_service
                         results["stall"] = stall_res
-                    except Exception as e:  # noqa: BLE001
+                    except Exception as e:
                         logger.warning(f"WorkerScheduler: Fehler beim Obststand: {e}")
 
                 await asyncio.sleep(random.uniform(0.5, 1.2))
@@ -338,7 +338,7 @@ class WorkerScheduler:
                         trade_service = TradeService(client, stock_service)
                         trade_res = await trade_service.serve()
                         results["trade"] = trade_res
-                    except Exception as e:  # noqa: BLE001
+                    except Exception as e:
                         logger.warning(f"WorkerScheduler: Fehler beim Handel: {e}")
 
                 self.last_cycle_results = results
@@ -347,12 +347,14 @@ class WorkerScheduler:
                 )
 
             except CircuitBreakerOpenError as e:
-                logger.error(f"WorkerScheduler: Zyklus wegen Circuit-Breaker Not-Aus sofort abgebrochen: {e}")
+                logger.error(
+                    f"WorkerScheduler: Zyklus wegen Circuit-Breaker Not-Aus sofort abgebrochen: {e}"
+                )
                 self.current_state = "PAUSED_CIRCUIT_BREAKER"
                 self.last_error = str(e)
                 results["error"] = str(e)
                 results["circuit_breaker"] = circuit_breaker.get_status()
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.opt(exception=True).error(f"WorkerScheduler: Fehler während des Zyklus: {e}")
                 self.last_error = str(e)
                 results["error"] = str(e)
@@ -360,7 +362,7 @@ class WorkerScheduler:
                 # 8. Clean logout
                 try:
                     await client.logout()
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     logger.debug(f"WorkerScheduler: Logout-Hinweis: {e}")
 
                 self.current_state = "SLEEPING" if self.is_running else "IDLE"
@@ -376,7 +378,7 @@ class WorkerScheduler:
         # Immediate initial cycle on startup
         try:
             await self.run_cycle()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.error(f"WorkerScheduler: Fehler im Initial-Zyklus: {e}")
 
         while self.is_running:
@@ -403,7 +405,7 @@ class WorkerScheduler:
 
             try:
                 await self.run_cycle()
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.error(f"WorkerScheduler: Unerwarteter Fehler in der Schleife: {e}")
 
         self.current_state = "IDLE"

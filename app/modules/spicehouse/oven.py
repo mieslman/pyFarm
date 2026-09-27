@@ -1,9 +1,10 @@
 import json
 from typing import Any
+
 from loguru import logger
 
 from app.core.client import MFFGameClient
-from app.modules.spicehouse.models import OvenSlotInfo, SPICE_RAW_TO_DRIED
+from app.modules.spicehouse.models import SPICE_RAW_TO_DRIED, OvenSlotInfo
 from app.modules.spicehouse.solver import SpiceQuestSolver
 from app.services.stock_service import StockService
 
@@ -71,9 +72,15 @@ class SpiceOvenService:
         try:
             res = await self.client.api_call("farm", {"mode": "spicehouse_open_oven"})
             datablock = res.get("datablock")
-            success = datablock == 1 or datablock == [1] or (isinstance(datablock, list) and 1 in datablock)
+            success = (
+                datablock == 1
+                or datablock == [1]
+                or (isinstance(datablock, list) and 1 in datablock)
+            )
             if success:
-                logger.info("Gewürzhaus: Trockenofen erfolgreich geleert (+100 Gewürzstreuer-Punkte).")
+                logger.info(
+                    "Gewürzhaus: Trockenofen erfolgreich geleert (+100 Gewürzstreuer-Punkte)."
+                )
                 self.oven_is_ready = False
                 self.oven_is_idle = True
                 return True
@@ -90,7 +97,9 @@ class SpiceOvenService:
         min_crop_reserve: int = 500,
     ) -> dict[str, dict[str, dict[str, int]]]:
         """Plan loading configuration for available oven lines based on Quest 6 priorities and stock surplus."""
-        available_lines = [line for line in self.lines.values() if line.is_available and line.line in (1, 2, 3)]
+        available_lines = [
+            line for line in self.lines.values() if line.is_available and line.line in (1, 2, 3)
+        ]
         if not available_lines:
             logger.debug("Gewürzhaus: Keine verfügbaren Ofenbleche vorhanden.")
             return {}
@@ -182,9 +191,7 @@ class SpiceOvenService:
             return False
 
         total_loaded = sum(
-            item["amount"]
-            for line_data in setup.values()
-            for item in line_data.values()
+            item["amount"] for line_data in setup.values() for item in line_data.values()
         )
 
         logger.info(
@@ -200,9 +207,15 @@ class SpiceOvenService:
                 },
             )
             datablock = res.get("datablock")
-            success = datablock == 1 or datablock == [1] or (isinstance(datablock, list) and 1 in datablock)
+            success = (
+                datablock == 1
+                or datablock == [1]
+                or (isinstance(datablock, list) and 1 in datablock)
+            )
             if success:
-                logger.info(f"Gewürzhaus: Trockenofen erfolgreich gestartet ({total_loaded} Einheiten).")
+                logger.info(
+                    f"Gewürzhaus: Trockenofen erfolgreich gestartet ({total_loaded} Einheiten)."
+                )
                 for line_data in setup.values():
                     for slot_item in line_data.values():
                         stock_service.deduct_stock(

@@ -38,7 +38,9 @@ class Fuelstation:
         data_obj = building_data.get("data", {})
         inner_data = data_obj.get("data", {}) if isinstance(data_obj, dict) else {}
         constants = data_obj.get("constants", {}) if isinstance(data_obj, dict) else {}
-        slot_level_constants = constants.get("slot_level", {}) if isinstance(constants, dict) else {}
+        slot_level_constants = (
+            constants.get("slot_level", {}) if isinstance(constants, dict) else {}
+        )
 
         self.level = int(inner_data.get("level", building_data.get("level", 1)))
 
@@ -60,9 +62,7 @@ class Fuelstation:
                 is_blocked = bool(s_data.get("block", 0))
 
                 # Determine production limit: check constants first, fallback to s_data or level * 1_000_000
-                prod_limit = int(
-                    slot_level_constants.get(str(s_level), {}).get("limit", 0)
-                )
+                prod_limit = int(slot_level_constants.get(str(s_level), {}).get("limit", 0))
                 if prod_limit <= 0:
                     prod_limit = int(s_data.get("limit", s_data.get("production_limit", 0)))
                 if prod_limit <= 0:
@@ -154,7 +154,11 @@ class Fuelstation:
                     )
                     datablock = res.get("datablock")
                     is_ok = (
-                        (isinstance(datablock, (list, tuple)) and len(datablock) > 0 and datablock[0] == 1)
+                        (
+                            isinstance(datablock, (list, tuple))
+                            and len(datablock) > 0
+                            and datablock[0] == 1
+                        )
                         or datablock == 1
                         or bool(res.get("updateblock"))
                     )
@@ -239,7 +243,11 @@ class Fuelstation:
                     )
                     datablock = res.get("datablock")
                     is_ok = (
-                        (isinstance(datablock, (list, tuple)) and len(datablock) > 0 and datablock[0] == 1)
+                        (
+                            isinstance(datablock, (list, tuple))
+                            and len(datablock) > 0
+                            and datablock[0] == 1
+                        )
                         or datablock == 1
                         or bool(res.get("updateblock"))
                     )

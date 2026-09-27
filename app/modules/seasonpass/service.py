@@ -1,11 +1,12 @@
 from typing import Any
+
 from loguru import logger
 
-from app.core.client import MFFGameClient
 # Trigger handler registrations
 import app.modules.seasonpass.handlers  # noqa: F401
+from app.core.client import MFFGameClient
 from app.modules.seasonpass.handlers.defaults import NoOpTaskHandler
-from app.modules.seasonpass.models import SeasonPassConfig, SeasonPassSnapshot, SeasonPassTask
+from app.modules.seasonpass.models import SeasonPassConfig, SeasonPassSnapshot
 from app.modules.seasonpass.task_registry import get_task_handler
 from app.services.stock_service import StockService
 
@@ -45,14 +46,21 @@ class SeasonPassService:
         claimed_count = 0
         for lvl_num, lvl in sorted(self.snapshot.levels.items()):
             if self.snapshot.points >= lvl.points and not lvl.is_claimed and lvl.free_rewards:
-                logger.info(f"Seasonpass: Hole freie Belohnung für Stufe {lvl_num} ab ({lvl.points} Punkte)...")
+                logger.info(
+                    f"Seasonpass: Hole freie Belohnung für Stufe {lvl_num} ab ({lvl.points} Punkte)..."
+                )
                 try:
                     res = await self.client.api_call(
                         "farm",
                         {"mode": "seasonpass_getreward", "level": lvl_num, "type": "free"},
                     )
                     datablock = res.get("datablock")
-                    success = datablock == 1 or datablock == [1] or (isinstance(datablock, list) and 1 in datablock) or (isinstance(datablock, dict) and "data" in datablock)
+                    success = (
+                        datablock == 1
+                        or datablock == [1]
+                        or (isinstance(datablock, list) and 1 in datablock)
+                        or (isinstance(datablock, dict) and "data" in datablock)
+                    )
                     if success or res.get("status") == "ok":
                         lvl.is_claimed = True
                         claimed_count += 1

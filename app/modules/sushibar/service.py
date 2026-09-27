@@ -106,7 +106,7 @@ class SushiBarService:
             s_data = ub.get("sushibar", {})
             if s_data:
                 self.update(s_data, catalog)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.error(f"Sushi-Bar: Fehler beim Initialisieren via sushibar_init: {e}")
 
     async def serve(

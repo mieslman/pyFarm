@@ -1,8 +1,8 @@
 from typing import Any
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.config import settings
 from app.core.auth import create_access_token
 from app.core.client import MFFGameClient
 from app.main import app
@@ -63,7 +63,9 @@ async def test_event_manager_detect_none_when_empty(dummy_client: MFFGameClient)
 # 2. Calendar Event Service
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_calendar_service_opens_door(dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch):
+async def test_calendar_service_opens_door(
+    dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch
+):
     service = CalendarEventService(dummy_client)
 
     calls = []
@@ -95,7 +97,9 @@ async def test_calendar_service_opens_door(dummy_client: MFFGameClient, monkeypa
 
 
 @pytest.mark.asyncio
-async def test_calendar_service_already_opened(dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch):
+async def test_calendar_service_already_opened(
+    dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch
+):
     service = CalendarEventService(dummy_client)
 
     async def mock_api_call(endpoint: str, params: dict[str, Any], **kwargs):
@@ -117,7 +121,9 @@ async def test_calendar_service_already_opened(dummy_client: MFFGameClient, monk
 # 3. Delivery Event Service
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_delivery_service_optimizes_tour(dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch):
+async def test_delivery_service_optimizes_tour(
+    dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch
+):
     service = DeliveryEventService(dummy_client)
     calls = []
 
@@ -129,9 +135,21 @@ async def test_delivery_service_optimizes_tour(dummy_client: MFFGameClient, monk
                     "data": {"points": 150, "tour": {"remain": -1}},
                     "config": {
                         "spots": {
-                            "1": {"name": "Spot 1", "points": 100, "duration": 1000},  # outcome = 0.10
-                            "2": {"name": "Spot 2", "points": 300, "duration": 1000},  # outcome = 0.30 (too expensive)
-                            "3": {"name": "Spot 3", "points": 50, "duration": 1000},   # outcome = 0.05
+                            "1": {
+                                "name": "Spot 1",
+                                "points": 100,
+                                "duration": 1000,
+                            },  # outcome = 0.10
+                            "2": {
+                                "name": "Spot 2",
+                                "points": 300,
+                                "duration": 1000,
+                            },  # outcome = 0.30 (too expensive)
+                            "3": {
+                                "name": "Spot 3",
+                                "points": 50,
+                                "duration": 1000,
+                            },  # outcome = 0.05
                         }
                     },
                 }
@@ -149,7 +167,9 @@ async def test_delivery_service_optimizes_tour(dummy_client: MFFGameClient, monk
 
 
 @pytest.mark.asyncio
-async def test_delivery_service_skips_when_tour_active(dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch):
+async def test_delivery_service_skips_when_tour_active(
+    dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch
+):
     service = DeliveryEventService(dummy_client)
 
     async def mock_api_call(endpoint: str, params: dict[str, Any], **kwargs):
@@ -169,7 +189,9 @@ async def test_delivery_service_skips_when_tour_active(dummy_client: MFFGameClie
 # 4. Event Garden Service
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_eventgarden_harvest_and_plant(dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch):
+async def test_eventgarden_harvest_and_plant(
+    dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch
+):
     service = EventGardenService(dummy_client)
     calls = []
 
@@ -242,7 +264,9 @@ def test_oktoberfest_solver_pure_logic():
 
 
 @pytest.mark.asyncio
-async def test_oktoberfest_service_executes_rounds(dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch):
+async def test_oktoberfest_service_executes_rounds(
+    dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch
+):
     service = OktoberfestEventService(dummy_client)
     calls = []
 
@@ -351,7 +375,9 @@ async def test_olympia_service(dummy_client: MFFGameClient, monkeypatch: pytest.
 # 7. Event Manager Orchestration
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_event_manager_serve_orchestration(dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch):
+async def test_event_manager_serve_orchestration(
+    dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch
+):
     mgr = EventManager(dummy_client)
 
     calendar_called = []

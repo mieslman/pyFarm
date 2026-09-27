@@ -29,9 +29,7 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
 def decode_access_token(token: str) -> dict[str, Any]:
     """Decode and validate a signed JWT token."""
     try:
-        payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.jwt_algorithm]
-        )
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.jwt_algorithm])
         return payload
     except JWTError as e:
         logger.warning(f"JWT Validierungsfehler: {e}")

@@ -23,9 +23,7 @@ class PlantStrategySolver:
         candidates = [
             p
             for p in stock_service.products.values()
-            if p.category == category
-            and p.total_amount < min_products
-            and p.pid not in excluded
+            if p.category == category and p.total_amount < min_products and p.pid not in excluded
         ]
 
         has_farm_stocks = bool(
@@ -34,9 +32,7 @@ class PlantStrategySolver:
         )
         is_outer_farm = farm_id in (5, 6, 8, 10)
 
-        with_seeds = [
-            p for p in candidates if stock_service.get_farm_amount(farm_id, p.pid) > 0
-        ]
+        with_seeds = [p for p in candidates if stock_service.get_farm_amount(farm_id, p.pid) > 0]
         if with_seeds:
             candidates = with_seeds
         elif is_outer_farm and has_farm_stocks:
@@ -148,7 +144,11 @@ class PlantStrategySolver:
                         f"Feste Vorgabe wird ignoriert und dynamisch nach '{strategy_name}' ermittelt."
                     )
                 else:
-                    if is_outer_farm and has_farm_stocks and stock_service.get_farm_amount(farm_id, fixed_pid) <= 0:
+                    if (
+                        is_outer_farm
+                        and has_farm_stocks
+                        and stock_service.get_farm_amount(farm_id, fixed_pid) <= 0
+                    ):
                         logger.warning(
                             f"Farm {farm_id}: Feste Vorgabe '{fixed_product.name}' (PID {fixed_pid}) "
                             f"hat 0 Saatgut im lokalen Farmregal! Weiche auf dynamische Strategie '{strategy_name}' aus."
@@ -180,7 +180,11 @@ class PlantStrategySolver:
         strategy = strategy_name.lower()
 
         # Specific handler for Farm 8 (water farm) and Quest 5 demands
-        if (farm_id == 8 or category == "water") and "quest" in strategy and quest5_water_candidates:
+        if (
+            (farm_id == 8 or category == "water")
+            and "quest" in strategy
+            and quest5_water_candidates
+        ):
             water_results = []
             for pid, deficit, q_id, reason in quest5_water_candidates:
                 if pid in excluded:
@@ -237,9 +241,7 @@ class PlantStrategySolver:
             if p.category == category and p.pid not in excluded
         ]
         if all_crops:
-            with_seeds = [
-                p for p in all_crops if stock_service.get_farm_amount(farm_id, p.pid) > 0
-            ]
+            with_seeds = [p for p in all_crops if stock_service.get_farm_amount(farm_id, p.pid) > 0]
             if with_seeds:
                 all_crops = with_seeds
             elif is_outer_farm and has_farm_stocks:

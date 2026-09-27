@@ -1,4 +1,5 @@
 from typing import Any
+
 from loguru import logger
 
 from app.core.client import MFFGameClient
@@ -62,14 +63,20 @@ class SpicehouseService:
             # 1. Update Oven
             oven_data = data_block.get("oven")
             oven_slots = data_block.get("oven_slots")
-            oven_levels = config_block.get("oven_levels") if isinstance(config_block, dict) else None
+            oven_levels = (
+                config_block.get("oven_levels") if isinstance(config_block, dict) else None
+            )
             self.oven.update(oven_data, oven_slots, oven_levels)
 
             # 2. Update Mills
             mill_slots = data_block.get("mill_slots")
-            mill_levels = config_block.get("mill_levels") if isinstance(config_block, dict) else None
+            mill_levels = (
+                config_block.get("mill_levels") if isinstance(config_block, dict) else None
+            )
             server_time = int(data_block.get("time", 0)) if "time" in data_block else 0
-            products_config = config_block.get("products") if isinstance(config_block, dict) else None
+            products_config = (
+                config_block.get("products") if isinstance(config_block, dict) else None
+            )
             self.mill.update(
                 mill_slots,
                 mill_levels,

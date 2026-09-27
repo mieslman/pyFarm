@@ -7,15 +7,31 @@ from app.core.auth import create_access_token
 from app.core.client import MFFGameClient
 from app.main import app
 from app.models.product import Product
-from app.modules.seasonpass import SeasonPassConfig, SeasonPassService, SeasonPassSnapshot, SeasonPassTask
-from app.modules.seasonpass.handlers.crops import HarvestTaskHandler, PlantTaskHandler, WaterTaskHandler
+from app.modules.seasonpass import (
+    SeasonPassService,
+    SeasonPassSnapshot,
+    SeasonPassTask,
+)
+from app.modules.seasonpass.handlers.crops import (
+    HarvestTaskHandler,
+    PlantTaskHandler,
+    WaterTaskHandler,
+)
 from app.modules.seasonpass.handlers.defaults import NoOpTaskHandler
-from app.modules.seasonpass.handlers.forestry import ForestryHarvestTaskHandler, ForestryPlantTaskHandler
-from app.modules.seasonpass.handlers.misc import FarmiTaskHandler, FriendVisitTaskHandler, WeatherTaskHandler
-from app.modules.seasonpass.handlers.sheds import HarvestProductionTaskHandler, StartProductionTaskHandler
+from app.modules.seasonpass.handlers.forestry import (
+    ForestryHarvestTaskHandler,
+    ForestryPlantTaskHandler,
+)
+from app.modules.seasonpass.handlers.misc import (
+    FarmiTaskHandler,
+    FriendVisitTaskHandler,
+    WeatherTaskHandler,
+)
+from app.modules.seasonpass.handlers.sheds import (
+    HarvestProductionTaskHandler,
+)
 from app.modules.seasonpass.task_registry import get_registered_types, get_task_handler
 from app.services.stock_service import StockService
-from app.worker.scheduler import worker_scheduler
 
 SAMPLE_SEASONPASS_PAYLOAD = {
     "status": "ok",
@@ -374,25 +390,51 @@ async def test_shed_harvest_production_task_and_is_ready():
 
     with respx.mock:
         # Mock shed update (inner_init)
-        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php", params__contains={"mode": "inner_init"}).mock(
+        respx.get(
+            url__startswith="https://s1.myfreefarm.de/ajax/farm.php",
+            params__contains={"mode": "inner_init"},
+        ).mock(
             return_value=httpx.Response(
                 200,
                 json={
                     "datablock": [
                         1,
-                        {"1": {"2": {"pid": 9, "animals": {"amount": 10}, "remain": 0, "rest": 7200, "feed": {}}}},
+                        {
+                            "1": {
+                                "2": {
+                                    "pid": 9,
+                                    "animals": {"amount": 10},
+                                    "remain": 0,
+                                    "rest": 7200,
+                                    "feed": {},
+                                }
+                            }
+                        },
                     ]
                 },
             )
         )
         # Mock shed crop (inner_crop)
-        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php", params__contains={"mode": "inner_crop"}).mock(
+        respx.get(
+            url__startswith="https://s1.myfreefarm.de/ajax/farm.php",
+            params__contains={"mode": "inner_crop"},
+        ).mock(
             return_value=httpx.Response(
                 200,
                 json={
                     "datablock": [
                         1,
-                        {"1": {"2": {"pid": 9, "animals": {"amount": 10}, "remain": 7200, "rest": 7200, "feed": {}}}},
+                        {
+                            "1": {
+                                "2": {
+                                    "pid": 9,
+                                    "animals": {"amount": 10},
+                                    "remain": 7200,
+                                    "rest": 7200,
+                                    "feed": {},
+                                }
+                            }
+                        },
                     ]
                 },
             )
@@ -400,4 +442,3 @@ async def test_shed_harvest_production_task_and_is_ready():
 
         success = await handler.run()
         assert success is True
-
