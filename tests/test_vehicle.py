@@ -925,3 +925,58 @@ async def test_vehicle_skips_wolle_supply_when_above_reorder_threshold(fast_clie
         # Empty cart because Wolle is above 50 (saves fuel and capacity!)
         assert v.last_sent_cart == ""
         assert stock.products[11].amount == 30000
+
+
+@pytest.mark.asyncio
+async def test_vehicle_loads_sushi_dishes_from_farm_8(fast_client):
+    """Test that vehicle on Farm 8 loads sushi dishes (e.g. Brunnenkressensalat 978, Taro-Dampfnudeln 984) for quests."""
+    stock = StockService(fast_client)
+    salat = Product(
+        pid=978, name="Brunnenkressensalat", category="sushi", amount=0, tmp_amount=50
+    )
+    dampfnudel = Product(
+        pid=984, name="Taro-Dampfnudeln", category="sushi", amount=10, tmp_amount=80
+    )
+
+    stock.products = {978: salat, 984: dampfnudel}
+    stock.farm_temp_stocks = {
+        8: {978: 50, 984: 80},
+    }
+
+    state = VehicleState(current=8, route=4, vehicle_type=19, remain=0)
+    config = VehicleConfigData(
+        name="Boot", capacity=750, products=3, farms=[8], duration=1200
+    )
+    route_cfg = VehicleRouteConfig(
+        farm_id=8,
+        route=4,
+        transport=True,
+        prioritize_quests=True,
+        only_quest_products=True,
+        min_crop_reserve=500,
+        send_partial=True,
+    )
+
+    v = Vehicle(fast_client, state, config, route_cfg)
+    quest_requirements = {978: 741, 984: 500}
+    quest_priority_order = {978: 72, 984: 74}
+
+    with respx.mock:
+        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
+            return_value=httpx.Response(200, json={"datablock": 1})
+        )
+        res = await v.loop(
+            stock,
+            quest_requirements=quest_requirements,
+            quest_priority_order=quest_priority_order,
+        )
+        assert res is True
+        assert len(v.current_cargo) == 2
+        # Earlier quest (Q72: Brunnenkressensalat 978) loaded first
+        assert v.current_cargo[0].pid == 978
+        assert v.current_cargo[0].amount == 50
+        # Q74: Taro-Dampfnudeln 984 loaded second
+        assert v.current_cargo[1].pid == 984
+        assert v.current_cargo[1].amount == 80
+        assert v.last_sent_cart == "1,978,50_2,984,80_"
+

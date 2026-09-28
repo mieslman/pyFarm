@@ -273,12 +273,21 @@ class SushiQuestSolver:
         for q_id in sorted_quests:
             reqs = quests_catalog[q_id]
 
-            # 1. Direct water plant requirements
+            # 1. Direct water plant requirements and sushi dishes for logistics
             for pid, needed_amt in reqs.items():
                 is_water = 950 <= pid <= 957 or (
                     catalog and pid in catalog and getattr(catalog[pid], "category", "") == "water"
                 )
-                if is_water:
+                is_sushi_dish = (
+                    pid in recipes
+                    or (970 <= pid < 1000)
+                    or (
+                        catalog
+                        and pid in catalog
+                        and getattr(catalog[pid], "category", "") in ("sushi", "soup", "salad", "dessert")
+                    )
+                )
+                if is_water or (for_logistics and is_sushi_dish):
                     main_stock = stock_service.get_amount(pid)
                     if for_logistics:
                         # Hauptfarm (Farm 1) needs delivery if main_stock < needed_amt

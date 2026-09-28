@@ -427,6 +427,9 @@ class Vehicle:
             if self.route_config.only_quest_products:
                 if not is_quest:
                     continue
+            elif self.target_farm_id == 8:
+                if p.category not in ("water", "sushi", "soup", "salad", "dessert") and not is_quest:
+                    continue
             elif is_farm_10:
                 is_milled = "gemahlen" in p.name.lower()
                 if not is_milled and not (self.route_config.prioritize_quests and is_quest):

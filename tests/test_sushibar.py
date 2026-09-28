@@ -618,3 +618,7 @@ async def test_quest5_water_requirements_logistics_vs_planting():
     assert 957 in logistics_pids
     assert logistics_candidates[1][0] == 957
     assert logistics_candidates[1][2] == 68  # Priority is Quest 68!
+
+    # Sushi dish 978 (Brunnenkressensalat) for Quest 72 must also be in logistics candidates!
+    assert 978 in logistics_pids
+    assert any(c[0] == 978 and c[2] == 72 for c in logistics_candidates)
