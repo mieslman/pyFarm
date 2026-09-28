@@ -24,6 +24,7 @@ dependencies = [
     "python-multipart>=0.0.9",
     "loguru>=0.7.2",
     "apscheduler>=3.10.4",
+    "paramiko>=3.4.0",
 ]
 
 [project.optional-dependencies]
