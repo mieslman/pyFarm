@@ -370,6 +370,7 @@ def cmd_update(client: RemoteClient, args: argparse.Namespace) -> int:
 
     print(f"[*] Aktualisiere Repository auf Server ({client.remote_path})...")
     remote_script = (
+        'export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH" && '
         f"cd {client.remote_path} && "
         "git fetch origin && "
         "git pull && "
