@@ -141,6 +141,7 @@
     "auto_train": false,
     "auto_farmi": true,
     "production_strategy": "quest5",
+    "fallback_to_balanced": false,
     "preferred_pids": [],
     "reserve_full_field": true,
     "coin_protection": true

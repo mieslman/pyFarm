@@ -124,6 +124,7 @@ class SushiKitchenService:
         strategy: str = "quest5",
         preferred_pids: list[int] | None = None,
         reserve_full_field: bool = True,
+        fallback_to_balanced: bool = False,
         coin_protection: bool = True,
         update_callback: Any | None = None,
     ) -> int:
@@ -143,6 +144,7 @@ class SushiKitchenService:
                 strategy=strategy,
                 preferred_pids=preferred_pids,
                 reserve_full_field=reserve_full_field,
+                fallback_to_balanced=fallback_to_balanced,
             )
 
             if not recipe:

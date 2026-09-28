@@ -161,8 +161,8 @@ class SushiBarService:
         # 4. Produce according to Questreihe 5
         if self.config.auto_produce:
             current_quest_id = 1
-            if quest_status_main and "5" in quest_status_main:
-                q5_info = quest_status_main["5"]
+            if quest_status_main:
+                q5_info = quest_status_main.get("5") or quest_status_main.get(5)
                 if isinstance(q5_info, dict) and "questid" in q5_info:
                     current_quest_id = int(q5_info["questid"])
 
@@ -176,6 +176,7 @@ class SushiBarService:
                 strategy=self.config.production_strategy,
                 preferred_pids=self.config.preferred_pids,
                 reserve_full_field=self.config.reserve_full_field,
+                fallback_to_balanced=self.config.fallback_to_balanced,
                 coin_protection=self.config.coin_protection,
                 update_callback=refresh_callback,
             )
@@ -202,4 +203,5 @@ class SushiBarService:
             auto_train=self.config.auto_train,
             auto_farmi=self.config.auto_farmi,
             production_strategy=self.config.production_strategy,
+            fallback_to_balanced=self.config.fallback_to_balanced,
         )

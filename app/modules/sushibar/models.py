@@ -147,3 +147,4 @@ class SushiBarSummary(BaseModel):
     auto_train: bool = False
     auto_farmi: bool = True
     production_strategy: str = "quest5"
+    fallback_to_balanced: bool = False

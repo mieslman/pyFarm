@@ -156,6 +156,7 @@ class SushibarConfig(BaseModel):
     auto_train: bool = False  # Standardmäßig inaktiv (Nutzer-Vorgabe)
     auto_farmi: bool = True
     production_strategy: str = "quest5"  # "quest5", "balanced", "preferred"
+    fallback_to_balanced: bool = False  # Bei Quest-5-Strategie kein Fallback auf andere Rezepte (verhindert Fehlproduktion)
     preferred_pids: list[int] = Field(default_factory=list)
     reserve_full_field: bool = True  # Mindestreserve: 120 // (size_x * size_y)
     coin_protection: bool = True  # Strikter Schutz: Keine Coin-Rezepte, kein Coin-Speedup

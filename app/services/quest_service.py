@@ -69,7 +69,7 @@ class QuestService:
 
                 prod = self.stock_service.get_product(pid)
                 name = prod.name if prod else f"Produkt {pid}"
-                curr_stock = prod.total_amount if prod else 0
+                curr_stock = self.stock_service.get_total_stock(pid)
                 missing = max(0, amount_needed - curr_stock)
 
                 requirements.append(
@@ -184,7 +184,7 @@ class QuestService:
                 for req in self.current_quest.requirements:
                     prod = self.stock_service.get_product(req.pid)
                     if prod:
-                        req.current_stock = prod.total_amount
+                        req.current_stock = self.stock_service.get_total_stock(req.pid)
                         req.missing = max(0, req.amount_needed - req.current_stock)
                 self.current_quest.is_ready = all(
                     r.missing == 0 for r in self.current_quest.requirements

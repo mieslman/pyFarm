@@ -70,11 +70,12 @@ Im Spiel existieren 16 Rezepte, von denen exakt 8 Rezepte reale Spielmünzen (Co
   - PID 982: Lotoswurzel in Honigglasur (dessert)
   - PID 984: Taro-Dampfnudeln (dessert)
 
-### 3.2 Ausrichtung an Hauptquestreihe 5
+### 3.2 Ausrichtung an Hauptquestreihe 5 & Kumulativer Bedarf
 - Der `SushiQuestSolver` parst die Quests der Reihe 5 über `help.php?mode=quests5`.
 - Er liest den aktuellen Spielerfortschritt (`queststatus.main["5"].questid`, z. B. Quest 64).
-- Ab dieser Questnummer sucht er chronologisch nach geforderten kT-Sushi-Rezepten (z. B. Quest 72: Brunnenkressensalat 978, Quest 74: Taro-Dampfnudeln 984 & Brunnenkressensuppe 977, Quest 83: Sommerrolle 970 usw.).
-- Das früheste noch nicht im Lager vorhandene Zielrezept wird bevorzugt gekocht.
+- Ab dieser Questnummer sucht er chronologisch nach geforderten kT-Sushi-Rezepten (z. B. Quest 72: Brunnenkressensalat 978, Quest 74: Taro-Dampfnudeln 984 & Brunnenkressensuppe 977, Quest 81: Taro-Dampfnudeln 984, Quest 88: Brunnenkressensalat 978 usw.).
+- **Kumulative Bedarfsermittlung:** Der Lagerbestand wird virtuell über alle anstehenden Quests hinweg fortgeführt. Ist ein Rezept für die nächste Quest bereits abgedeckt, wird der verbleibende Restbestand an nachfolgende Quests übergeben. So wird z. B. Taro-Dampfnudeln für Quest 81 weiter gekocht, selbst wenn der Anfangsbestand für Quest 74 bereits ausreichte.
+- **Fehlproduktions-Schutz (`fallback_to_balanced`):** Wenn die Strategie `quest5` aktiv ist, wird standardmäßig (`fallback_to_balanced = False`) kein Fallback auf questfremde kT-Rezepte (wie Omelett-Rolle) ausgeführt, um ein Verbrauchen wertvoller Zutaten und Blockieren von Kochslots zu verhindern. Sollten keine Quest-5-Rezepte zubereitet werden können (z. B. fehlende Zutaten oder Sushibar-Level zu niedrig), pausiert die Produktion, bis Zutaten nachwachsen oder ein Levelaufstieg erfolgt.
 
 ### 3.3 Feld-Bepflanzungsreserve
 - Die Zutaten für Sushi stammen primär aus dem Ackerbau auf Farm 8 (Reis 950, Lotos 951, Wasserspinat 952, Taro 953, Wasserpfeffer 954, Wasserkastanie 955, Brunnenkresse 957).

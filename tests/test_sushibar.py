@@ -202,6 +202,77 @@ async def test_quest_solver_priority_and_field_reserve():
     assert target.quest_id == 74
     assert target.missing == 843
 
+    # Case 3: Cumulative tracking across quests
+    # Suppose Quest 72 needs 741x 978, and Quest 88 needs 794x 978.
+    # Player has 800 in stock: Quest 72 is covered (leaves 59), Quest 88 still needs 735!
+    # With Brunnenkresse 957 restored, it MUST pick 978 for Quest 88 and NOT fall back!
+    multi_quest_html = """
+    <table class="newhelp_table" cellspacing="0" cellpadding="0">
+      <tr class="newhelp_line">
+        <td valign="top">72.</td>
+        <td valign="top"><div class="kp978"></div> 741x&nbsp;Brunnenkressensalat</td>
+      </tr>
+      <tr class="newhelp_line">
+        <td valign="top">88.</td>
+        <td valign="top"><div class="kp978"></div> 794x&nbsp;Brunnenkressensalat</td>
+      </tr>
+    </table>
+    """
+    solver.parse_quests_html(multi_quest_html)
+    stock_svc.products[957].amount = 200  # Ingredients available
+    stock_svc.products[978].amount = 800  # 800 covers Q72 (741), leaving 59 -> Q88 deficit 735
+
+    # Non-quest recipe (e.g. Omelett-Rolle 973) exists with 0 stock
+    recipes[973] = SushiRecipe(
+        pid=973, name="Omelett-Rolle", level=2, cost_money=1000, needs={}
+    )
+    stock_svc.products[973] = Product(pid=973, name="Omelett-Rolle", amount=0)
+
+    recipe, target = await solver.find_best_recipe(
+        current_quest_id=64,
+        sushibar_level=14,
+        recipes=recipes,
+        stock_service=stock_svc,
+        catalog=catalog,
+        strategy="quest5",
+        reserve_full_field=True,
+        fallback_to_balanced=False,
+    )
+    assert recipe is not None
+    assert recipe.pid == 978  # Must pick Brunnenkressensalat for Quest 88, NOT Omelett-Rolle!
+    assert target is not None
+    assert target.quest_id == 88
+    assert target.missing == 735
+
+    # Case 4: When all Quest 5 recipes are fulfilled, fallback_to_balanced=False stops cooking
+    stock_svc.products[978].amount = 2000  # Covers both Q72 and Q88
+    recipe, target = await solver.find_best_recipe(
+        current_quest_id=64,
+        sushibar_level=14,
+        recipes=recipes,
+        stock_service=stock_svc,
+        catalog=catalog,
+        strategy="quest5",
+        reserve_full_field=True,
+        fallback_to_balanced=False,
+    )
+    assert recipe is None  # Does NOT cook Omelett-Rolle 973!
+
+    # Case 5: When fallback_to_balanced=True, it cooks lowest-stock kT recipe
+    stock_svc.products[984].amount = 10  # 973 has 0, so 973 is strictly lowest stock
+    recipe, target = await solver.find_best_recipe(
+        current_quest_id=64,
+        sushibar_level=14,
+        recipes=recipes,
+        stock_service=stock_svc,
+        catalog=catalog,
+        strategy="quest5",
+        reserve_full_field=True,
+        fallback_to_balanced=True,
+    )
+    assert recipe is not None
+    assert recipe.pid == 973  # Now falls back to lowest-stock recipe Omelett-Rolle
+
 
 @pytest.mark.asyncio
 async def test_kitchen_harvest_and_produce():

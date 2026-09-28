@@ -74,6 +74,8 @@ async def update_sushibar_settings(
         cfg.preferred_pids = [int(p) for p in payload["preferred_pids"] if str(p).isdigit()]
     if "reserve_full_field" in payload:
         cfg.reserve_full_field = bool(payload["reserve_full_field"])
+    if "fallback_to_balanced" in payload:
+        cfg.fallback_to_balanced = bool(payload["fallback_to_balanced"])
     if "coin_protection" in payload:
         cfg.coin_protection = bool(payload["coin_protection"])
 

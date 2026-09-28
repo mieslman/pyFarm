@@ -121,6 +121,7 @@ class SushiQuestSolver:
         strategy: str = "quest5",
         preferred_pids: list[int] | None = None,
         reserve_full_field: bool = True,
+        fallback_to_balanced: bool = False,
     ) -> tuple[SushiRecipe | None, SushiQuestTarget | None]:
         """Find the next recipe to cook based on Questreihe 5 demand, fallback to balanced/preferred."""
         # 1. Questreihe 5 Strategy
@@ -128,6 +129,10 @@ class SushiQuestSolver:
             quests_catalog = await self.load_quests5_catalog()
             if quests_catalog:
                 sorted_quests = sorted([q for q in quests_catalog if q >= current_quest_id])
+                # Track available stock cumulatively across upcoming quests
+                virtual_stock = {pid: stock_service.get_total_stock(pid) for pid in recipes}
+                first_target: SushiQuestTarget | None = None
+
                 for q_id in sorted_quests:
                     reqs = quests_catalog[q_id]
                     for pid, needed_amt in reqs.items():
@@ -139,38 +144,54 @@ class SushiQuestSolver:
                         if recipe.is_coin_recipe:
                             continue
 
+                        avail = virtual_stock.get(pid, 0)
+                        if avail >= needed_amt:
+                            virtual_stock[pid] = avail - needed_amt
+                            continue
+                        else:
+                            deficit = needed_amt - avail
+                            virtual_stock[pid] = 0
+
+                        prod_name = (
+                            catalog[pid].name
+                            if (catalog and pid in catalog)
+                            else recipe.name or f"PID {pid}"
+                        )
+                        target = SushiQuestTarget(
+                            quest_id=q_id,
+                            pid=pid,
+                            product_name=prod_name,
+                            amount_needed=needed_amt,
+                            amount_in_stock=stock_service.get_total_stock(pid),
+                            missing=deficit,
+                            category=recipe.category,
+                        )
+                        if first_target is None:
+                            first_target = target
+
                         # Check level requirement
                         if recipe.level > sushibar_level:
                             continue
 
-                        stock = stock_service.get_total_stock(pid)
-                        if stock < needed_amt:
-                            prod_name = (
-                                catalog[pid].name
-                                if (catalog and pid in catalog)
-                                else recipe.name or f"PID {pid}"
-                            )
-                            target = SushiQuestTarget(
-                                quest_id=q_id,
-                                pid=pid,
-                                product_name=prod_name,
-                                amount_needed=needed_amt,
-                                amount_in_stock=stock,
-                                missing=needed_amt - stock,
-                                category=recipe.category,
-                            )
+                        # Can we cook this target recipe right now?
+                        if self.check_ingredients(
+                            recipe,
+                            stock_service,
+                            catalog,
+                            reserve_full_field,
+                            farm_id=self.farm_id,
+                        ):
                             self.last_target = target
+                            return recipe, target
+                        # If ingredients are lacking, check the next sushi requirement
 
-                            # Can we cook this target recipe right now?
-                            if self.check_ingredients(
-                                recipe,
-                                stock_service,
-                                catalog,
-                                reserve_full_field,
-                                farm_id=self.farm_id,
-                            ):
-                                return recipe, target
-                            # If ingredients are lacking, check the next sushi requirement
+                # Remember earliest unfulfilled target even if it could not be cooked immediately
+                if first_target is not None:
+                    self.last_target = first_target
+
+                # If no Quest 5 recipe can be cooked and fallback is disabled, do not cook random dishes
+                if not fallback_to_balanced:
+                    return None, self.last_target
 
         # 2. Preferred PIDs Strategy (or fallback)
         if strategy == "preferred" and preferred_pids:
@@ -189,22 +210,26 @@ class SushiQuestSolver:
                         )
                     ):
                         return recipe, None
+            if not fallback_to_balanced:
+                return None, None
 
         # 3. Balanced Fallback (cook available kT recipe with lowest warehouse stock)
-        available_recipes: list[tuple[int, SushiRecipe]] = []
-        for pid, recipe in recipes.items():
-            if recipe.is_coin_recipe or recipe.level > sushibar_level:
-                continue
-            if self.check_ingredients(
-                recipe, stock_service, catalog, reserve_full_field, farm_id=self.farm_id
-            ):
-                stock = stock_service.get_total_stock(pid)
-                available_recipes.append((stock, recipe))
+        # Only active if strategy is balanced or fallback_to_balanced is enabled
+        if strategy == "balanced" or fallback_to_balanced:
+            available_recipes: list[tuple[int, SushiRecipe]] = []
+            for pid, recipe in recipes.items():
+                if recipe.is_coin_recipe or recipe.level > sushibar_level:
+                    continue
+                if self.check_ingredients(
+                    recipe, stock_service, catalog, reserve_full_field, farm_id=self.farm_id
+                ):
+                    stock = stock_service.get_total_stock(pid)
+                    available_recipes.append((stock, recipe))
 
-        if available_recipes:
-            # Sort by lowest stock first
-            available_recipes.sort(key=lambda x: x[0])
-            return available_recipes[0][1], None
+            if available_recipes:
+                # Sort by lowest stock first
+                available_recipes.sort(key=lambda x: x[0])
+                return available_recipes[0][1], None
 
         return None, None
 
@@ -234,6 +259,16 @@ class SushiQuestSolver:
         candidates: list[tuple[int, int, int, str]] = []
         seen_pids: set[int] = set()
 
+        # Track virtual stock cumulatively across upcoming quests
+        virtual_water_stock: dict[int, int] = {}
+        if not for_logistics:
+            for p in range(950, 958):
+                virtual_water_stock[p] = stock_service.get_farm_amount(
+                    self.farm_id, p
+                ) + stock_service.get_amount(p)
+
+        virtual_dish_stock = {pid: stock_service.get_total_stock(pid) for pid in recipes}
+
         sorted_quests = sorted([q for q in quests_catalog if q >= current_quest_id])
         for q_id in sorted_quests:
             reqs = quests_catalog[q_id]
@@ -243,11 +278,11 @@ class SushiQuestSolver:
                 is_water = 950 <= pid <= 957 or (
                     catalog and pid in catalog and getattr(catalog[pid], "category", "") == "water"
                 )
-                if is_water and pid not in seen_pids:
+                if is_water:
                     main_stock = stock_service.get_amount(pid)
                     if for_logistics:
                         # Hauptfarm (Farm 1) needs delivery if main_stock < needed_amt
-                        if main_stock < needed_amt:
+                        if pid not in seen_pids and main_stock < needed_amt:
                             deficit = needed_amt - main_stock
                             prod_name = (
                                 catalog[pid].name if (catalog and pid in catalog) else f"PID {pid}"
@@ -263,22 +298,25 @@ class SushiQuestSolver:
                             seen_pids.add(pid)
                     else:
                         # Farm 8 needs to plant if total system stock < needed_amt + min_products
-                        farm_stock = stock_service.get_farm_amount(self.farm_id, pid)
-                        total_stock = farm_stock + main_stock
+                        total_stock = virtual_water_stock.get(pid, 0)
                         if total_stock < needed_amt + min_products:
-                            deficit = (needed_amt + min_products) - total_stock
-                            prod_name = (
-                                catalog[pid].name if (catalog and pid in catalog) else f"PID {pid}"
-                            )
-                            candidates.append(
-                                (
-                                    pid,
-                                    deficit,
-                                    q_id,
-                                    f"Direktbedarf Quest {q_id} ({needed_amt}x {prod_name})",
+                            if pid not in seen_pids:
+                                deficit = (needed_amt + min_products) - max(0, total_stock)
+                                prod_name = (
+                                    catalog[pid].name if (catalog and pid in catalog) else f"PID {pid}"
                                 )
-                            )
-                            seen_pids.add(pid)
+                                candidates.append(
+                                    (
+                                        pid,
+                                        deficit,
+                                        q_id,
+                                        f"Direktbedarf Quest {q_id} ({needed_amt}x {prod_name})",
+                                    )
+                                )
+                                seen_pids.add(pid)
+                            virtual_water_stock[pid] = 0
+                        else:
+                            virtual_water_stock[pid] = total_stock - needed_amt
 
             # 2. Ingredients for required sushi dishes (only relevant for planting on Farm 8)
             if not for_logistics:
@@ -288,46 +326,51 @@ class SushiQuestSolver:
                         if recipe.is_coin_recipe:
                             continue
 
-                        dish_stock = stock_service.get_total_stock(pid)
-                        if dish_stock < needed_amt:
-                            missing_dishes = needed_amt - dish_stock
-                            craft_yield = max(1, recipe.amount)
-                            crafts_needed = (missing_dishes + craft_yield - 1) // craft_yield
+                        avail_dish = virtual_dish_stock.get(pid, 0)
+                        if avail_dish >= needed_amt:
+                            virtual_dish_stock[pid] = avail_dish - needed_amt
+                            continue
+                        else:
+                            missing_dishes = needed_amt - avail_dish
+                            virtual_dish_stock[pid] = 0
 
-                            for ingr_pid, per_craft in recipe.needs.items():
-                                is_water = 950 <= ingr_pid <= 957 or (
-                                    catalog
-                                    and ingr_pid in catalog
-                                    and getattr(catalog[ingr_pid], "category", "") == "water"
+                        craft_yield = max(1, recipe.amount)
+                        crafts_needed = (missing_dishes + craft_yield - 1) // craft_yield
+
+                        for ingr_pid, per_craft in recipe.needs.items():
+                            is_water = 950 <= ingr_pid <= 957 or (
+                                catalog
+                                and ingr_pid in catalog
+                                and getattr(catalog[ingr_pid], "category", "") == "water"
+                            )
+                            if is_water and ingr_pid not in seen_pids:
+                                needed_water = crafts_needed * per_craft
+                                current_water = stock_service.get_farm_amount(
+                                    self.farm_id, ingr_pid
                                 )
-                                if is_water and ingr_pid not in seen_pids:
-                                    needed_water = crafts_needed * per_craft
-                                    current_water = stock_service.get_farm_amount(
-                                        self.farm_id, ingr_pid
-                                    )
 
-                                    # Reserve check: 120 // (sx * sy)
-                                    prod = (
-                                        catalog.get(ingr_pid)
-                                        if catalog
-                                        else stock_service.get_product(ingr_pid)
-                                    )
-                                    sx = getattr(prod, "size_x", 1) or 1
-                                    sy = getattr(prod, "size_y", 1) or 1
-                                    field_reserve = 120 // (sx * sy)
-                                    available_water = max(0, current_water - field_reserve)
+                                # Reserve check: 120 // (sx * sy)
+                                prod = (
+                                    catalog.get(ingr_pid)
+                                    if catalog
+                                    else stock_service.get_product(ingr_pid)
+                                )
+                                sx = getattr(prod, "size_x", 1) or 1
+                                sy = getattr(prod, "size_y", 1) or 1
+                                field_reserve = 120 // (sx * sy)
+                                available_water = max(0, current_water - field_reserve)
 
-                                    if available_water < needed_water + min_products:
-                                        deficit = (needed_water + min_products) - available_water
-                                        dish_name = recipe.name or f"PID {pid}"
-                                        candidates.append(
-                                            (
-                                                ingr_pid,
-                                                deficit,
-                                                q_id,
-                                                f"Zutat für {dish_name} in Quest {q_id} (noch {missing_dishes}x Speise)",
-                                            )
+                                if available_water < needed_water + min_products:
+                                    deficit = (needed_water + min_products) - available_water
+                                    dish_name = recipe.name or f"PID {pid}"
+                                    candidates.append(
+                                        (
+                                            ingr_pid,
+                                            deficit,
+                                            q_id,
+                                            f"Zutat für {dish_name} in Quest {q_id} (noch {missing_dishes}x Speise)",
                                         )
-                                        seen_pids.add(ingr_pid)
+                                    )
+                                    seen_pids.add(ingr_pid)
 
         return candidates

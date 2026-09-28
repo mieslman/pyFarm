@@ -213,13 +213,9 @@ class StockService:
         return 0
 
     def get_total_stock(self, pid: int) -> int:
-        """Get total stock of a product across all farm racks and temporary stock."""
+        """Get total stock of a product across all farm racks."""
         if hasattr(self, "farm_stocks") and self.farm_stocks:
-            total = sum(f_stock.get(pid, 0) for f_stock in self.farm_stocks.values())
-            prod = self.get_product(pid)
-            if prod:
-                total += prod.tmp_amount
-            return total
+            return sum(f_stock.get(pid, 0) for f_stock in self.farm_stocks.values())
         product = self.get_product(pid)
         return product.total_amount if product else 0
 
