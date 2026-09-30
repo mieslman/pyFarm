@@ -1,3 +1,5 @@
+from typing import Any
+
 from loguru import logger
 
 from app.core.client import MFFGameClient
@@ -11,6 +13,36 @@ class EventGardenService:
         self.client = client
         self.last_status: EventGardenStatus | None = None
 
+    @staticmethod
+    def _extract_tiles(datablock: dict[str, Any]) -> dict[str, Any]:
+        """Safely extract tiles mapping regardless of whether upstream returned list or dict."""
+        raw_tiles = datablock.get("data", {}).get("tiles", {})
+        if isinstance(raw_tiles, dict):
+            return raw_tiles
+        if isinstance(raw_tiles, list):
+            return {
+                str(idx): item
+                for idx, item in enumerate(raw_tiles, start=1)
+                if isinstance(item, dict)
+            }
+        return {}
+
+    @staticmethod
+    def _extract_stock(datablock: dict[str, Any]) -> dict[str, int]:
+        """Safely extract stock mapping regardless of upstream type."""
+        raw_stock = datablock.get("data", {}).get("stock", {})
+        if not isinstance(raw_stock, dict):
+            return {}
+        result: dict[str, int] = {}
+        for k, v in raw_stock.items():
+            try:
+                amt = int(v)
+                if amt > 0:
+                    result[str(k)] = amt
+            except (ValueError, TypeError):
+                continue
+        return result
+
     async def get_status(self) -> EventGardenStatus | None:
         """Fetch and parse event garden state."""
         try:
@@ -19,24 +51,18 @@ class EventGardenService:
             if not isinstance(datablock, dict) or not datablock.get("data"):
                 return None
 
-            tiles = datablock.get("data", {}).get("tiles", {})
-            stock = datablock.get("data", {}).get("stock", {})
+            tiles = self._extract_tiles(datablock)
+            stock = self._extract_stock(datablock)
 
             ripe_count = 0
             for tile_data in tiles.values():
                 if isinstance(tile_data, dict) and tile_data.get("remain", 0) <= 0:
                     ripe_count += 1
 
-            available_seeds = {
-                int(pid): int(amt)
-                for pid, amt in stock.items()
-                if str(pid).isdigit() and int(amt) > 0
-            }
-
             status = EventGardenStatus(
                 tiles_count=len(tiles),
                 ripe_count=ripe_count,
-                available_seeds=available_seeds,
+                available_seeds=stock,
             )
             self.last_status = status
             return status
@@ -54,9 +80,11 @@ class EventGardenService:
                 logger.debug("EventGardenService: Kein aktiver Event-Garten vorhanden.")
                 return False
 
-            tiles = datablock.get("data", {}).get("tiles", {})
-            stock = datablock.get("data", {}).get("stock", {})
+            tiles = self._extract_tiles(datablock)
+            stock = self._extract_stock(datablock)
             products = datablock.get("config", {}).get("products", {})
+            if not isinstance(products, dict):
+                products = {}
 
             action_performed = False
 
@@ -75,34 +103,35 @@ class EventGardenService:
                     logger.info("EventGardenService: Event-Garten erfolgreich abgeerntet.")
                     action_performed = True
                     # Update data after harvest
-                    res = harvest_res
-                    datablock = res.get("datablock", {})
-                    tiles = datablock.get("data", {}).get("tiles", {})
-                    stock = datablock.get("data", {}).get("stock", {})
+                    datablock = harvest_res.get("datablock", {})
+                    tiles = self._extract_tiles(datablock)
+                    stock = self._extract_stock(datablock)
                 else:
                     logger.warning(f"EventGardenService: Fehler beim Abernten: {harvest_res}")
 
             # 2. Plant if garden is empty
             if len(tiles) == 0:
                 # Find available seed with largest stock
-                valid_seeds: list[tuple[int, int, str]] = []
+                valid_seeds: list[tuple[str, int, str]] = []
                 for pid_str, amt in stock.items():
-                    if str(pid_str).isdigit() and int(amt) > 0:
-                        pid = int(pid_str)
-                        prod_name = products.get(pid_str, {}).get("name", f"PID {pid}")
-                        valid_seeds.append((pid, int(amt), prod_name))
+                    if amt > 0:
+                        prod_name = products.get(pid_str, {}).get("name", f"PID {pid_str}")
+                        valid_seeds.append((pid_str, amt, prod_name))
 
                 valid_seeds.sort(key=lambda s: s[1], reverse=True)
 
                 if valid_seeds:
-                    best_pid, best_amt, best_name = valid_seeds[0]
+                    best_pid_str, best_amt, best_name = valid_seeds[0]
+                    plant_param: int | str = (
+                        int(best_pid_str) if best_pid_str.isdigit() else best_pid_str
+                    )
                     logger.info(
                         f"EventGardenService: Bepflanze Event-Garten mit '{best_name}' "
-                        f"(PID {best_pid}, Vorrat: {best_amt} Stk)..."
+                        f"(Saatgut: {plant_param}, Vorrat: {best_amt} Stk)..."
                     )
                     plant_res = await self.client.api_call(
                         "farm",
-                        {"mode": "eventgarden_autoplant", "plant": best_pid},
+                        {"mode": "eventgarden_autoplant", "plant": plant_param},
                     )
                     if plant_res.get("datablock", {}).get("data"):
                         logger.info(

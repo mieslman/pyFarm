@@ -137,8 +137,8 @@ Ein temporärer, separater Schrebergarten mit eigenen Beeten und speziellem Even
   1. **Gartenstatus abrufen:**
      - `GET/POST /ajax/farm.php?mode=eventgarden_init`
      - Antwort (`datablock`):
-       - `data.tiles`: Wörterbuch aller Gartenbeete (mit `remain`, `status`, `plant`).
-       - `data.stock`: Spezial-Lagerbestand an Event-Pflanzen (`{pid: amount}`).
+       - `data.tiles`: Wörterbuch aller Gartenbeete (mit `remain`, `status`, `pid` bzw. `plant`). *Hinweis:* Sind keine Beete bepflanzt, liefert die Upstream-PHP-Schnittstelle ein leeres JSON-Array (`[]` / Python `list`). Der Service normalisiert `tiles` daher defensiv (`_extract_tiles`).
+       - `data.stock`: Spezial-Lagerbestand an Event-Pflanzen (`{pid: amount}`). Produkt-Keys sind oft alphanumerische Strings (z. B. `tinkergame5`, `pentecost1`), weshalb PIDs als `str` verarbeitet werden.
        - `config.products`: Definitionen der Event-Pflanzen.
   2. **Alles abernten:**
      - `GET/POST /ajax/farm.php?mode=eventgarden_harvest_all`

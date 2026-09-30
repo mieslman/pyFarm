@@ -235,6 +235,58 @@ async def test_eventgarden_harvest_and_plant(
     assert ("farm", {"mode": "eventgarden_autoplant", "plant": 902}) in calls
 
 
+@pytest.mark.asyncio
+async def test_eventgarden_empty_list_and_string_pids(
+    dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch
+):
+    """Test that eventgarden gracefully handles upstream PHP returning empty list [] for tiles
+
+    and correctly plants string seed IDs such as 'tinkergame5'.
+    """
+    service = EventGardenService(dummy_client)
+    calls = []
+
+    # Upstream returns tiles: [] (empty list) when no tiles are planted
+    state = {
+        "tiles": [],
+        "stock": {"tinkergame1": 60, "tinkergame3": 190, "tinkergame5": 236},
+        "products": {
+            "tinkergame1": {"name": "Ballonkraut"},
+            "tinkergame3": {"name": "Spitzhut"},
+            "tinkergame5": {"name": "Trötenpflanze"},
+        },
+    }
+
+    async def mock_api_call(endpoint: str, params: dict[str, Any], **kwargs):
+        calls.append((endpoint, params))
+        mode = params.get("mode")
+        if mode == "eventgarden_init":
+            return {
+                "datablock": {
+                    "data": {"tiles": state["tiles"], "stock": state["stock"]},
+                    "config": {"products": state["products"]},
+                }
+            }
+        elif mode == "eventgarden_autoplant":
+            plant_id = params.get("plant")
+            state["tiles"] = {"1": {"remain": 43200, "pid": plant_id}}
+            return {"datablock": {"data": {"status": "ok"}}}
+        return {}
+
+    monkeypatch.setattr(dummy_client, "api_call", mock_api_call)
+
+    success = await service.serve()
+    assert success is True
+    # Should plant tinkergame5 directly as it has highest stock (236)
+    assert ("farm", {"mode": "eventgarden_autoplant", "plant": "tinkergame5"}) in calls
+
+    # Verify status parses correctly
+    status = service.last_status
+    assert status is not None
+    assert status.available_seeds.get("tinkergame5") == 236
+    assert status.tiles_count == 1
+
+
 # ---------------------------------------------------------------------------
 # 5. Oktoberfest Backtracking Solver & Service
 # ---------------------------------------------------------------------------

@@ -43,7 +43,7 @@ class EventGardenTile(BaseModel):
     tile_id: str
     remain: int = 0
     status: int = 0
-    plant: int = 0
+    plant: str | int = 0
 
 
 class EventGardenStatus(BaseModel):
@@ -51,7 +51,7 @@ class EventGardenStatus(BaseModel):
 
     tiles_count: int = 0
     ripe_count: int = 0
-    available_seeds: dict[int, int] = Field(default_factory=dict)
+    available_seeds: dict[str, int] = Field(default_factory=dict)
 
 
 class OktoberfestSheep(BaseModel):
