@@ -246,6 +246,51 @@ async def test_farmis_demand_and_serve(fast_client: MFFGameClient):
 
 
 @pytest.mark.asyncio
+async def test_farmis_grasp_missing_crops(fast_client: MFFGameClient):
+    """Test that missing farm crops (category 'v') trigger grasp_products with the total required amount."""
+    fast_client.rid = "test_rid"
+    # Stock has 2342 carrots (PID 17, category 'v'), Farmi wants 4031
+    stock = DummyStockService({17: 2342})
+    farmis_service = MarketFarmisService(fast_client, stock)  # type: ignore[arg-type]
+    order_manager = FlowerOrderManager()
+
+    raw_data = {
+        "farmis": [
+            {
+                "id": "201",
+                "price": "7953",
+                "points": "1250",
+                "cart": [{"pid": 17, "amount": 4031}],
+                "status": "0",
+            },
+        ]
+    }
+    farmis_service.update(raw_data)
+
+    captured_requests = []
+
+    async def tracking_grasp(requirements: list[dict[str, int]]) -> bool:
+        captured_requests.extend(requirements)
+        for req in requirements:
+            stock.inventory[req["pid"]] = req["amount"]
+        return True
+
+    stock.grasp_products = tracking_grasp  # type: ignore[method-assign]
+
+    with respx.mock:
+        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
+            return_value=httpx.Response(200, json={"datablock": 1})
+        )
+
+        served = await farmis_service.serve_and_collect_orders(order_manager)
+        assert served == 1
+        assert len(captured_requests) == 1
+        # Crucial: Must request the TOTAL required amount (4031), not just the delta (1689),
+        # so StockService can factor in the buffer correctly!
+        assert captured_requests[0] == {"pid": 17, "amount": 4031}
+
+
+@pytest.mark.asyncio
 async def test_petbreed_inactive_by_default(fast_client: MFFGameClient):
     """Verify that PetBreedService strictly makes 0 API calls when inactive (default config)."""
     fast_client.rid = "test_rid"

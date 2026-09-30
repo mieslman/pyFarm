@@ -78,15 +78,20 @@ class MarketFarmisService:
 
                 # If missing farm crops (category 'v'), attempt safe grasping from market/dealer
                 if in_stock < item.amount and category == "v" and self.stock_service:
-                    missing = item.amount - in_stock
                     try:
+                        logger.info(
+                            f"Blumenmarkt-Farmis: Fehlbestand für '{getattr(prod_info, 'name', f'PID {item.pid}')}' "
+                            f"(Bestand: {in_stock}/{item.amount}). Fordere Nachkauf via StockService an..."
+                        )
                         grasped = await self.stock_service.grasp_products(
-                            [{"pid": item.pid, "amount": missing}]
+                            [{"pid": item.pid, "amount": item.amount}]
                         )
                         if grasped:
                             in_stock = self.stock_service.get_amount(item.pid)
                     except Exception as e:
-                        logger.debug(f"Farmis: Grasping für PID {item.pid} fehlgeschlagen: {e}")
+                        logger.warning(
+                            f"Blumenmarkt-Farmis: Grasping für PID {item.pid} fehlgeschlagen: {e}"
+                        )
 
                 if in_stock < item.amount:
                     can_serve = False
