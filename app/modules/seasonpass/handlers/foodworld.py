@@ -21,14 +21,18 @@ class FoodworldStartProductionTaskHandler(BaseTaskHandler):
                 {"action": "foodworld_init", "id": 0, "table": 0, "chair": 0},
             )
             db = res.get("datablock", {})
-            if db:
+            if isinstance(db, dict):
                 kitchen = KitchenService(self.client, self.stock_service)
                 kitchen.update(db)
                 await kitchen.pickup_products()
 
-                # Produce requested dish if specified
+                # Produce requested dish if specified (force_produce=True ignores stock for production tasks)
                 demanded = {pid: self.task.count} if pid else {}
-                cooked = await kitchen.produce(demanded_cart=demanded)
+                cooked = await kitchen.produce(
+                    demanded_cart=demanded,
+                    force_produce=True,
+                    auto_buy_ingredients=True,
+                )
                 self.logger.info(
                     f"Seasonpass: Foodworld-Küche gestartet ({cooked} Gerichte gekocht)."
                 )
@@ -46,7 +50,10 @@ class FoodworldHarvestProductionTaskHandler(BaseTaskHandler):
     task_type = "foodworldharvestproduction"
 
     async def run(self) -> bool:
-        self.logger.info(f"Seasonpass: Starte FoodworldHarvestProduction-Task {self.task.id}...")
+        pid = self.task.pid
+        self.logger.info(
+            f"Seasonpass: Starte FoodworldHarvestProduction-Task {self.task.id} (Gericht PID {pid})..."
+        )
 
         try:
             res = await self.client.api_call(
@@ -54,13 +61,41 @@ class FoodworldHarvestProductionTaskHandler(BaseTaskHandler):
                 {"action": "foodworld_init", "id": 0, "table": 0, "chair": 0},
             )
             db = res.get("datablock", {})
-            if db:
+            if isinstance(db, dict):
                 kitchen = KitchenService(self.client, self.stock_service)
                 kitchen.update(db)
                 picked = await kitchen.pickup_products()
                 self.logger.info(
                     f"Seasonpass: Foodworld-Küche geleert ({picked} Gerichte abgeholt)."
                 )
+
+                # If a specific dish is demanded for harvest, check if it's currently cooking.
+                # If not currently cooking and wasn't just ready/picked up, start production!
+                if pid:
+                    is_cooking = False
+                    for b in kitchen.buildings.values():
+                        for s in b.slots.values():
+                            if s.pid == pid and not s.is_free:
+                                is_cooking = True
+                                break
+
+                    if is_cooking:
+                        self.logger.info(
+                            f"Seasonpass: Gericht PID {pid} wird aktuell zubereitet (Warten auf Fertigstellung)."
+                        )
+                    else:
+                        self.logger.info(
+                            f"Seasonpass: Gericht PID {pid} kocht noch nicht. Starte Vorab-Zubereitung für Harvest-Task..."
+                        )
+                        cooked = await kitchen.produce(
+                            demanded_cart={pid: self.task.count},
+                            force_produce=True,
+                            auto_buy_ingredients=True,
+                        )
+                        self.logger.info(
+                            f"Seasonpass: Vorab-Zubereitung gestartet ({cooked} Gerichte gekocht)."
+                        )
+
                 return True
         except Exception as e:
             self.logger.warning(f"Seasonpass: Fehler bei FoodworldHarvestProduction-Task: {e}")

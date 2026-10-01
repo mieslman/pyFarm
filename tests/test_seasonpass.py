@@ -18,6 +18,10 @@ from app.modules.seasonpass.handlers.crops import (
     WaterTaskHandler,
 )
 from app.modules.seasonpass.handlers.defaults import NoOpTaskHandler
+from app.modules.seasonpass.handlers.foodworld import (
+    FoodworldHarvestProductionTaskHandler,
+    FoodworldStartProductionTaskHandler,
+)
 from app.modules.seasonpass.handlers.forestry import (
     ForestryHarvestTaskHandler,
     ForestryPlantTaskHandler,
@@ -442,3 +446,75 @@ async def test_shed_harvest_production_task_and_is_ready():
 
         success = await handler.run()
         assert success is True
+
+
+@pytest.mark.asyncio
+async def test_foodworld_seasonpass_handlers():
+    """Verify FoodworldStartProductionTaskHandler and FoodworldHarvestProductionTaskHandler."""
+    client = MFFGameClient(server=1, username="test", password="pwd")
+    client.rid = "test_rid"
+    stock_svc = StockService(client)
+    stock_svc.products = {
+        2: Product(pid=2, name="Salat", amount=100),
+        131: Product(pid=131, name="Hawaii-Toast", amount=50),
+    }
+
+    raw_foodworld_db = {
+        "buildings": {
+            "1": {
+                "name": "Pikante Pfanne",
+                "level": 1,
+                "slots": {
+                    "1": {"slot": "1", "pid": None, "remain": 0, "block": 0, "coins": 0},
+                },
+            }
+        },
+        "products": {
+            "10": {"pos": 1, "out": {"131": 1}, "in": {"2": 5}},
+        },
+    }
+
+    # 1. Test FoodworldStartProductionTaskHandler
+    task_start = SeasonPassTask(
+        id="632983",
+        type="foodworldstartproduction",
+        payload={"pid": 131, "count": 1, "points": 100, "done": 0},
+    )
+    handler_start = FoodworldStartProductionTaskHandler(
+        task=task_start, client=client, stock_service=stock_svc
+    )
+
+    api_calls: list[dict] = []
+
+    async def fake_api_call(endpoint: str, params: dict) -> dict:
+        api_calls.append({"endpoint": endpoint, "params": params})
+        if params.get("action") in ("init", "foodworld_init"):
+            return {"datablock": raw_foodworld_db}
+        return {"datablock": 1}
+
+    client.api_call = fake_api_call  # type: ignore[method-assign]
+
+    success = await handler_start.run()
+    assert success is True
+    # Production call was executed with recipe 10 despite having 50x in stock!
+    prod_calls = [c for c in api_calls if c["params"].get("action") == "production"]
+    assert len(prod_calls) == 1
+    assert prod_calls[0]["params"]["id"] == 10
+
+    # 2. Test FoodworldHarvestProductionTaskHandler (pre-production when not cooking)
+    api_calls.clear()
+    task_harvest = SeasonPassTask(
+        id="632984",
+        type="foodworldharvestproduction",
+        payload={"pid": 131, "count": 1, "points": 100, "done": 0},
+    )
+    handler_harvest = FoodworldHarvestProductionTaskHandler(
+        task=task_harvest, client=client, stock_service=stock_svc
+    )
+
+    success_harvest = await handler_harvest.run()
+    assert success_harvest is True
+    # Because PID 131 was not cooking, it should have initiated production!
+    prod_calls_harvest = [c for c in api_calls if c["params"].get("action") == "production"]
+    assert len(prod_calls_harvest) == 1
+    assert prod_calls_harvest[0]["params"]["id"] == 10

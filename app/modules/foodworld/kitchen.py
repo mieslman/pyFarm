@@ -18,6 +18,9 @@ class KitchenService:
 
     def update(self, datablock: dict) -> None:
         """Parse kitchen buildings, slots, and recipes from upstream datablock."""
+        if not isinstance(datablock, dict):
+            return
+
         # 1. Parse buildings & slots
         raw_buildings = datablock.get("buildings", {})
         parsed_buildings: dict[int, FoodworldBuilding] = {}
@@ -149,6 +152,7 @@ class KitchenService:
         demanded_pids: list[int] | None = None,
         reserve_buffer: int = 50,
         auto_buy_ingredients: bool = True,
+        force_produce: bool = False,
     ) -> int:
         """Cook dishes in available, unblocked slots prioritizing waiting Farmi customer demands.
 
@@ -157,6 +161,7 @@ class KitchenService:
                     Multiple slots may be used if deficit requires multiple batches.
                     Missing ingredients are automatically purchased via StockService.grasp_products
                     if auto_buy_ingredients is enabled.
+                    If force_produce is True (e.g. for Seasonpass tasks), existing stock is ignored.
         Priority 2: Maintain reserve buffer (e.g. 50), executed ONLY when no unsatisfied Farmi
                     deficits remain. Max 1 active slot per building for buffer dishes.
         Priority 3: Blind/arbitrary cooking of unrequested dishes is disabled.
@@ -182,9 +187,12 @@ class KitchenService:
         # Calculate net deficit for each demanded dish
         net_deficit: dict[int, int] = {}
         for pid, needed_amt in demands.items():
-            current_stock = self.stock_service.get_amount(pid) if self.stock_service else 0
             in_prog = in_production.get(pid, 0)
-            deficit = max(0, needed_amt - (current_stock + in_prog))
+            if force_produce:
+                deficit = max(0, needed_amt - in_prog)
+            else:
+                current_stock = self.stock_service.get_amount(pid) if self.stock_service else 0
+                deficit = max(0, needed_amt - (current_stock + in_prog))
             if deficit > 0:
                 net_deficit[pid] = deficit
 

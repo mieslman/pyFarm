@@ -609,3 +609,48 @@ async def test_foodworld_service_aborts_export_on_market_full(fast_client: MFFGa
     # Should have stopped after first offer attempt (PID 131) and NOT proceeded to PID 132
     assert len(market_calls) == 1
     assert market_calls[0]["pid"] == 131
+
+
+@pytest.mark.asyncio
+async def test_kitchen_force_produce_ignores_stock(fast_client: MFFGameClient):
+    """Test that force_produce=True ignores existing stock and cooks demanded dish."""
+    fast_client.rid = "test_rid"
+    # Stock already has 50x PID 131 (e.g. Johannisbeer-Sorbet or Hawaii-Toast)
+    stock = DummyStockService({2: 100, 4: 100, 131: 50})
+    kitchen = KitchenService(fast_client, stock)  # type: ignore[arg-type]
+
+    raw_datablock = {
+        "buildings": {
+            "1": {
+                "name": "Pikante Pfanne",
+                "level": 1,
+                "slots": {
+                    "1": {"slot": "1", "pid": None, "remain": 0, "block": 0, "coins": 0},
+                },
+            }
+        },
+        "products": {
+            "10": {"pos": 1, "out": {"131": 1}, "in": {"2": 5, "4": 2}},
+        },
+    }
+    kitchen.update(raw_datablock)
+
+    production_calls: list[dict] = []
+
+    async def fake_api_call(endpoint: str, params: dict) -> dict:
+        if params.get("action") == "production":
+            production_calls.append(params)
+        return {"datablock": 1}
+
+    fast_client.api_call = fake_api_call  # type: ignore[method-assign]
+
+    # Without force_produce: deficit is 0 because stock (50) >= demand (1) -> 0 cooked
+    cooked_normal = await kitchen.produce(demanded_cart={131: 1}, force_produce=False)
+    assert cooked_normal == 0
+    assert len(production_calls) == 0
+
+    # With force_produce=True: stock is ignored, deficit is 1 -> 1 cooked!
+    cooked_forced = await kitchen.produce(demanded_cart={131: 1}, force_produce=True)
+    assert cooked_forced == 1
+    assert len(production_calls) == 1
+    assert production_calls[0]["id"] == 10
