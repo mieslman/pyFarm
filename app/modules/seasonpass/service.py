@@ -38,6 +38,20 @@ class SeasonPassService:
             logger.warning(f"Seasonpass: Fehler beim Abruf von seasonpass_init: {e}")
         return None
 
+    def get_pending_crop_pid(self) -> int | None:
+        """Return the product ID of an active plant or harvest crop task, if any."""
+        if not self.snapshot:
+            return None
+        for task in self.snapshot.pending_tasks:
+            if (
+                not task.is_completed
+                and task.type in ("plant", "harvest")
+                and task.pid
+                and task.pid > 0
+            ):
+                return task.pid
+        return None
+
     async def claim_available_rewards(self) -> int:
         """Claim uncollected free tier rewards when point thresholds are met."""
         if not self.config.auto_claim_rewards or not self.snapshot:

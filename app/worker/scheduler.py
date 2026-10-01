@@ -183,11 +183,29 @@ class WorkerScheduler:
                         else None
                     )
                     catalog_dict = stock_service.products if stock_service else None
+
+                    # Check for active SeasonPass crop task
+                    seasonpass_crop_pid: int | None = None
+                    if settings.seasonpass.enabled:
+                        try:
+                            sp_temp = SeasonPassService(client, config=settings.seasonpass)
+                            await sp_temp.init_remote()
+                            seasonpass_crop_pid = sp_temp.get_pending_crop_pid()
+                            if seasonpass_crop_pid:
+                                logger.info(
+                                    f"WorkerScheduler: Aktive Seasonpass-Pflanzenaufgabe erkannt: PID {seasonpass_crop_pid}"
+                                )
+                        except Exception as e:
+                            logger.debug(
+                                f"WorkerScheduler: Konnte Seasonpass-Bedarf nicht vorab ermitteln: {e}"
+                            )
+
                     await farm_service.loop(
                         stock_service=stock_service,
                         quest_requirements=quest_requirements,
                         quest_status_main=quest_status_main,
                         catalog=catalog_dict,
+                        seasonpass_crop_pid=seasonpass_crop_pid,
                     )
                     self.last_farm_service = farm_service
                     if farm_service.sushibars:

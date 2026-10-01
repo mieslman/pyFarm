@@ -32,6 +32,10 @@ class Field:
         self.failed_pids: set[int] = set()
 
     @property
+    def is_empty(self) -> bool:
+        return len(self.tiles) == 0
+
+    @property
     def is_fully_planted(self) -> bool:
         return len(self.tiles) >= 120
 

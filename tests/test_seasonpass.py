@@ -319,6 +319,13 @@ async def test_reward_claiming_flow():
         assert claimed == 1
         assert service.snapshot.levels[5].is_claimed is True
 
+        # Verify get_pending_crop_pid detects plant/harvest tasks
+        assert service.get_pending_crop_pid() is None
+        service.snapshot.pending_tasks.append(
+            SeasonPassTask(id="999", type="harvest", payload={"pid": 34, "count": 24})
+        )
+        assert service.get_pending_crop_pid() == 34
+
 
 def test_seasonpass_api_endpoints():
     """Verify REST API endpoints for Seasonpass (/api/v1/seasonpass)."""
@@ -518,3 +525,53 @@ async def test_foodworld_seasonpass_handlers():
     prod_calls_harvest = [c for c in api_calls if c["params"].get("action") == "production"]
     assert len(prod_calls_harvest) == 1
     assert prod_calls_harvest[0]["params"]["id"] == 10
+
+
+@pytest.mark.asyncio
+async def test_harvest_crop_task_with_pid():
+    """Verify HarvestTaskHandler pre-plants PID on empty preferred field when not growing anywhere."""
+    from app.modules.agriculture.field import Field
+    from app.modules.farm_buildings.farm_service import FarmService
+
+    client = MFFGameClient(server=1, username="test", password="pwd")
+    client.rid = "test_rid"
+    stock_svc = StockService(client)
+    stock_svc.products = {34: Product(pid=34, name="Johannisbeeren", amount=100)}
+
+    farm_svc = FarmService(client)
+    field_1 = Field(client, farm_id=1, position=1)
+    farm_svc.fields = [field_1]
+
+    task_harvest = SeasonPassTask(
+        id="632230",
+        type="harvest",
+        payload={"building": 1, "pid": 34, "count": 24, "points": 100, "done": 0},
+    )
+    handler = HarvestTaskHandler(
+        task=task_harvest, client=client, stock_service=stock_svc, farm_service=farm_svc
+    )
+
+    api_calls: list[dict] = []
+
+    async def fake_api_call(endpoint: str, params: dict) -> dict:
+        api_calls.append({"endpoint": endpoint, "params": params})
+        if params.get("mode") == "gardeninit":
+            return {"datablock": [1, {}]}
+        if params.get("mode") == "autoplant":
+            return {"datablock": [1, {"1": {"tile": 1, "pid": 34, "water": 0, "phase": 1}}]}
+        return {"datablock": [1]}
+
+    client.api_call = fake_api_call  # type: ignore[method-assign]
+
+    success = await handler.run()
+    assert success is True
+
+    # Check that autoplant and water were called for PID 34!
+    plant_calls = [
+        c
+        for c in api_calls
+        if c["params"].get("mode") == "autoplant" and c["params"].get("id") == 34
+    ]
+    assert len(plant_calls) == 1
+    water_calls = [c for c in api_calls if c["params"].get("mode") == "watergarden"]
+    assert len(water_calls) == 1

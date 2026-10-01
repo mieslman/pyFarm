@@ -170,6 +170,7 @@ class FarmService:
         quest_requirements: dict[int, int] | None = None,
         quest_status_main: dict[str, Any] | None = None,
         catalog: dict[int, Any] | None = None,
+        seasonpass_crop_pid: int | None = None,
     ):
         """Execute one complete serving cycle across all fields, sheds, fuelstations and sushibar."""
         logger.info("========== FarmService: Starte Zyklus ==========")
@@ -218,8 +219,29 @@ class FarmService:
                 )
 
         # 1. Äcker bewirtschaften
+        sp_farm = settings.seasonpass.preferred_field_farm
+        sp_pos = settings.seasonpass.preferred_field_pos
+
         for field in self.fields:
             try:
+                # If this field is the dedicated SeasonPass field and a SeasonPass crop is active:
+                if (
+                    settings.seasonpass.enabled
+                    and seasonpass_crop_pid
+                    and field.farm_id == sp_farm
+                    and field.position == sp_pos
+                ):
+                    sp_prod = (
+                        stock_service.get_product(seasonpass_crop_pid) if stock_service else None
+                    )
+                    if sp_prod:
+                        logger.info(
+                            f"FarmService: Feld {field.farm_id}/{field.position} ist Seasonpass-Acker -> "
+                            f"Priorisiere '{sp_prod.name}' (PID {seasonpass_crop_pid})!"
+                        )
+                        await field.serve(sp_prod, fallback_candidates=[])
+                        continue
+
                 fixed_pid = self.config.farm_crops.get(field.farm_id)
                 farm_category = self.config.get_farm_category(field.farm_id)
                 plant_candidates = PlantStrategySolver.resolve_candidates(
