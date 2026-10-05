@@ -134,10 +134,18 @@ class FoodworldService:
         exported_total = 0
         reserve = self.config.dish_reserve_buffer
 
-        # Scan for products in category 'fw' or PIDs in 130..169 and 450..485
+        # Scan for genuine Foodworld dishes: category 'fw' or recipe output PIDs, never standard crops (v) or animal/factory products
+        recipe_output_pids = (
+            {r.output_pid for r in self.kitchen.recipes.values()}
+            if hasattr(self, "kitchen") and self.kitchen and self.kitchen.recipes
+            else set()
+        )
         for pid, product in self.stock_service.products.items():
             cat = getattr(product, "category", "")
-            is_fw = cat == "fw" or (130 <= pid <= 169) or (450 <= pid <= 485)
+            is_fw = (cat == "fw") or (
+                pid in recipe_output_pids
+                and cat not in ("v", "e", "t", "fl", "md", "o", "ex", "alpin", "water", "spice", "breed", "fish")
+            )
             if not is_fw:
                 continue
 

@@ -163,7 +163,7 @@
     "enabled": true,
     "auto_claim_rewards": false,
     "friend_unr": "",
-    "preferred_field_farm": 4,
+    "preferred_field_farm": 1,
     "preferred_field_pos": 1,
     "preferred_forestry_pos": 1
   },

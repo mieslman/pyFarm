@@ -122,6 +122,7 @@ Die Python-Implementierung von Phase 9 kapselt das Gastronomie-System vollständ
   Es werden keine neuen Tische für kT oder Coins gekauft. Nur bereits freigeschaltete Tische werden bewirtschaftet.
 - **Markt-Export nur bei absolutem Angebotsleerstand (`only_empty_market = True`):**
   Überschussmengen oberhalb des 50er Puffers werden nur dann auf den Marktplatz gestellt, wenn für das jeweilige Produkt aktuell noch kein einziges Verkaufsangebot auf dem Markt aktiv ist. Dadurch werden Unterbietungskriege vermieden und Maximalpreise erzielt.
+  *Wichtig (Kategorie-Filterung):* Es werden ausschließlich echte Foodworld-Gerichte (Kategorie `'fw'` bzw. registrierte Rezept-Ausgaben) exportiert. Reguläre Feldfrüchte (z. B. Kohlrabi PID 153 mit Kategorie `'v'`) und Fabrik-/Tiererzeugnisse sind strikt vom Foodworld-Marktexport ausgeschlossen.
 - **Level-Strategie (kT-zu-XP Hebel):**
   Da Restaurant-Farmis 0 Erfahrungspunkte geben, fließen die durch die 123.5%-Vergütung erwirtschafteten kT direkt in den Freikauf von Hauptquests (Millionen XP) und die Finanzierung von High-XP-Pflanzen auf den Farmen.
 

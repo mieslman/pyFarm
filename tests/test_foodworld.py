@@ -29,7 +29,7 @@ class DummyStockService:
         self.inventory: dict[int, int] = inventory or {}
         self.products: dict[int, Product] = {}
         for pid, amt in self.inventory.items():
-            cat = "fw" if (130 <= pid <= 169 or 450 <= pid <= 485) else "v"
+            cat = "fw" if ((130 <= pid <= 150 or 161 <= pid <= 170 or 450 <= pid <= 485) and pid not in (151, 152, 153, 154, 155, 156, 157, 158, 159, 160)) else "v"
             self.products[pid] = Product(
                 pid=pid,
                 name=f"FoodProduct {pid}",
@@ -654,3 +654,37 @@ async def test_kitchen_force_produce_ignores_stock(fast_client: MFFGameClient):
     assert cooked_forced == 1
     assert len(production_calls) == 1
     assert production_calls[0]["id"] == 10
+
+
+@pytest.mark.asyncio
+async def test_foodworld_service_never_exports_crops_like_kohlrabi(fast_client: MFFGameClient):
+    """Test that FoodworldService strictly ignores crops (e.g. Kohlrabi PID 153) during market export."""
+    fast_client.rid = "test_rid"
+    # Stock has 1000 Kohlrabi (PID 153, cat='v') and 500 Wollsocken (PID 155, cat='v')
+    stock = DummyStockService({153: 1000, 155: 500})
+    stock.products[153].name = "Kohlrabi"
+
+    market_mock = AsyncMock()
+    market_mock.get_offers = AsyncMock(return_value=[])  # Empty market
+
+    config = FoodworldConfig(dish_reserve_buffer=20, only_empty_market=True)
+    fw_service = FoodworldService(
+        client=fast_client,
+        stock_service=stock,  # type: ignore[arg-type]
+        market_service=market_mock,
+        config=config,
+    )
+
+    api_calls: list[dict] = []
+
+    async def fake_api_call(endpoint: str, params: dict) -> dict:
+        api_calls.append(params)
+        return {"datablock": [1]}
+
+    fast_client.api_call = fake_api_call  # type: ignore[method-assign]
+
+    exported = await fw_service._export_surplus_dishes()
+    assert exported == 0
+    assert len(api_calls) == 0
+    market_mock.get_offers.assert_not_called()
+
