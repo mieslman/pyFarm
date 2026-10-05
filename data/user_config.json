@@ -121,7 +121,8 @@
     "flower_slots_enabled": true,
     "farmis_enabled": true,
     "pet_breed_enabled": false,
-    "pet_daily_parts": true
+    "pet_daily_parts": true,
+    "max_flower_batch": 36
   },
   "foodworld": {
     "enabled": true,
@@ -184,7 +185,15 @@
     "auto_collect_checkout": true,
     "checkout_threshold_percent": 0.5,
     "min_stock_reserve": 50,
-    "auto_buy_feed": true
+    "auto_buy_feed": true,
+    "strategy": "dynamic_rotation",
+    "priority_species": [
+      "Schmetterling",
+      "Marienkäfer",
+      "Schwebfliegen"
+    ],
+    "auto_rotate_slots": true,
+    "min_safety_happiness": 25.0
   },
   "stall": {
     "enabled": true,
@@ -232,6 +241,10 @@
         "auto_fastest": true,
         "transport": true,
         "required_products": [],
+        "supply_threshold": 500,
+        "reorder_threshold": null,
+        "required_product_targets": {},
+        "required_reorder_thresholds": {},
         "send_partial": false,
         "prioritize_quests": true,
         "only_milled_surplus": false,
@@ -247,6 +260,10 @@
         "auto_fastest": true,
         "transport": true,
         "required_products": [],
+        "supply_threshold": 500,
+        "reorder_threshold": null,
+        "required_product_targets": {},
+        "required_reorder_thresholds": {},
         "send_partial": false,
         "prioritize_quests": true,
         "only_milled_surplus": false,
@@ -262,6 +279,10 @@
         "auto_fastest": true,
         "transport": false,
         "required_products": [],
+        "supply_threshold": 500,
+        "reorder_threshold": null,
+        "required_product_targets": {},
+        "required_reorder_thresholds": {},
         "send_partial": false,
         "prioritize_quests": true,
         "only_milled_surplus": true,
@@ -275,5 +296,5 @@
   "poll_interval_seconds": 600,
   "anti_detection_min_delay_ms": 350,
   "anti_detection_max_delay_ms": 900,
-  "_last_saved": "2026-09-26T14:06:20.917017+00:00"
+  "_last_saved": "2026-10-01T09:45:13.632737+00:00"
 }
