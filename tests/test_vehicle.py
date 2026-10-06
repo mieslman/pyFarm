@@ -188,12 +188,12 @@ async def test_vehicle_outer_to_main_quest_prioritization(fast_client):
         )
         res = await v.loop(stock, quest_requirements=quest_reqs)
         assert res is True
-        # Slot 1 must contain Limette (Prio 1 Quest), Slot 2 contains Ananas (Prio 2 Surplus)
-        # Limette: 80 loaded. Remaining capacity: 500 - 80 = 420. Ananas: 420 loaded!
-        assert v.last_sent_cart == "1,352,80_2,351,420_"
-        # Check seed reserve was preserved: 600 - 420 = 180 remaining (> 120)
-        assert stock.get_temp_amount(5, 351) == 180
-        assert stock.get_temp_amount(5, 352) == 120
+        # Slot 1 must contain Limette (Prio 1 Quest Restmenge: 40 needed to reach 50),
+        # Slot 2 contains Ananas (Prio 2 Surplus: remaining capacity 500 - 40 = 460)
+        assert v.last_sent_cart == "1,352,40_2,351,460_"
+        # Check seed reserve was preserved: 600 - 460 = 140 remaining (> 120), Limette: 200 - 40 = 160
+        assert stock.get_temp_amount(5, 351) == 140
+        assert stock.get_temp_amount(5, 352) == 160
 
 
 @pytest.mark.asyncio
@@ -384,12 +384,13 @@ async def test_farm8_only_quest_products_and_crop_reserve(fast_client):
         )
         res = await v.loop(stock, quest_requirements=quest_requirements)
         assert res is True
-        # Cart should only contain 957 with max 700 (1200 - 500 reserve)
+        # Cart should only contain 957 with exactly 500 (restmenge for quest deficit)
         assert "957" in v.last_sent_cart
         assert "950" not in v.last_sent_cart  # non-quest skipped
         assert "953" not in v.last_sent_cart  # below reserve skipped
         assert v.current_cargo[0].pid == 957
-        assert v.current_cargo[0].amount == 700
+        assert v.current_cargo[0].amount == 500
+        assert v.last_sent_cart == "1,957,500_"
 
 
 @pytest.mark.asyncio
@@ -979,4 +980,75 @@ async def test_vehicle_loads_sushi_dishes_from_farm_8(fast_client):
         assert v.current_cargo[1].pid == 984
         assert v.current_cargo[1].amount == 80
         assert v.last_sent_cart == "1,978,50_2,984,80_"
+
+
+@pytest.mark.asyncio
+async def test_vehicle_batching_full_capacity_vs_restmenge(fast_client):
+    """Verify fuel-saving batch rules:
+    - If deficit > capacity (e.g. 5000 > 750): load up to full capacity (750)
+    - Farm 1 does not fly empty unless >= capacity is ready or Restmenge is ready
+    - If deficit <= capacity (e.g. 40 <= 750): load exact Restmenge (40)
+    """
+    stock = StockService(fast_client)
+    # PID 984: Taro-Dampfnudeln
+    taro = Product(pid=984, name="Taro-Dampfnudeln", category="water", amount=0)
+    stock.products = {984: taro}
+
+    # Case A: Deficit = 5000 (>> capacity 750). Outer farm only has 100 surplus.
+    # Farm 1 should NOT fly empty to Farm 8 because neither full load (750) nor Restmenge (5000) is ready!
+    stock.farm_temp_stocks = {8: {984: 100}}
+    quest_reqs = {984: 5000}
+
+    state_main = VehicleState(current=1, route=4, vehicle_type=18, remain=0)
+    config = VehicleConfigData(name="Wasserhelikopter", capacity=750, products=1, farms=[8], duration=1800)
+    route_cfg = VehicleRouteConfig(
+        farm_id=8,
+        route=4,
+        transport=True,
+        prioritize_quests=True,
+        only_quest_products=True,
+        min_crop_reserve=0,
+        send_partial=False,
+    )
+    v_main = Vehicle(fast_client, state_main, config, route_cfg)
+    res = await v_main.loop(stock, quest_requirements=quest_reqs)
+    # Should not fly empty
+    assert res is False
+
+    # Case B: Outer farm now has 900 available (surplus 780 after 120 seed reserve >= 750). Farm 1 flies empty!
+    stock.farm_temp_stocks = {8: {984: 900}}
+    with respx.mock:
+        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
+            return_value=httpx.Response(200, json={"datablock": 1})
+        )
+        res = await v_main.loop(stock, quest_requirements=quest_reqs)
+        assert res is True
+        assert v_main.last_sent_cart == ""
+
+    # Case C: On Farm 8 with 900 available and deficit 5000: Loads exactly full capacity (750), not more!
+    state_outer = VehicleState(current=8, route=4, vehicle_type=18, remain=0)
+    v_outer = Vehicle(fast_client, state_outer, config, route_cfg)
+    with respx.mock:
+        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
+            return_value=httpx.Response(200, json={"datablock": 1})
+        )
+        res = await v_outer.loop(stock, quest_requirements=quest_reqs)
+        assert res is True
+        assert v_outer.last_sent_cart == "1,984,750_"
+        assert v_outer.current_cargo[0].amount == 750
+
+    # Case D: Deficit <= capacity (Restmenge): Quest only needs 40 more. Outer farm has 300.
+    # Should load exactly 40 (the Restmenge), not full capacity or all surplus!
+    v_outer.state.current = 8
+    v_outer.state.remain = 0
+    stock.products[984].amount = 4960  # 40 missing
+    stock.farm_temp_stocks = {8: {984: 300}}
+    with respx.mock:
+        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
+            return_value=httpx.Response(200, json={"datablock": 1})
+        )
+        res = await v_outer.loop(stock, quest_requirements=quest_reqs)
+        assert res is True
+        assert v_outer.last_sent_cart == "1,984,40_"
+        assert v_outer.current_cargo[0].amount == 40
 

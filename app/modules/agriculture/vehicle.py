@@ -334,15 +334,20 @@ class Vehicle:
             has_outer_demand = True
         elif self.route_config.transport:
             if self.route_config.only_quest_products:
-                # Only travel empty if outer farm has quest goods ready to collect
+                # Only travel empty if outer farm has quest goods ready to collect in efficient batches:
+                # Full capacity load if demand > capacity, or complete remaining deficit (Restmenge)
                 farm_category = settings.agriculture.get_farm_category(self.target_farm_id)
                 if quest_requirements:
+                    total_outer_quest_surplus = 0
+                    has_restmenge_ready = False
                     for p in stock_service.products.values():
                         if not is_product_for_farm(p, self.target_farm_id):
                             continue
                         if p.pid in quest_requirements:
                             target_demand = quest_requirements[p.pid]
-                            if stock_service.get_amount(p.pid) < target_demand:
+                            main_amt = stock_service.get_amount(p.pid)
+                            if main_amt < target_demand:
+                                missing_demand = target_demand - main_amt
                                 outer_amt = stock_service.get_temp_amount(
                                     self.target_farm_id, p.pid
                                 )
@@ -354,9 +359,17 @@ class Vehicle:
                                         min_reserve = max(
                                             min_reserve, self.route_config.min_crop_reserve
                                         )
-                                if outer_amt > min_reserve:
-                                    has_outer_demand = True
-                                    break
+                                outer_surplus = max(0, outer_amt - min_reserve)
+                                total_outer_quest_surplus += outer_surplus
+
+                                # Restmenge zur Quest-Erfüllung steht vollständig bereit
+                                if 0 < missing_demand <= self.capacity and outer_surplus >= missing_demand:
+                                    has_restmenge_ready = True
+
+                    # Treibstoff sparen: Fliege nur leer hin, wenn entweder eine volle Ladung
+                    # (z.B. 750) abholbereit ist ODER die Restmenge zur Quest-Erfüllung bereitsteht
+                    if total_outer_quest_surplus >= self.capacity or has_restmenge_ready:
+                        has_outer_demand = True
             else:
                 has_outer_demand = True
 
@@ -504,15 +517,30 @@ class Vehicle:
             if surplus <= 0:
                 continue
 
-            load = min(remaining_capacity, surplus)
+            is_qp = bool(
+                self.route_config.prioritize_quests
+                and quest_requirements
+                and plant.pid in quest_requirements
+            )
+            missing_demand = (
+                max(0, quest_requirements[plant.pid] - stock_service.get_amount(plant.pid))
+                if is_qp and quest_requirements
+                else None
+            )
+
+            # Margen-Regel für Questprodukte:
+            # Volle Ladung wenn offener Bedarf > Kapazität, sonst genau die Restmenge
+            if is_qp and missing_demand is not None and missing_demand > 0:
+                load = min(remaining_capacity, surplus, missing_demand)
+            else:
+                load = min(remaining_capacity, surplus)
+
             if load > 0:
                 cart += f"{slot},{plant.pid},{load}_"
                 remaining_capacity -= load
 
-                is_qp = bool(quest_requirements and plant.pid in quest_requirements)
-                if is_qp and quest_requirements:
-                    deficit = quest_requirements[plant.pid] - stock_service.get_amount(plant.pid)
-                    if deficit > 0 and load >= deficit:
+                if is_qp and missing_demand is not None:
+                    if load >= missing_demand:
                         quest_satisfied = True
 
                 self.current_cargo.append(
