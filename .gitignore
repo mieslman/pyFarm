@@ -12,3 +12,6 @@ build/
 .env
 logs/
 *.log
+*.bak
+tmp/
+

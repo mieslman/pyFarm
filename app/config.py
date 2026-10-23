@@ -156,7 +156,9 @@ class SushibarConfig(BaseModel):
     auto_train: bool = False  # Standardmäßig inaktiv (Nutzer-Vorgabe)
     auto_farmi: bool = True
     production_strategy: str = "quest5"  # "quest5", "balanced", "preferred"
-    fallback_to_balanced: bool = False  # Bei Quest-5-Strategie kein Fallback auf andere Rezepte (verhindert Fehlproduktion)
+    fallback_to_balanced: bool = (
+        False  # Bei Quest-5-Strategie kein Fallback auf andere Rezepte (verhindert Fehlproduktion)
+    )
     preferred_pids: list[int] = Field(default_factory=list)
     reserve_full_field: bool = True  # Mindestreserve: 120 // (size_x * size_y)
     coin_protection: bool = True  # Strikter Schutz: Keine Coin-Rezepte, kein Coin-Speedup
@@ -234,6 +236,17 @@ class StallSettingsConfig(BaseModel):
     min_stock_reserve: int = 500
 
 
+class CraftingVillageConfig(BaseModel):
+    """Crafting Village (Handwerkerdorf: Steinbruch / Mine, Steinmetz, Quests) settings."""
+
+    enabled: bool = True
+    auto_harvest: bool = True
+    auto_mine: bool = True
+    auto_refill_energy: bool = True
+    auto_buy_tools: bool = True
+    preferred_material: str = "sandstone"  # sandstone, granite
+
+
 class StockConfig(BaseModel):
     """Inventory management and raw materials grasping settings."""
 
@@ -294,6 +307,7 @@ class Settings(BaseSettings):
     events: EventsSettingsConfig = Field(default_factory=EventsSettingsConfig)
     insecthotel: InsecthotelSettingsConfig = Field(default_factory=InsecthotelSettingsConfig)
     stall: StallSettingsConfig = Field(default_factory=StallSettingsConfig)
+    crafting_village: CraftingVillageConfig = Field(default_factory=CraftingVillageConfig)
     vehicles: VehiclesConfig = Field(default_factory=VehiclesConfig)
 
     model_config = SettingsConfigDict(

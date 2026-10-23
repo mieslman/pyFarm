@@ -4,6 +4,7 @@ from app.api.endpoints.auth import auth_router
 from app.api.endpoints.bot import bot_router
 from app.api.endpoints.config import config_router
 from app.api.endpoints.contracts import contracts_router
+from app.api.endpoints.crafting_village import crafting_village_router
 from app.api.endpoints.events import events_router
 from app.api.endpoints.factories import factories_router
 from app.api.endpoints.farmersmarket import farmersmarket_router
@@ -47,6 +48,7 @@ api_router.include_router(seasonpass_router)
 api_router.include_router(events_router)
 api_router.include_router(insecthotel_router)
 api_router.include_router(stall_router)
+api_router.include_router(crafting_village_router)
 api_router.include_router(factories_router)
 api_router.include_router(vehicles_router)
 api_router.include_router(bot_router)

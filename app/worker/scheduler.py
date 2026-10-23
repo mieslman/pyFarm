@@ -9,6 +9,7 @@ from app.config import settings
 from app.core.circuit_breaker import circuit_breaker
 from app.core.client import MFFGameClient
 from app.core.exceptions import CircuitBreakerOpenError
+from app.modules.crafting_village import CraftingVillageService
 from app.modules.events import EventManager
 from app.modules.farm_buildings.farm_service import FarmService
 from app.modules.farmersmarket.service import FarmersMarketService
@@ -57,6 +58,7 @@ class WorkerScheduler:
         self.last_event_manager: EventManager | None = None
         self.last_insecthotel_service: InsectHotelService | None = None
         self.last_stall_service: FruitStallService | None = None
+        self.last_crafting_village_service: CraftingVillageService | None = None
         self.last_vehicle_service: Any | None = None
         self.last_quest_requirements: dict[int, int] = {}
         self.last_cycle_results: dict[str, Any] = {}
@@ -347,6 +349,18 @@ class WorkerScheduler:
                         results["stall"] = stall_res
                     except Exception as e:
                         logger.warning(f"WorkerScheduler: Fehler beim Obststand: {e}")
+
+                await asyncio.sleep(random.uniform(0.5, 1.2))
+
+                # 12b. Handwerkerdorf (Steinbruch / Mine)
+                if settings.crafting_village.enabled:
+                    try:
+                        cv_service = CraftingVillageService(client=client)
+                        await cv_service.init_remote()
+                        self.last_crafting_village_service = cv_service
+                        results["crafting_village"] = cv_service.get_summary().model_dump()
+                    except Exception as e:
+                        logger.warning(f"WorkerScheduler: Fehler beim Handwerkerdorf: {e}")
 
                 await asyncio.sleep(random.uniform(0.5, 1.2))
 
