@@ -356,9 +356,9 @@ class WorkerScheduler:
                 if settings.crafting_village.enabled:
                     try:
                         cv_service = CraftingVillageService(client=client)
-                        await cv_service.init_remote()
+                        cv_res = await cv_service.serve(stock_service=stock_service)
                         self.last_crafting_village_service = cv_service
-                        results["crafting_village"] = cv_service.get_summary().model_dump()
+                        results["crafting_village"] = cv_res
                     except Exception as e:
                         logger.warning(f"WorkerScheduler: Fehler beim Handwerkerdorf: {e}")
 

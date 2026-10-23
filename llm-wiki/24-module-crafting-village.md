@@ -46,9 +46,51 @@ Alle Aufrufe erfolgen an das zentrale Skript `ajax/farm.php`:
   - `config.material`: Material-Konfigurationen (Dauer, Yield, Energiekosten).
   - `config.items`: Shopkatalog für Werkzeugpreise und Boni.
 
+### Ernte / Fertigstellung (`mine_finish_production`)
+- **Endpunkt:** `GET https://s{server}.myfreefarm.de/ajax/farm.php?rid={rid}&slot={slot}&position={pos}&mode=mine_finish_production`
+- **Response (`datablock.reward`):**
+  - `materials`: Gewonnene Erntemenge (z. B. `{"sandstone": "7"}`).
+  - `xp`: Erfahrungsgewinn für zugewiesene Arbeiter (z. B. `{"16": {"sandstone": 13}}`).
+  - `money`: Erhaltene kT (z. B. 180 kT).
+  - `points`: Erhaltene Farmpunkte (z. B. 221 Punkte).
+
+### Abbau starten (`mine_start_production`)
+- **Endpunkt:** `GET https://s{server}.myfreefarm.de/ajax/farm.php?rid={rid}&setup={json_setup}&mode=mine_start_production`
+- **Setup-Payload (JSON-kodiert):**
+  ```json
+  {
+    "slot": 1,
+    "position": 1,
+    "name": "sandstone",
+    "workers": { "1": 16 },
+    "items": { "1": 1321, "2": 1322 }
+  }
+  ```
+- **Response:** Liefert im `updateblock.mine` sofort den aktualisierten Status des Steinbruchs.
+
 ---
 
-## 3. Pydantic v2 Datenarchitektur (`app.modules.crafting_village.models`)
+## 3. Automationsstrategien (`CraftingVillageService.serve`)
+
+1. **Auto-Ernte (`auto_harvest`):**
+   - Prüft in jedem Zyklus alle Slots in `mine.productions`.
+   - Sobald `remain <= 0`, wird `mine_finish_production` aufgerufen und die Belohnung protokolliert.
+
+2. **Gesteins-Auswahl (`least_stock` Balancing):**
+   - Vergleicht den aktuellen Dorflager-Bestand: `sandstone_stock` vs. `granite_stock`.
+   - Baut bevorzugt das Gestein mit dem geringeren Bestand ab, um ein ausgewogenes Lager für spätere Verarbeitungsstufen (Steinmetz) sicherzustellen.
+
+3. **Optimierte Werkzeugauswahl (Höchste Erfahrungsstufe):**
+   - Filtert freie Werkzeuge im Rucksack (`stock > 0`, `durability > 0`).
+   - Sortiert nach dem XP-Bonus (`bonus.xp`) absteigend (z. B. Funkgerät 1.6 > Schuhe 0.8 > Spitzhacke 0.4).
+   - Wählt die besten 2 verfügbaren Werkzeuge für den Abbau aus.
+
+4. **Arbeiter-Zuweisung:**
+   - Wählt untätige Arbeiter mit der höchsten Fertigkeitsstufe für das Zielmaterial und prüft, ob die Energie für den Vorgang ausreicht.
+
+---
+
+## 4. Pydantic v2 Datenarchitektur (`app.modules.crafting_village.models`)
 
 - `WorkerSkill`: Punkte, Stufe und Prozentsatz pro Gesteinsart.
 - `Worker`: ID, Name, Energie (`energy_percent`), Status (`is_working`), Fähigkeiten.
@@ -60,7 +102,7 @@ Alle Aufrufe erfolgen an das zentrale Skript `ajax/farm.php`:
 
 ---
 
-## 4. API Endpunkte (`/api/v1/crafting`)
+## 5. API Endpunkte (`/api/v1/crafting`)
 
 | Methode | Pfad | Beschreibung |
 | :--- | :--- | :--- |
@@ -70,12 +112,12 @@ Alle Aufrufe erfolgen an das zentrale Skript `ajax/farm.php`:
 
 ---
 
-## 5. UI-Dashboard-Integration
+## 6. UI-Dashboard-Integration
 
 Im Web-Dashboard (`app/static/index.html`):
 - Neuer Navigations-Tab **„Handwerkerdorf“** (`#tab-crafting`).
 - Live-Metrik-Karten für Steinbruch-Level, Arbeiter-Status, aktive Abbaue und Dorf-Lagerbestand.
-- Dynamische Slot-Anzeige mit visuellen Fortschrittsbalken und Restzeit-Countdowns.
+- Dynamische Slot-Anzeige mit visuellem Fortschrittsbalken und Restzeit-Countdown.
 - Arbeiter-Übersicht mit interaktivem Energiebalken und Fähigkeitsleveln.
 - Werkzeug-Inventarliste mit Farbcodierung für die Rest-Haltbarkeit.
-- Zukunftskarten für den Steinmetz und die Handwerker-Quests.
+- Strategie-Auswahl: *Abwechselnd (geringster Lagerbestand)*, *Nur Sandstein*, *Nur Granit*.

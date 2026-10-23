@@ -65,7 +65,7 @@ async def update_crafting_village_settings(
         cfg.auto_buy_tools = bool(payload["auto_buy_tools"])
     if "preferred_material" in payload:
         mat = str(payload["preferred_material"]).strip().lower()
-        if mat in ("sandstone", "granite"):
+        if mat in ("least_stock", "sandstone", "granite"):
             cfg.preferred_material = mat
 
     settings_manager.save_settings()

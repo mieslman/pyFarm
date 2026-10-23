@@ -10,6 +10,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from app.config import (
+    CraftingVillageConfig,
     EventsSettingsConfig,
     FactoryConfig,
     FarmersMarketConfig,
@@ -24,7 +25,6 @@ from app.config import (
     SeasonpassSettingsConfig,
     SpicehouseSettingsConfig,
     StallSettingsConfig,
-    CraftingVillageConfig,
     StockConfig,
     SushibarConfig,
     TradeConfig,
