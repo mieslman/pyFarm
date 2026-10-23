@@ -1999,6 +1999,7 @@
       await loadFarmsData();
       await loadStockData();
       await loadFuelstationConfig();
+      await loadCraftingVillageData();
       updateAuthUI();
     });
 
@@ -3755,7 +3756,7 @@
     }
 
     function switchTab(tabName) {
-      ['farms', 'logs', 'stock', 'config', 'farmersmarket', 'foodworld', 'sushibar', 'factories', 'insecthotel', 'stall', 'seasonpass', 'events', 'spicehouse', 'fuelstation', 'contracts'].forEach(t => {
+      ['farms', 'logs', 'stock', 'config', 'farmersmarket', 'foodworld', 'sushibar', 'factories', 'insecthotel', 'stall', 'seasonpass', 'events', 'spicehouse', 'fuelstation', 'contracts', 'crafting'].forEach(t => {
         const c = document.getElementById(`content-${t}`);
         const tab = document.getElementById(`tab-${t}`);
         if (c) c.classList.add('hidden');
@@ -3777,6 +3778,7 @@
       if (tabName === 'spicehouse') loadSpicehouseData();
       if (tabName === 'fuelstation') loadFuelstationTab();
       if (tabName === 'contracts') loadContractsData();
+      if (tabName === 'crafting') loadCraftingVillageData();
     }
 
     // ── Config Persistenz ──────────────────────────────────────────────────────
@@ -4600,6 +4602,280 @@
         alert('Netzwerkfehler beim Speichern der Verträge.');
       }
     }
+  
+    // ==========================================
+    // Handwerkerdorf Integration
+    // ==========================================
+    let craftingCountdownTimer = null;
+    let craftingActiveProductions = [];
+
+    async function loadCraftingVillageData() {
+      try {
+        const res = await fetch('/api/v1/crafting', { headers: authHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        const sum = data.summary || {};
+        const snap = data.snapshot || {};
+        const cfg = data.config || {};
+        const mine = snap.mine || {};
+
+        // 1. Top Metrics
+        const elLvl = document.getElementById('craftingMineLevel');
+        if (elLvl) elLvl.textContent = sum.mine_level ? `Stufe ${sum.mine_level}` : '-';
+        const elWCount = document.getElementById('craftingWorkersCount');
+        if (elWCount) elWCount.textContent = sum.workers_count || 0;
+        const elWWorking = document.getElementById('craftingWorkingCount');
+        if (elWWorking) elWWorking.textContent = `(${sum.working_workers_count || 0} im Einsatz)`;
+        const elAProds = document.getElementById('craftingActiveProds');
+        if (elAProds) elAProds.textContent = sum.active_productions_count || 0;
+        const elRProds = document.getElementById('craftingReadyProds');
+        if (elRProds) elRProds.textContent = `(${sum.ready_productions_count || 0} fertig)`;
+        const elSand = document.getElementById('craftingSandstoneStock');
+        if (elSand) elSand.textContent = (mine.stock && mine.stock.sandstone !== undefined) ? mine.stock.sandstone : 0;
+        const elGran = document.getElementById('craftingGraniteStock');
+        if (elGran) elGran.textContent = (mine.stock && mine.stock.granite !== undefined) ? mine.stock.granite : 0;
+
+        // 2. Settings Checkboxes
+        if (document.getElementById('craftingCfgEnabled')) document.getElementById('craftingCfgEnabled').checked = !!cfg.enabled;
+        if (document.getElementById('craftingCfgAutoHarvest')) document.getElementById('craftingCfgAutoHarvest').checked = !!cfg.auto_harvest;
+        if (document.getElementById('craftingCfgAutoMine')) document.getElementById('craftingCfgAutoMine').checked = !!cfg.auto_mine;
+        if (document.getElementById('craftingCfgAutoEnergy')) document.getElementById('craftingCfgAutoEnergy').checked = !!cfg.auto_refill_energy;
+        if (document.getElementById('craftingCfgAutoBuyTools')) document.getElementById('craftingCfgAutoBuyTools').checked = !!cfg.auto_buy_tools;
+        if (document.getElementById('craftingCfgPreferredMaterial') && cfg.preferred_material) {
+          document.getElementById('craftingCfgPreferredMaterial').value = cfg.preferred_material;
+        }
+
+        // 3. Render Mining Slots
+        const slotsContainer = document.getElementById('craftingSlotsContainer');
+        if (slotsContainer) {
+          const prods = mine.productions || {};
+          const slotsList = [
+            { slot: '1', name: 'Sandstein-Bruch', mat: 'sandstone' },
+            { slot: '2', name: 'Granit-Bruch', mat: 'granite' }
+          ];
+
+          craftingActiveProductions = [];
+
+          slotsContainer.innerHTML = slotsList.map(s => {
+            const p = prods[s.slot];
+            if (p) {
+              const duration = p.duration || 18000;
+              const remain = Math.max(0, p.remain || 0);
+              craftingActiveProductions.push({ slot: s.slot, remain: remain, duration: duration, name: p.name });
+
+              const isReady = remain <= 0;
+              const elapsed = Math.max(0, duration - remain);
+              const pct = duration > 0 ? Math.min(100, Math.round((elapsed / duration) * 100)) : 100;
+              
+              const h = Math.floor(remain / 3600);
+              const m = Math.floor((remain % 3600) / 60);
+              const sec = remain % 60;
+              const timeStr = isReady ? 'Fertig zur Ernte' : `${h}h ${m}m ${sec}s`;
+              const badgeClass = isReady ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-400 border border-amber-500/40';
+
+              return `
+                <div class="bg-slate-950 p-3.5 rounded-lg border border-slate-800 space-y-3">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                      <span class="text-xl">🪨</span>
+                      <div>
+                        <div class="font-bold text-xs text-slate-200">Slot ${s.slot}: ${p.name.toUpperCase()}</div>
+                        <div class="text-[10px] text-slate-400">Ertrag: ${p.amount} Stück</div>
+                      </div>
+                    </div>
+                    <span id="craftingSlotBadge_${s.slot}" class="text-[10px] px-2 py-0.5 rounded font-medium ${badgeClass}">${isReady ? 'Bereit' : 'Abbau läuft'}</span>
+                  </div>
+                  <div class="space-y-1">
+                    <div class="flex justify-between text-[11px] font-mono text-slate-400">
+                      <span id="craftingSlotTimer_${s.slot}">${timeStr}</span>
+                      <span id="craftingSlotPct_${s.slot}">${pct}%</span>
+                    </div>
+                    <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden">
+                      <div id="craftingSlotBar_${s.slot}" class="${isReady ? 'bg-emerald-500' : 'bg-amber-500'} h-full transition-all" style="width: ${pct}%"></div>
+                    </div>
+                  </div>
+                </div>
+              `;
+            } else {
+              return `
+                <div class="bg-slate-950/60 p-3.5 rounded-lg border border-dashed border-slate-800 space-y-3 text-center">
+                  <div class="text-slate-400 font-bold text-xs">Slot ${s.slot}: ${s.name}</div>
+                  <div class="text-slate-500 text-[11px]">Aktuell kein Abbau aktiv.</div>
+                  <div class="text-[10px] text-slate-600 uppercase font-semibold">Bereit für nächsten Zyklus</div>
+                </div>
+              `;
+            }
+          }).join('');
+
+          // Start dynamic client countdown
+          if (craftingCountdownTimer) clearInterval(craftingCountdownTimer);
+          if (craftingActiveProductions.length > 0) {
+            craftingCountdownTimer = setInterval(() => {
+              craftingActiveProductions.forEach(item => {
+                if (item.remain > 0) {
+                  item.remain -= 1;
+                  const h = Math.floor(item.remain / 3600);
+                  const m = Math.floor((item.remain % 3600) / 60);
+                  const sec = item.remain % 60;
+                  const elTimer = document.getElementById(`craftingSlotTimer_${item.slot}`);
+                  if (elTimer) elTimer.textContent = `${h}h ${m}m ${sec}s`;
+                  const elapsed = Math.max(0, item.duration - item.remain);
+                  const pct = item.duration > 0 ? Math.min(100, Math.round((elapsed / item.duration) * 100)) : 100;
+                  const elPct = document.getElementById(`craftingSlotPct_${item.slot}`);
+                  if (elPct) elPct.textContent = `${pct}%`;
+                  const elBar = document.getElementById(`craftingSlotBar_${item.slot}`);
+                  if (elBar) elBar.style.width = `${pct}%`;
+                } else {
+                  const elTimer = document.getElementById(`craftingSlotTimer_${item.slot}`);
+                  if (elTimer) elTimer.textContent = 'Fertig zur Ernte';
+                  const elBadge = document.getElementById(`craftingSlotBadge_${item.slot}`);
+                  if (elBadge) {
+                    elBadge.textContent = 'Bereit';
+                    elBadge.className = 'text-[10px] px-2 py-0.5 rounded font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/40';
+                  }
+                  const elBar = document.getElementById(`craftingSlotBar_${item.slot}`);
+                  if (elBar) {
+                    elBar.className = 'bg-emerald-500 h-full transition-all';
+                    elBar.style.width = '100%';
+                  }
+                }
+              });
+            }, 1000);
+          }
+        }
+
+        // 4. Render Workers
+        const workersContainer = document.getElementById('craftingWorkersContainer');
+        const workers = mine.workers ? Object.values(mine.workers) : [];
+        if (document.getElementById('craftingWorkersTotalBadge')) {
+          document.getElementById('craftingWorkersTotalBadge').textContent = workers.length;
+        }
+
+        if (workersContainer) {
+          if (workers.length === 0) {
+            workersContainer.innerHTML = '<div class="text-center text-slate-500 text-xs py-2">Keine Arbeiter registriert.</div>';
+          } else {
+            workersContainer.innerHTML = workers.map(w => {
+              const energy = parseInt(w.energy, 10) || 0;
+              const isWorking = !!(w.productionid && String(w.productionid) !== '0');
+              let energyBarColor = 'bg-emerald-500';
+              if (energy < 30) energyBarColor = 'bg-rose-500';
+              else if (energy < 70) energyBarColor = 'bg-amber-500';
+
+              const skills = w.data || {};
+              const skillsHtml = Object.entries(skills).map(([mat, sk]) => `
+                <span class="text-[10px] text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                  ${mat}: Lvl ${sk.level} (${sk.points} Pkt)
+                </span>
+              `).join(' ');
+
+              return `
+                <div class="bg-slate-950 p-2.5 rounded border border-slate-800 space-y-2">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="font-bold text-slate-200">${w.name} (ID ${w.id})</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded font-medium ${isWorking ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-400'}">
+                      ${isWorking ? 'Arbeitet' : 'Bereit'}
+                    </span>
+                  </div>
+                  <div class="space-y-1">
+                    <div class="flex justify-between text-[10px] font-mono text-slate-400">
+                      <span>Energie</span>
+                      <span>${energy} / 100</span>
+                    </div>
+                    <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                      <div class="${energyBarColor} h-full transition-all" style="width: ${energy}%"></div>
+                    </div>
+                  </div>
+                  <div class="flex flex-wrap gap-1 pt-1">
+                    ${skillsHtml || '<span class="text-[10px] text-slate-500">Keine Fertigkeiten</span>'}
+                  </div>
+                </div>
+              `;
+            }).join('');
+          }
+        }
+
+        // 5. Render Tools
+        const toolsContainer = document.getElementById('craftingToolsContainer');
+        const items = mine.items ? Object.values(mine.items) : [];
+        if (document.getElementById('craftingToolsCountBadge')) {
+          document.getElementById('craftingToolsCountBadge').textContent = items.length;
+        }
+
+        if (toolsContainer) {
+          if (items.length === 0) {
+            toolsContainer.innerHTML = '<div class="text-center text-slate-500 text-xs py-2">Keine Ausrüstung vorhanden.</div>';
+          } else {
+            const toolNames = {
+              pickaxe: 'Spitzhacke',
+              shoes: 'Stahlkappenschuhe',
+              helmet: 'Sicherheitshelm',
+              headlamp: 'Stirnlampe',
+              gasdetector: 'Gasmessgerät'
+            };
+
+            toolsContainer.innerHTML = items.map(t => {
+              const dur = parseInt(t.durability, 10) || 0;
+              const maxDur = 20;
+              const pct = Math.min(100, Math.round((dur / maxDur) * 100));
+              const inUse = parseInt(t.stock, 10) === 0;
+              const nameDisplay = toolNames[t.name] || t.name;
+
+              return `
+                <div class="bg-slate-950 p-2 rounded border border-slate-800 flex items-center justify-between text-xs">
+                  <div class="min-w-0 flex-1 pr-2">
+                    <div class="flex items-center space-x-1.5">
+                      <span class="font-bold text-slate-200 truncate">${nameDisplay}</span>
+                      <span class="text-[9px] px-1 py-0.2 rounded font-mono ${inUse ? 'bg-amber-950/60 text-amber-400' : 'bg-slate-800 text-slate-400'}">
+                        ${inUse ? 'In Nutzung' : 'Rucksack'}
+                      </span>
+                    </div>
+                    <div class="w-full bg-slate-900 h-1 rounded-full overflow-hidden mt-1.5">
+                      <div class="${pct < 25 ? 'bg-rose-500' : 'bg-amber-500'} h-full" style="width: ${pct}%"></div>
+                    </div>
+                  </div>
+                  <div class="text-right text-[10px] font-mono text-slate-400 shrink-0">
+                    ${dur}/${maxDur}
+                  </div>
+                </div>
+              `;
+            }).join('');
+          }
+        }
+
+      } catch (e) {
+        console.error("Handwerkerdorf fetch error", e);
+      }
+    }
+
+    async function saveCraftingVillageConfig() {
+      try {
+        const payload = {
+          enabled: document.getElementById('craftingCfgEnabled').checked,
+          auto_harvest: document.getElementById('craftingCfgAutoHarvest').checked,
+          auto_mine: document.getElementById('craftingCfgAutoMine').checked,
+          auto_refill_energy: document.getElementById('craftingCfgAutoEnergy').checked,
+          auto_buy_tools: document.getElementById('craftingCfgAutoBuyTools').checked,
+          preferred_material: document.getElementById('craftingCfgPreferredMaterial').value
+        };
+
+        const res = await fetch('/api/v1/crafting/settings', {
+          method: 'PUT',
+          headers: authHeaders(),
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          alert("Handwerkerdorf-Einstellungen erfolgreich gespeichert!");
+          await loadCraftingVillageData();
+        } else {
+          alert("Fehler beim Speichern der Handwerkerdorf-Einstellungen.");
+        }
+      } catch (e) {
+        alert("Netzwerkfehler beim Speichern der Handwerkerdorf-Einstellungen.");
+      }
+    }
+
   </script>
 </body>
 </html>

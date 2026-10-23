@@ -24,6 +24,7 @@ from app.config import (
     SeasonpassSettingsConfig,
     SpicehouseSettingsConfig,
     StallSettingsConfig,
+    CraftingVillageConfig,
     StockConfig,
     SushibarConfig,
     TradeConfig,
@@ -50,6 +51,7 @@ SECTION_MODELS: dict[str, type[BaseModel]] = {
     "events": EventsSettingsConfig,
     "insecthotel": InsecthotelSettingsConfig,
     "stall": StallSettingsConfig,
+    "crafting_village": CraftingVillageConfig,
     "vehicles": VehiclesConfig,
 }
 
