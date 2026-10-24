@@ -426,3 +426,107 @@ async def test_finish_and_start_production_in_serve(dummy_client: MFFGameClient)
     assert res["status"] == "ok"
     assert res["harvested"] == 1
     assert res["started"] == 1
+
+
+@pytest.mark.asyncio
+async def test_refill_worker_energy(dummy_client: MFFGameClient):
+    """Verify worker energy refilling using valid energy crops (e.g. Carrots PID 1)."""
+    low_energy_init = {
+        "status": "ok",
+        "datablock": {
+            "data": {
+                "id": "16",
+                "stock": {"sandstone": 5, "granite": 0},
+                "workers": {
+                    "16": {
+                        "id": "16",
+                        "name": "Skyler",
+                        "energy": "45",
+                        "productionid": None,
+                        "data": {"sandstone": {"level": 4, "points": 48}},
+                    }
+                },
+                "items": {},
+                "productions": {},
+                "validenergyproducts": {"1": 1, "2": 2},
+            },
+            "config": {
+                "constants": {"worker_energy": 100},
+                "items": {},
+                "material": {},
+            },
+        },
+    }
+
+    refill_resp = {
+        "status": "ok",
+        "datablock": 1,
+        "updateblock": {
+            "mine": {
+                "data": {
+                    "level": 1,
+                    "stock": {"sandstone": 5},
+                    "workers": {
+                        "16": {
+                            "id": "16",
+                            "name": "Skyler",
+                            "energy": "100",
+                            "productionid": None,
+                            "data": {"sandstone": {"level": 4, "points": 48}},
+                        }
+                    },
+                    "items": {},
+                    "productions": {},
+                    "validenergyproducts": {"1": 1, "2": 2},
+                },
+                "config": {},
+            }
+        },
+    }
+
+    dummy_client.api_call = AsyncMock(side_effect=[low_energy_init, refill_resp])
+    service = CraftingVillageService(client=dummy_client)
+    await service.init_remote()
+
+    success = await service.refill_worker_energy(worker_id="16")
+    assert success is True
+
+    # Check api_call parameters for refill
+    assert dummy_client.api_call.call_count == 2
+    call_args = dummy_client.api_call.call_args_list[1]
+    assert call_args[0][0] == "farm"
+    params = call_args[0][1]
+    assert params["mode"] == "mine_worker_refill"
+    assert params["id"] == 16
+    assert params["pid"] == 1
+    assert params["amount"] == 55
+
+    # Check updated energy
+    worker = service.snapshot.mine.workers["16"]
+    assert worker.energy == 100
+
+
+@pytest.mark.asyncio
+async def test_refill_action_endpoint(
+    dummy_client: MFFGameClient,
+    auth_headers: dict[str, str],
+):
+    """Test POST /api/v1/crafting/action/refill endpoint."""
+    service = CraftingVillageService(client=dummy_client)
+    service.refill_worker_energy = AsyncMock(return_value=True)
+    worker_scheduler.last_crafting_village_service = service
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        res = await ac.post(
+            "/api/v1/crafting/action/refill",
+            headers=auth_headers,
+            json={"worker_id": "16", "pid": 1, "amount": 55},
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["status"] == "ok"
+        assert data["worker_id"] == "16"
+        service.refill_worker_energy.assert_awaited_once_with(
+            worker_id="16", pid=1, amount=55, stock_service=worker_scheduler.last_stock_service
+        )

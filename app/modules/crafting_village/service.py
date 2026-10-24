@@ -1,4 +1,5 @@
 import json
+import math
 from datetime import UTC, datetime
 from typing import Any
 
@@ -217,6 +218,137 @@ class CraftingVillageService:
             logger.error(f"CraftingVillageService: Fehler beim Ernten von Slot {slot}: {e}")
             return None
 
+    async def refill_worker_energy(
+        self,
+        worker_id: str | int,
+        pid: int | None = None,
+        amount: int | None = None,
+        stock_service: Any | None = None,
+    ) -> bool:
+        """Refill a worker's energy using valid farm products (e.g. Carrots PID 1)."""
+        try:
+            if not self.snapshot or not self.snapshot.mine:
+                await self.init_remote()
+                if not self.snapshot or not self.snapshot.mine:
+                    return False
+
+            mine = self.snapshot.mine
+            worker = mine.workers.get(str(worker_id))
+            if not worker:
+                logger.warning(f"CraftingVillageService: Arbeiter ID {worker_id} nicht gefunden.")
+                return False
+
+            current_energy = int(worker.energy)
+            max_energy = 100
+            missing_energy = max(0, max_energy - current_energy)
+            if missing_energy <= 0:
+                logger.debug(
+                    f"CraftingVillageService: Arbeiter {worker.name} hat bereits volle Energie (100)."
+                )
+                return True
+
+            # Auswertung des Produkts & der benötigten Menge
+            chosen_pid = pid
+            chosen_amount = amount
+
+            if chosen_pid is None or chosen_amount is None:
+                energy_map = mine.validenergyproducts
+                # Bevorzuge Grundpflanzen (1: Karotte, 2: Gurke, 3: Radieschen etc.)
+                preferred_pids = [1, 2, 3, 4, 5]
+
+                selected_candidate: int | None = None
+                for cand in preferred_pids:
+                    if str(cand) in energy_map or cand in energy_map:
+                        if stock_service:
+                            avail_stock = stock_service.get_stock(cand) - getattr(
+                                settings.stock, "buffer_crops", 0
+                            )
+                            if avail_stock > 0:
+                                selected_candidate = cand
+                                break
+                        else:
+                            selected_candidate = cand
+                            break
+
+                if selected_candidate is None:
+                    for k in energy_map:
+                        selected_candidate = int(k)
+                        break
+
+                if selected_candidate is None:
+                    logger.warning(
+                        "CraftingVillageService: Keine validen Energieprodukte in Mine verfügbar."
+                    )
+                    return False
+
+                chosen_pid = selected_candidate
+                energy_per_unit = energy_map.get(str(chosen_pid), energy_map.get(chosen_pid, 1))
+                if energy_per_unit <= 0:
+                    energy_per_unit = 1
+
+                needed_units = math.ceil(missing_energy / energy_per_unit)
+                if stock_service:
+                    avail_stock = max(
+                        0,
+                        stock_service.get_stock(chosen_pid)
+                        - getattr(settings.stock, "buffer_crops", 0),
+                    )
+                    chosen_amount = min(needed_units, avail_stock)
+                    if chosen_amount <= 0:
+                        logger.warning(
+                            f"CraftingVillageService: Zu wenig Bestand von Produkt {chosen_pid} für Energie-Refill von {worker.name}."
+                        )
+                        return False
+                else:
+                    chosen_amount = needed_units
+
+            logger.info(
+                f"CraftingVillageService: Fülle Energie von Arbeiter {worker.name} (ID {worker_id}) "
+                f"auf: {chosen_amount}x PID {chosen_pid} (aktuelle Energie: {current_energy}/100)..."
+            )
+
+            res = await self.client.api_call(
+                "farm",
+                {
+                    "mode": "mine_worker_refill",
+                    "id": int(worker_id),
+                    "pid": int(chosen_pid),
+                    "amount": int(chosen_amount),
+                },
+            )
+
+            if stock_service and "updateblock" in res:
+                stock_service.update(res)
+
+            ub = res.get("updateblock", {})
+            if "mine" in ub and "data" in ub["mine"]:
+                cfg = (
+                    self.snapshot.mine.materials_config
+                    if self.snapshot and self.snapshot.mine
+                    else {}
+                )
+                self.snapshot.mine = self._parse_mine_data(
+                    ub["mine"].get("data", {}), ub["mine"].get("config", cfg)
+                )
+
+            updated_worker = (
+                self.snapshot.mine.workers.get(str(worker_id))
+                if self.snapshot and self.snapshot.mine
+                else None
+            )
+            new_energy = updated_worker.energy if updated_worker else "unbekannt"
+            logger.info(
+                f"CraftingVillageService: Arbeiter {worker.name} erfolgreich aufgeladen! "
+                f"Neue Energie: {new_energy}/100."
+            )
+            return True
+
+        except Exception as e:
+            logger.error(
+                f"CraftingVillageService: Fehler beim Aufladen von Arbeiter {worker_id}: {e}"
+            )
+            return False
+
     def select_next_material(self) -> str:
         """Determine next material to mine: balance granite and sandstone based on lowest stock."""
         if not self.snapshot or not self.snapshot.mine:
@@ -330,7 +462,7 @@ class CraftingVillageService:
             return False
 
     async def serve(self, stock_service: Any | None = None) -> dict[str, Any]:
-        """Perform automated cycle: harvest completed slots and start new mining operations."""
+        """Perform automated cycle: harvest completed slots, refill energy, and start new mining operations."""
         logger.info("========== Handwerkerdorf: Starte Bewirtschaftungszyklus ==========")
         snap = await self.init_remote()
         if not snap or not snap.mine:
@@ -339,6 +471,7 @@ class CraftingVillageService:
         mine = snap.mine
         harvested_count = 0
         started_count = 0
+        refilled_count = 0
 
         # 1. Ernten fertiger Slots
         if settings.crafting_village.auto_harvest:
@@ -350,11 +483,20 @@ class CraftingVillageService:
                     reward = await self.finish_production(slot=prod.slot, position=prod.position)
                     if reward:
                         harvested_count += 1
-                        # Re-fetch state
                         await self.init_remote()
                         mine = self.snapshot.mine
 
-        # 2. Neuen Abbau starten
+        # 2. Arbeiter-Energie auffüllen
+        if settings.crafting_village.auto_refill_energy:
+            for wid, worker in list(mine.workers.items()):
+                if worker.energy < 100:
+                    ok = await self.refill_worker_energy(worker_id=wid, stock_service=stock_service)
+                    if ok:
+                        refilled_count += 1
+            if self.snapshot and self.snapshot.mine:
+                mine = self.snapshot.mine
+
+        # 3. Neuen Abbau starten
         if settings.crafting_village.auto_mine:
             target_mat = self.select_next_material()
             logger.debug(
@@ -369,12 +511,10 @@ class CraftingVillageService:
                 slots_to_check = [("1", "sandstone"), ("2", "granite")]
 
             for s_id, mat in slots_to_check:
-                # Prüfen ob Slot bereits produziert
                 existing_prod = mine.productions.get(s_id)
                 if existing_prod and not existing_prod.is_ready:
                     continue
 
-                # Werkzeuge mit höchster Erfahrung wählen
                 tools = self.get_best_tools_for_mining(count=2)
                 if len(tools) < 2:
                     logger.warning(
@@ -382,7 +522,6 @@ class CraftingVillageService:
                     )
                     break
 
-                # Besten verfügbaren Arbeiter mit genügend Energie ermitteln
                 worker = self.get_best_worker_for_material(mat)
                 if not worker:
                     logger.debug(
@@ -402,15 +541,17 @@ class CraftingVillageService:
                     started_count += 1
                     await self.init_remote()
                     mine = self.snapshot.mine
-                    break  # Wenn 1 Arbeiter vorhanden, nur 1 Slot starten
+                    break
 
         summary = self.get_summary()
         logger.info(
-            f"========== Handwerkerdorf: Zyklus beendet (Geerntet: {harvested_count}, Gestartet: {started_count}) =========="
+            f"========== Handwerkerdorf: Zyklus beendet (Geerntet: {harvested_count}, "
+            f"Aufgeladen: {refilled_count}, Gestartet: {started_count}) =========="
         )
         return {
             "status": "ok",
             "harvested": harvested_count,
+            "refilled": refilled_count,
             "started": started_count,
             "summary": summary.model_dump(),
         }

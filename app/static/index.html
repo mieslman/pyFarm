@@ -4774,9 +4774,15 @@
                 <div class="bg-slate-950 p-2.5 rounded border border-slate-800 space-y-2">
                   <div class="flex items-center justify-between text-xs">
                     <span class="font-bold text-slate-200">${w.name} (ID ${w.id})</span>
-                    <span class="text-[10px] px-1.5 py-0.5 rounded font-medium ${isWorking ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-400'}">
-                      ${isWorking ? 'Arbeitet' : 'Bereit'}
-                    </span>
+                    <div class="flex items-center space-x-1.5">
+                      <button onclick="refillWorkerEnergy('${w.id}')" title="Energie mit Karotten/Hof-Produkten auffüllen" class="text-[10px] px-2 py-0.5 rounded bg-amber-600/30 hover:bg-amber-600 text-amber-300 hover:text-white transition flex items-center space-x-1 border border-amber-600/50">
+                        <i class="fa-solid fa-bolt text-[9px]"></i>
+                        <span>Aufladen</span>
+                      </button>
+                      <span class="text-[10px] px-1.5 py-0.5 rounded font-medium ${isWorking ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-400'}">
+                        ${isWorking ? 'Arbeitet' : 'Bereit'}
+                      </span>
+                    </div>
                   </div>
                   <div class="space-y-1">
                     <div class="flex justify-between text-[10px] font-mono text-slate-400">
@@ -4846,6 +4852,24 @@
 
       } catch (e) {
         console.error("Handwerkerdorf fetch error", e);
+      }
+    }
+
+    
+    async function refillWorkerEnergy(workerId) {
+      try {
+        const res = await fetch('/api/v1/crafting/action/refill', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ worker_id: workerId })
+        });
+        if (res.ok) {
+          await loadCraftingVillageData();
+        } else {
+          alert("Fehler beim Aufladen der Arbeiter-Energie.");
+        }
+      } catch (e) {
+        alert("Netzwerkfehler beim Aufladen der Energie.");
       }
     }
 

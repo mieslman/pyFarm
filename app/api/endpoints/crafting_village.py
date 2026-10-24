@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, HTTPException
 from loguru import logger
 
 from app.config import settings
@@ -71,3 +71,63 @@ async def update_crafting_village_settings(
     settings_manager.save_settings()
     logger.info(f"Handwerkerdorf-Einstellungen aktualisiert: {cfg.model_dump()}")
     return {"status": "ok", "settings": cfg.model_dump()}
+
+
+@crafting_village_router.post("/action/refill", response_model=dict[str, Any])
+async def refill_worker_action(
+    payload: dict[str, Any] = Body(default_factory=dict),
+    _: dict[str, Any] = Depends(get_current_user),
+):
+    """Refill energy of a specific worker or all workers with <100 energy."""
+    cv_svc = worker_scheduler.last_crafting_village_service
+    if not cv_svc or not cv_svc.client:
+        raise HTTPException(
+            status_code=503,
+            detail="Game-Client oder Handwerkerdorf-Service nicht verfügbar.",
+        )
+
+    worker_id = payload.get("worker_id")
+    pid = payload.get("pid")
+    amount = payload.get("amount")
+    stock_service = worker_scheduler.last_stock_service
+
+    if worker_id:
+        success = await cv_svc.refill_worker_energy(
+            worker_id=worker_id, pid=pid, amount=amount, stock_service=stock_service
+        )
+        return {"status": "ok" if success else "failed", "worker_id": str(worker_id)}
+
+    # Refill all workers with energy < 100
+    if not cv_svc.snapshot or not cv_svc.snapshot.mine:
+        await cv_svc.init_remote()
+
+    refilled = 0
+    if cv_svc.snapshot and cv_svc.snapshot.mine:
+        for wid, w in cv_svc.snapshot.mine.workers.items():
+            if w.energy < 100:
+                ok = await cv_svc.refill_worker_energy(
+                    worker_id=wid, pid=pid, amount=amount, stock_service=stock_service
+                )
+                if ok:
+                    refilled += 1
+
+    return {"status": "ok", "refilled_workers": refilled}
+
+
+@crafting_village_router.post("/action/harvest", response_model=dict[str, Any])
+async def harvest_action(
+    payload: dict[str, Any] = Body(default_factory=dict),
+    _: dict[str, Any] = Depends(get_current_user),
+):
+    """Harvest completed mining production slots."""
+    cv_svc = worker_scheduler.last_crafting_village_service
+    if not cv_svc or not cv_svc.client:
+        raise HTTPException(
+            status_code=503,
+            detail="Game-Client oder Handwerkerdorf-Service nicht verfügbar.",
+        )
+
+    slot = payload.get("slot", 1)
+    position = payload.get("position", 1)
+    reward = await cv_svc.finish_production(slot=slot, position=position)
+    return {"status": "ok" if reward else "failed", "reward": reward}

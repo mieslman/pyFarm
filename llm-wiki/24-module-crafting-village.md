@@ -68,6 +68,17 @@ Alle Aufrufe erfolgen an das zentrale Skript `ajax/farm.php`:
   ```
 - **Response:** Liefert im `updateblock.mine` sofort den aktualisierten Status des Steinbruchs.
 
+### Arbeiter-Energie auffüllen (`mine_worker_refill`)
+- **Endpunkt:** `GET https://s{server}.myfreefarm.de/ajax/farm.php?rid={rid}&id={worker_id}&pid={product_id}&amount={amount}&mode=mine_worker_refill`
+- **Parameter:**
+  - `id`: Arbeiter-ID (z. B. `"16"`).
+  - `pid`: ID des verwendeten Feldprodukts (z. B. `1` für Karotte).
+  - `amount`: Stückzahl (z. B. `55` Karotten für 55 Energiepunkte).
+- **Response:**
+  - `datablock`: `1`
+  - `updateblock.mine`: Enthält den aktualisierten Arbeiter mit neuer Energie (z. B. `100`).
+  - `updateblock.stock`: Enthält das Farm-Lager nach Abzug der verfütterten Einheiten.
+
 ---
 
 ## 3. Automationsstrategien (`CraftingVillageService.serve`)
