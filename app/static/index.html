@@ -1908,7 +1908,13 @@
                 <i class="fa-solid fa-toolbox text-amber-400"></i>
                 <span>Werkzeuge & Haltbarkeit</span>
               </h3>
-              <span id="craftingToolsCountBadge" class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded">0</span>
+              <div class="flex items-center space-x-2">
+                <button onclick="buyBestTool()" title="Stahlkappenschuhe (höchste Erfahrung) für 5.000 kT nachkaufen" class="text-[10px] bg-amber-600/30 hover:bg-amber-600 text-amber-300 hover:text-white px-2 py-0.5 rounded border border-amber-600/50 flex items-center space-x-1 transition">
+                  <i class="fa-solid fa-cart-shopping text-[9px]"></i>
+                  <span>Kaufen (5.000 kT)</span>
+                </button>
+                <span id="craftingToolsCountBadge" class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded">0</span>
+              </div>
             </div>
             <div id="craftingToolsContainer" class="space-y-2 max-h-64 overflow-y-auto pr-1">
               <div class="text-center text-slate-500 text-xs py-2">Keine Ausrüstung vorhanden.</div>
@@ -4856,6 +4862,24 @@
     }
 
     
+    
+    async function buyBestTool() {
+      try {
+        const res = await fetch('/api/v1/crafting/action/buy_tool', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ name: 'shoes', amount: 1 })
+        });
+        if (res.ok) {
+          await loadCraftingVillageData();
+        } else {
+          alert("Fehler beim Werkzeugkauf.");
+        }
+      } catch (e) {
+        alert("Netzwerkfehler beim Werkzeugkauf.");
+      }
+    }
+
     async function refillWorkerEnergy(workerId) {
       try {
         const res = await fetch('/api/v1/crafting/action/refill', {

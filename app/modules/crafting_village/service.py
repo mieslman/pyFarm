@@ -247,13 +247,11 @@ class CraftingVillageService:
                 )
                 return True
 
-            # Auswertung des Produkts & der benötigten Menge
             chosen_pid = pid
             chosen_amount = amount
 
             if chosen_pid is None or chosen_amount is None:
                 energy_map = mine.validenergyproducts
-                # Bevorzuge Grundpflanzen (1: Karotte, 2: Gurke, 3: Radieschen etc.)
                 preferred_pids = [1, 2, 3, 4, 5]
 
                 selected_candidate: int | None = None
@@ -347,6 +345,109 @@ class CraftingVillageService:
             logger.error(
                 f"CraftingVillageService: Fehler beim Aufladen von Arbeiter {worker_id}: {e}"
             )
+            return False
+
+    def get_best_buyable_tool(self) -> tuple[str, MineShopItemConfig] | None:
+        """Find the shop tool with highest XP bonus that can be bought with money/kT (no coins)."""
+        if not self.snapshot or not self.snapshot.mine:
+            return None
+
+        mine = self.snapshot.mine
+        kt_tools: list[tuple[str, MineShopItemConfig]] = []
+
+        for name, item_cfg in mine.shop_items_config.items():
+            # Strict Coin-Schutz: Keine Werkzeuge kaufen, die Coins kosten!
+            if item_cfg.coins > 0:
+                continue
+            if item_cfg.money <= 0:
+                continue
+            kt_tools.append((name, item_cfg))
+
+        if not kt_tools:
+            return None
+
+        def tool_sort_key(entry: tuple[str, MineShopItemConfig]) -> tuple[float, int]:
+            _, cfg = entry
+            return (cfg.bonus.get("xp", 0.0), cfg.durability)
+
+        # Sort descending by XP bonus
+        kt_tools.sort(key=tool_sort_key, reverse=True)
+        return kt_tools[0]
+
+    async def buy_shop_item(
+        self,
+        name: str = "shoes",
+        amount: int = 1,
+        stock_service: Any | None = None,
+    ) -> bool:
+        """Buy equipment tool in quarry shop using kT (strictly protected against coin costs)."""
+        try:
+            if not self.snapshot or not self.snapshot.mine:
+                await self.init_remote()
+                if not self.snapshot or not self.snapshot.mine:
+                    return False
+
+            mine = self.snapshot.mine
+            item_cfg = mine.shop_items_config.get(name)
+            if not item_cfg:
+                logger.warning(
+                    f"CraftingVillageService: Werkzeug '{name}' nicht im Shop-Katalog gefunden."
+                )
+                return False
+
+            # Coin-Protection: Keine Werkzeuge mit Coins kaufen!
+            if item_cfg.coins > 0:
+                logger.warning(
+                    f"CraftingVillageService: Kauf von '{name}' abgelehnt, da er {item_cfg.coins} Coins kosten würde!"
+                )
+                return False
+
+            total_cost_kt = item_cfg.money * amount
+            if stock_service:
+                credits_kt = getattr(stock_service, "credits_kt", 0.0)
+                min_credit = getattr(settings.trade, "min_credit_kt", 500.0)
+                if credits_kt - total_cost_kt < min_credit:
+                    logger.warning(
+                        f"CraftingVillageService: Nicht genügend Guthaben ({credits_kt:.2f} kT) "
+                        f"für Kauf von {amount}x '{name}' ({total_cost_kt} kT, Mindestreserve {min_credit} kT)."
+                    )
+                    return False
+
+            logger.info(
+                f"CraftingVillageService: Kaufe im Werkzeug-Shop {amount}x '{item_cfg.name}' ({name}) "
+                f"für insgesamt {total_cost_kt} kT (XP-Bonus: +{item_cfg.bonus.get('xp', 0.0)})..."
+            )
+
+            res = await self.client.api_call(
+                "farm",
+                {
+                    "mode": "mine_buy_shop_item",
+                    "name": name,
+                    "amount": int(amount),
+                },
+            )
+
+            if stock_service and "updateblock" in res:
+                stock_service.update(res)
+
+            ub = res.get("updateblock", {})
+            if "mine" in ub and "data" in ub["mine"]:
+                cfg = (
+                    self.snapshot.mine.materials_config
+                    if self.snapshot and self.snapshot.mine
+                    else {}
+                )
+                self.snapshot.mine = self._parse_mine_data(
+                    ub["mine"].get("data", {}), ub["mine"].get("config", cfg)
+                )
+
+            logger.info(
+                f"CraftingVillageService: Werkzeug '{item_cfg.name}' x{amount} erfolgreich gekauft!"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"CraftingVillageService: Fehler beim Kauf von Werkzeug '{name}': {e}")
             return False
 
     def select_next_material(self) -> str:
@@ -462,7 +563,7 @@ class CraftingVillageService:
             return False
 
     async def serve(self, stock_service: Any | None = None) -> dict[str, Any]:
-        """Perform automated cycle: harvest completed slots, refill energy, and start new mining operations."""
+        """Perform automated cycle: harvest completed slots, refill energy, buy tools, and start mining."""
         logger.info("========== Handwerkerdorf: Starte Bewirtschaftungszyklus ==========")
         snap = await self.init_remote()
         if not snap or not snap.mine:
@@ -472,6 +573,7 @@ class CraftingVillageService:
         harvested_count = 0
         started_count = 0
         refilled_count = 0
+        bought_tools_count = 0
 
         # 1. Ernten fertiger Slots
         if settings.crafting_village.auto_harvest:
@@ -496,7 +598,30 @@ class CraftingVillageService:
             if self.snapshot and self.snapshot.mine:
                 mine = self.snapshot.mine
 
-        # 3. Neuen Abbau starten
+        # 3. Werkzeuge mit höchster Erfahrung nachkaufen, wenn keine mehr verfügbar sind
+        if settings.crafting_village.auto_buy_tools:
+            best_buyable = self.get_best_buyable_tool()
+            if best_buyable:
+                tool_name, _ = best_buyable
+                # Wie viele dieses Spitzenwerkzeugs sind noch im Rucksack verfügbar?
+                available_count = sum(
+                    1
+                    for item in mine.items.values()
+                    if item.name == tool_name and item.stock > 0 and item.durability > 0
+                )
+                if available_count < 2:
+                    needed_to_buy = 2 - available_count
+                    ok = await self.buy_shop_item(
+                        name=tool_name,
+                        amount=needed_to_buy,
+                        stock_service=stock_service,
+                    )
+                    if ok:
+                        bought_tools_count += needed_to_buy
+                        if self.snapshot and self.snapshot.mine:
+                            mine = self.snapshot.mine
+
+        # 4. Neuen Abbau starten
         if settings.crafting_village.auto_mine:
             target_mat = self.select_next_material()
             logger.debug(
@@ -546,12 +671,13 @@ class CraftingVillageService:
         summary = self.get_summary()
         logger.info(
             f"========== Handwerkerdorf: Zyklus beendet (Geerntet: {harvested_count}, "
-            f"Aufgeladen: {refilled_count}, Gestartet: {started_count}) =========="
+            f"Aufgeladen: {refilled_count}, Gekauft: {bought_tools_count}, Gestartet: {started_count}) =========="
         )
         return {
             "status": "ok",
             "harvested": harvested_count,
             "refilled": refilled_count,
+            "bought_tools": bought_tools_count,
             "started": started_count,
             "summary": summary.model_dump(),
         }

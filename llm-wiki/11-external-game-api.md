@@ -96,7 +96,7 @@ Die Spielserver antworten standardmäßig im JSON-Format mit folgender Grundstru
 - `mode=handleflowerfarmi&farm=1&position=1&id={id}&farmi={id}&status=1`: Bedient Farmi am Marktstand.
 - `mode=sushibar_init`, `sushibar_crop`, `sushibar_startproduction`, `sushibar_loadtrain`, `sushibar_servefarmi`: Sushibar.
 - `mode=stall_init`, `stall_clear_slot`, `stall_fill_slot`, `stall_get_reward`: Obststand.
-- `mode=mine_init`, `mine_finish_production`, `mine_start_production`, `mine_worker_refill`: Handwerkerdorf Steinbruch (Status, Ernte, Abbau starten mit Setup-JSON, Arbeiter-Energie auffüllen mit Hof-Produkten).
+- `mode=mine_init`, `mine_finish_production`, `mine_start_production`, `mine_worker_refill`, `mine_buy_shop_item`: Handwerkerdorf Steinbruch (Status, Ernte, Abbau starten, Energie auffüllen, Werkzeuge im Shop kaufen).
 - `mode=insecthotel_init`, `insecthotel_set_stockslot`, `insecthotel_collect_checkout`: Insektenhotel.
 - `mode=dogbonus`, `dailydonkey`: Tägliche Tierboni.
 

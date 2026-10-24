@@ -79,6 +79,20 @@ Alle Aufrufe erfolgen an das zentrale Skript `ajax/farm.php`:
   - `updateblock.mine`: Enthält den aktualisierten Arbeiter mit neuer Energie (z. B. `100`).
   - `updateblock.stock`: Enthält das Farm-Lager nach Abzug der verfütterten Einheiten.
 
+### Werkzeuge im Shop kaufen (`mine_buy_shop_item`)
+- **Endpunkt:** `GET https://s{server}.myfreefarm.de/ajax/farm.php?rid={rid}&name={item_name}&amount={amount}&mode=mine_buy_shop_item`
+- **Parameter:**
+  - `name`: Name des Werkzeugs (z. B. `shoes`, `pickaxe`, `helmet`).
+  - `amount`: Anzahl der zu kaufenden Einheiten.
+- **Coin-Schutz & Strategie:**
+  - Es werden ausschließlich Werkzeuge gekauft, die mit kT (Spielgeld) bezahlt werden (`coins == 0`).
+  - Unter den kT-Werkzeugen wird dynamisch dasjenige mit dem höchsten Erfahrungsgewinn (`xp_bonus = 0.8` für Stahlkappenschuhe `shoes`) gewählt.
+  - Das Werkzeug wird automatisch nachgekauft, sobald im Rucksack weniger als 2 Einheiten mit Haltbarkeit verfügbar sind.
+- **Response:**
+  - `datablock`: `1`
+  - `updateblock.mine`: Enthält das neue Werkzeug mit voller Haltbarkeit (`durability: 20`, `stock: 1`).
+  - `updateblock.menue.bar`: Aktualisierter Kontostand in kT.
+
 ---
 
 ## 3. Automationsstrategien (`CraftingVillageService.serve`)

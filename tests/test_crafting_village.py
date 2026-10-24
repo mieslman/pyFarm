@@ -530,3 +530,128 @@ async def test_refill_action_endpoint(
         service.refill_worker_energy.assert_awaited_once_with(
             worker_id="16", pid=1, amount=55, stock_service=worker_scheduler.last_stock_service
         )
+
+
+@pytest.mark.asyncio
+async def test_buy_shop_item_and_coin_protection(dummy_client: MFFGameClient):
+    """Verify tool purchasing with coin protection and highest XP selection."""
+    mock_init = {
+        "status": "ok",
+        "datablock": {
+            "data": {
+                "id": "16",
+                "stock": {"sandstone": 5},
+                "workers": {},
+                "items": {
+                    "1": {
+                        "id": "1",
+                        "name": "shoes",
+                        "durability": "10",
+                        "stock": "0",
+                    }  # in use, 0 available!
+                },
+                "productions": {},
+                "validenergyproducts": {},
+            },
+            "config": {
+                "items": {
+                    "walkietalkie": {
+                        "name": "Funkgerät",
+                        "coins": 25,
+                        "money": 0,
+                        "durability": 20,
+                        "bonus": {"xp": 1.6},
+                    },
+                    "shoes": {
+                        "name": "Stahlkappenschuhe",
+                        "coins": 0,
+                        "money": 5000,
+                        "durability": 20,
+                        "bonus": {"xp": 0.8},
+                    },
+                    "pickaxe": {
+                        "name": "Spitzhacke",
+                        "coins": 0,
+                        "money": 4000,
+                        "durability": 20,
+                        "bonus": {"xp": 0.4},
+                    },
+                },
+                "material": {},
+            },
+        },
+    }
+
+    dummy_client.api_call = AsyncMock(return_value=mock_init)
+    service = CraftingVillageService(client=dummy_client)
+    await service.init_remote()
+
+    # 1. Check best buyable tool: Must be 'shoes' (highest XP among 0-coin items)
+    best_buyable = service.get_best_buyable_tool()
+    assert best_buyable is not None
+    tool_name, tool_cfg = best_buyable
+    assert tool_name == "shoes"
+    assert tool_cfg.coins == 0
+    assert tool_cfg.bonus["xp"] == 0.8
+
+    # 2. Strict Coin Protection test: Attempting to buy a coin item must fail!
+    coin_buy_result = await service.buy_shop_item(name="walkietalkie", amount=1)
+    assert coin_buy_result is False
+
+    # 3. Successful buy of 'shoes'
+    buy_resp = {
+        "status": "ok",
+        "datablock": 1,
+        "updateblock": {
+            "mine": {
+                "data": {
+                    "level": 1,
+                    "stock": {"sandstone": 5},
+                    "workers": {},
+                    "items": {
+                        "1": {"id": "1", "name": "shoes", "durability": "10", "stock": "0"},
+                        "2": {"id": "2", "name": "shoes", "durability": "20", "stock": "1"},
+                    },
+                    "productions": {},
+                },
+                "config": mock_init["datablock"]["config"],
+            }
+        },
+    }
+    dummy_client.api_call = AsyncMock(return_value=buy_resp)
+
+    buy_success = await service.buy_shop_item(name="shoes", amount=1)
+    assert buy_success is True
+
+    # Verify api_call params
+    call_args = dummy_client.api_call.call_args_list[0]
+    assert call_args[0][0] == "farm"
+    assert call_args[0][1]["mode"] == "mine_buy_shop_item"
+    assert call_args[0][1]["name"] == "shoes"
+    assert call_args[0][1]["amount"] == 1
+
+
+@pytest.mark.asyncio
+async def test_buy_tool_action_endpoint(
+    dummy_client: MFFGameClient,
+    auth_headers: dict[str, str],
+):
+    """Test POST /api/v1/crafting/action/buy_tool endpoint."""
+    service = CraftingVillageService(client=dummy_client)
+    service.buy_shop_item = AsyncMock(return_value=True)
+    worker_scheduler.last_crafting_village_service = service
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        res = await ac.post(
+            "/api/v1/crafting/action/buy_tool",
+            headers=auth_headers,
+            json={"name": "shoes", "amount": 1},
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["status"] == "ok"
+        assert data["tool"] == "shoes"
+        service.buy_shop_item.assert_awaited_once_with(
+            name="shoes", amount=1, stock_service=worker_scheduler.last_stock_service
+        )

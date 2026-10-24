@@ -63,6 +63,8 @@ async def update_crafting_village_settings(
         cfg.auto_refill_energy = bool(payload["auto_refill_energy"])
     if "auto_buy_tools" in payload:
         cfg.auto_buy_tools = bool(payload["auto_buy_tools"])
+    if "coin_protection" in payload:
+        cfg.coin_protection = bool(payload["coin_protection"])
     if "preferred_material" in payload:
         mat = str(payload["preferred_material"]).strip().lower()
         if mat in ("least_stock", "sandstone", "granite"):
@@ -131,3 +133,24 @@ async def harvest_action(
     position = payload.get("position", 1)
     reward = await cv_svc.finish_production(slot=slot, position=position)
     return {"status": "ok" if reward else "failed", "reward": reward}
+
+
+@crafting_village_router.post("/action/buy_tool", response_model=dict[str, Any])
+async def buy_tool_action(
+    payload: dict[str, Any] = Body(default_factory=dict),
+    _: dict[str, Any] = Depends(get_current_user),
+):
+    """Buy equipment tool in quarry shop."""
+    cv_svc = worker_scheduler.last_crafting_village_service
+    if not cv_svc or not cv_svc.client:
+        raise HTTPException(
+            status_code=503,
+            detail="Game-Client oder Handwerkerdorf-Service nicht verfügbar.",
+        )
+
+    name = payload.get("name", "shoes")
+    amount = int(payload.get("amount", 1))
+    stock_service = worker_scheduler.last_stock_service
+
+    success = await cv_svc.buy_shop_item(name=name, amount=amount, stock_service=stock_service)
+    return {"status": "ok" if success else "failed", "tool": name, "amount": amount}

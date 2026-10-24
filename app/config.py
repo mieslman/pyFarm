@@ -244,6 +244,7 @@ class CraftingVillageConfig(BaseModel):
     auto_mine: bool = True
     auto_refill_energy: bool = True
     auto_buy_tools: bool = True
+    coin_protection: bool = True
     preferred_material: str = "least_stock"  # least_stock, sandstone, granite
 
 
