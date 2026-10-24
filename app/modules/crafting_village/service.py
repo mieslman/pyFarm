@@ -649,9 +649,15 @@ class CraftingVillageService:
 
                 worker = self.get_best_worker_for_material(mat)
                 if not worker:
-                    logger.debug(
-                        f"CraftingVillage: Kein verfügbarer Arbeiter mit genügend Energie für {mat}."
-                    )
+                    all_busy = all(w.is_working for w in mine.workers.values())
+                    if all_busy:
+                        logger.debug(
+                            f"CraftingVillage: Slot {s_id} ({mat}) kann nicht gestartet werden: Alle Arbeiter sind aktuell beschäftigt."
+                        )
+                    else:
+                        logger.debug(
+                            f"CraftingVillage: Slot {s_id} ({mat}) kann nicht gestartet werden: Kein freier Arbeiter mit genügend Energie (>= 100)."
+                        )
                     continue
 
                 tool_ids = [t.id for t in tools]
