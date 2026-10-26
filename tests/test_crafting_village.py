@@ -655,3 +655,38 @@ async def test_buy_tool_action_endpoint(
         service.buy_shop_item.assert_awaited_once_with(
             name="shoes", amount=1, stock_service=worker_scheduler.last_stock_service
         )
+
+@pytest.mark.asyncio
+async def test_parse_mine_data_with_new_worker_null_data(dummy_client: MFFGameClient):
+    """Test that a newly hired worker with data=None, productions=None, etc. parses correctly."""
+    service = CraftingVillageService(client=dummy_client)
+    mock_data = {
+        "level": 1,
+        "workers": {
+            "402": {
+                "id": "402",
+                "name": "Charlie",
+                "position": "2",
+                "energy": "100",
+                "data": None,
+                "productionid": "0",
+                "createdate": "1793036440",
+            }
+        },
+        "items": None,
+        "productions": None,
+        "stock": None,
+        "validenergyproducts": None,
+        "stats": None,
+    }
+    mock_config = {
+        "material": None,
+        "items": None,
+    }
+    snap = service._parse_mine_data(mock_data, mock_config)
+    assert "402" in snap.workers
+    charlie = snap.workers["402"]
+    assert charlie.name == "Charlie"
+    assert charlie.energy == 100
+    assert charlie.is_working is False
+    assert charlie.data == {}

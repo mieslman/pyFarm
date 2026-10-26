@@ -31,35 +31,38 @@ class CraftingVillageService:
         """Hydrate MineSnapshot from raw datablock/updateblock dictionaries."""
         # 1. Parse Workers
         workers_map: dict[str, Worker] = {}
-        raw_workers = data.get("workers", {})
+        raw_workers = data.get("workers") or {}
         if isinstance(raw_workers, dict):
             for wid, w_info in raw_workers.items():
                 if not isinstance(w_info, dict):
                     continue
                 skills: dict[str, WorkerSkill] = {}
-                for mat_name, s_data in w_info.get("data", {}).items():
-                    if isinstance(s_data, dict):
-                        skills[mat_name] = WorkerSkill(
-                            points=int(s_data.get("points", 0)),
-                            level=int(s_data.get("level", 1)),
-                            percent=float(s_data.get("percent", 0.0)),
-                        )
+                raw_w_data = w_info.get("data") or {}
+                if isinstance(raw_w_data, dict):
+                    for mat_name, s_data in raw_w_data.items():
+                        if isinstance(s_data, dict):
+                            skills[mat_name] = WorkerSkill(
+                                points=int(s_data.get("points", 0)),
+                                level=int(s_data.get("level", 1)),
+                                percent=float(s_data.get("percent", 0.0)),
+                            )
+
+                raw_prod_id = w_info.get("productionid")
+                prod_id_str = str(raw_prod_id) if raw_prod_id not in (None, "0", 0) else None
 
                 workers_map[str(wid)] = Worker(
                     id=str(w_info.get("id", wid)),
                     name=str(w_info.get("name", "Arbeiter")),
                     position=str(w_info.get("position", "1")),
                     energy=int(w_info.get("energy", 100)),
-                    productionid=(
-                        str(w_info.get("productionid")) if w_info.get("productionid") else None
-                    ),
+                    productionid=prod_id_str,
                     data=skills,
                     createdate=str(w_info.get("createdate", "")),
                 )
 
         # 2. Parse Items (Tools)
         items_map: dict[str, MineItem] = {}
-        raw_items = data.get("items", {})
+        raw_items = data.get("items") or {}
         if isinstance(raw_items, dict):
             for iid, i_info in raw_items.items():
                 if not isinstance(i_info, dict):
@@ -73,13 +76,15 @@ class CraftingVillageService:
 
         # 3. Parse Productions (Running mining slots)
         productions_map: dict[str, MineProductionSlot] = {}
-        raw_prods = data.get("productions", {})
+        raw_prods = data.get("productions") or {}
         if isinstance(raw_prods, dict):
             for slot_key, sub_prods in raw_prods.items():
                 if isinstance(sub_prods, dict):
                     for sub_key, p_info in sub_prods.items():
                         if isinstance(p_info, dict):
                             p_id = str(p_info.get("id", f"{slot_key}_{sub_key}"))
+                            raw_p_workers = p_info.get("workers") or {}
+                            raw_p_items = p_info.get("items") or {}
                             productions_map[str(slot_key)] = MineProductionSlot(
                                 id=p_id,
                                 slot=str(p_info.get("slot", slot_key)),
@@ -87,9 +92,15 @@ class CraftingVillageService:
                                 name=str(p_info.get("name", "sandstone")),
                                 amount=int(p_info.get("amount", 0)),
                                 workers={
-                                    str(k): int(v) for k, v in p_info.get("workers", {}).items()
+                                    str(k): int(v)
+                                    for k, v in raw_p_workers.items()
+                                    if isinstance(raw_p_workers, dict)
                                 },
-                                items={str(k): int(v) for k, v in p_info.get("items", {}).items()},
+                                items={
+                                    str(k): int(v)
+                                    for k, v in raw_p_items.items()
+                                    if isinstance(raw_p_items, dict)
+                                },
                                 duration=int(p_info.get("duration", 0)),
                                 remain=int(p_info.get("remain", 0)),
                                 createdate=str(p_info.get("createdate", "")),
@@ -98,45 +109,51 @@ class CraftingVillageService:
 
         # 4. Parse Material Config
         materials_map: dict[str, MineMaterialConfig] = {}
-        for mat_key, m_info in config.get("material", {}).items():
-            if isinstance(m_info, dict):
-                materials_map[mat_key] = MineMaterialConfig(
-                    name=str(m_info.get("name", mat_key)),
-                    duration=int(m_info.get("duration", 18000)),
-                    harvest=int(m_info.get("harvest", 5)),
-                    energy=int(m_info.get("energy", 10)),
-                    worker=int(m_info.get("worker", 1)),
-                    items=int(m_info.get("items", 2)),
-                    reward=m_info.get("reward", {}),
-                )
+        raw_mat = config.get("material") or {}
+        if isinstance(raw_mat, dict):
+            for mat_key, m_info in raw_mat.items():
+                if isinstance(m_info, dict):
+                    materials_map[mat_key] = MineMaterialConfig(
+                        name=str(m_info.get("name", mat_key)),
+                        duration=int(m_info.get("duration", 18000)),
+                        harvest=int(m_info.get("harvest", 5)),
+                        energy=int(m_info.get("energy", 10)),
+                        worker=int(m_info.get("worker", 1)),
+                        items=int(m_info.get("items", 2)),
+                        reward=m_info.get("reward") or {},
+                    )
 
         # 5. Parse Shop Items Config
         shop_items_map: dict[str, MineShopItemConfig] = {}
-        for item_key, s_info in config.get("items", {}).items():
-            if isinstance(s_info, dict):
-                shop_items_map[item_key] = MineShopItemConfig(
-                    name=str(s_info.get("name", item_key)),
-                    money=int(s_info.get("money", 0)),
-                    coins=int(s_info.get("coins", 0)),
-                    durability=int(s_info.get("durability", 20)),
-                    bonus={k: float(v) for k, v in s_info.get("bonus", {}).items()},
-                )
+        raw_shop_items = config.get("items") or {}
+        if isinstance(raw_shop_items, dict):
+            for item_key, s_info in raw_shop_items.items():
+                if isinstance(s_info, dict):
+                    raw_bonus = s_info.get("bonus") or {}
+                    bonus_dict = (
+                        {k: float(v) for k, v in raw_bonus.items()}
+                        if isinstance(raw_bonus, dict)
+                        else {}
+                    )
+                    shop_items_map[item_key] = MineShopItemConfig(
+                        name=str(s_info.get("name", item_key)),
+                        money=int(s_info.get("money", 0)),
+                        coins=int(s_info.get("coins", 0)),
+                        durability=int(s_info.get("durability", 20)),
+                        bonus=bonus_dict,
+                    )
 
         # 6. Parse Stock & Energy Products
-        raw_stock = data.get("stock", {})
+        raw_stock = data.get("stock") or {}
         stock_dict = (
             {k: int(v) for k, v in raw_stock.items()} if isinstance(raw_stock, dict) else {}
         )
+        raw_energy = data.get("validenergyproducts") or {}
         energy_prods = (
-            {str(k): int(v) for k, v in data.get("validenergyproducts", {}).items()}
-            if isinstance(data.get("validenergyproducts"), dict)
-            else {}
+            {str(k): int(v) for k, v in raw_energy.items()} if isinstance(raw_energy, dict) else {}
         )
-        stats = (
-            {str(k): str(v) for k, v in data.get("stats", {}).items()}
-            if isinstance(data.get("stats"), dict)
-            else {}
-        )
+        raw_stats = data.get("stats") or {}
+        stats = {str(k): str(v) for k, v in raw_stats.items()} if isinstance(raw_stats, dict) else {}
 
         return MineSnapshot(
             level=int(data.get("level", 1)),
@@ -656,7 +673,7 @@ class CraftingVillageService:
                         )
                     else:
                         logger.debug(
-                            f"CraftingVillage: Slot {s_id} ({mat}) kann nicht gestartet werden: Kein freier Arbeiter mit genügend Energie (>= 100)."
+                            f"CraftingVillage: Slot {s_id} ({mat}) kann nicht gestartet werden: Kein freier Arbeiter mit genügend Energie."
                         )
                     continue
 
@@ -671,8 +688,10 @@ class CraftingVillageService:
                 if success:
                     started_count += 1
                     await self.init_remote()
+                    if not self.snapshot or not self.snapshot.mine:
+                        break
                     mine = self.snapshot.mine
-                    break
+                    continue
 
         summary = self.get_summary()
         logger.info(
