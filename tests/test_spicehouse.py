@@ -439,6 +439,17 @@ async def test_mill_harvest_dict_and_refill_cycle():
             )
         )
 
+        # Mock clear_mill API for sort switch
+        respx.get(
+            url__startswith="https://s1.myfreefarm.de/ajax/farm.php",
+            params__contains={"mode": "spicehouse_clear_mill", "slot": "3"},
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={"status": "ok", "datablock": 1, "updateblock": {}},
+            )
+        )
+
         # Mock set_millslot API for refill
         respx.get(
             url__startswith="https://s1.myfreefarm.de/ajax/farm.php",

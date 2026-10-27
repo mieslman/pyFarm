@@ -91,11 +91,14 @@ Im Spiel sind Gewürze in drei disjunkte Kategorien unterteilt:
 * **Kontinuierlicher Durchlauf:** Die Mühlen stoppen nicht pauschal nach einer Blockzeit, sondern mahlen Stück für Stück gemäß der produktspezifischen Mahldauer (120 s bis 720 s je Einheit).
 * **Teilentnahme:** Fertige Einheiten können jederzeit abgeholt werden (`spicehouse_harvest_mill`), während die restliche Menge weitergemahlen wird.
 * **Belohnung:** Pro fertig gemahlener Einheit wird **1 Gewürzstreuer-Punkt** gutgeschrieben.
-* **Upstream-Berechnung & Idle-Erkennung:**
+* **Upstream-Berechnung, Idle-Erkennung & Slot-Freigabe:**
   * Das Upstream-Game liefert in `spicehouse_init` kein direktes `output`-Feld, sondern den `start`-Timestamp und `amount`/`amount_original`.
   * Der Fortschritt wird berechnet als `finished_units = min(amount, (now - start) // unit_duration)` mit `output = max(raw_output, finished_units)`.
   * Bei der Ernte (`spicehouse_harvest_mill`) liefert `datablock` ein Dict (`{ '<pid>': amount, 'spicehouse_points': points }`).
-  * Nach der Ernte behält der Spielserver die alte `pid` bei und setzt `amount = 0`. Ein Slot gilt daher als leer/belegbar (`is_idle`), wenn `amount == 0 and output == 0`. Leere Slots werden im selben Zyklus direkt neu bestückt (`spicehouse_set_millslot`).
+  * **Upstream PID-Bindung & Sortenwechsel:** Nach dem Abernten behält der Spielserver die alte `pid` im Slot bei (`amount = 0`, `output = 0`). Ein Slot gilt daher als leer/belegbar (`is_idle`), wenn `amount == 0 and output == 0`.
+    * **Wichtig:** Soll ein Slot mit einer *anderen* PID neu befüllt werden als zuvor (`slot.pid != chosen_pid`), verweigert der Server `spicehouse_set_millslot` strikt mit `datablock: 0`!
+    * In diesem Fall muss vor dem Befüllen zwingend `spicehouse_clear_mill` gesendet werden (entspricht dem "X / Entfernen"-Button im offiziellen Web-Client), um die Bindung aufzuheben.
+    * Bei erfolgreichem `spicehouse_set_millslot` liefert der Server entweder `datablock = 1` oder bei Direktgutschriften ein Dict (`{ '<pid>': count, 'spicehouse_points': points }`).
 
 ---
 

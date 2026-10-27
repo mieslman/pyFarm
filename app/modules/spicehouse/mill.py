@@ -249,6 +249,28 @@ class SpiceMillService:
             if chosen_pid and amount_to_load > 0:
                 prod = stock_service.get_product(chosen_pid)
                 p_name = prod.name if prod else f"PID {chosen_pid}"
+
+                # Upstream-Game Bindung: Ist die Mühle noch auf eine andere PID initialisiert,
+                # verweigert der Server spicehouse_set_millslot mit datablock=0.
+                # In diesem Fall muss der Slot zuerst mit spicehouse_clear_mill geleert werden.
+                if slot.pid is not None and slot.pid != chosen_pid:
+                    logger.info(
+                        f"Gewürzhaus: Leere Mühle {slot.slot} (gebunden an PID {slot.pid}) "
+                        f"vor Sortenwechsel auf {p_name} (PID {chosen_pid})..."
+                    )
+                    try:
+                        clear_res = await self.client.api_call(
+                            "farm",
+                            {"mode": "spicehouse_clear_mill", "slot": slot.slot},
+                        )
+                        stock_service.update(clear_res)
+                        slot.pid = None
+                    except Exception as e:
+                        logger.warning(
+                            f"Gewürzhaus: Fehler beim Leeren von Mühle {slot.slot}: {e}"
+                        )
+                        continue
+
                 logger.info(
                     f"Gewürzhaus: Starte Mühle {slot.slot} mit {amount_to_load}x {p_name} (PID {chosen_pid})..."
                 )
@@ -267,7 +289,13 @@ class SpiceMillService:
                         datablock == 1
                         or datablock == [1]
                         or (isinstance(datablock, list) and 1 in datablock)
-                        or (isinstance(datablock, dict) and datablock.get("status") == 1)
+                        or (
+                            isinstance(datablock, dict)
+                            and (
+                                datablock.get("status") == 1
+                                or any(str(k).isdigit() for k in datablock)
+                            )
+                        )
                     )
                     if success:
                         logger.info(
@@ -284,6 +312,10 @@ class SpiceMillService:
                         slot.remain = amount_to_load * duration_unit
                         slot.start = int(time.time())
                         started_count += 1
+                    else:
+                        logger.warning(
+                            f"Gewürzhaus: Server lehnte Befüllen von Mühle {slot.slot} ab (datablock={datablock})."
+                        )
                 except Exception as e:
                     logger.warning(f"Gewürzhaus: Fehler beim Starten von Mühle {slot.slot}: {e}")
 
