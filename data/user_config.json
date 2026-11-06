@@ -10,9 +10,9 @@
     "auto_crop": true,
     "harvest_mode": "all",
     "farm_crops": {
-      "4": 113,
-      "1": 21,
-      "3": 21
+      "1": 42,
+      "3": 42,
+      "4": 113
     },
     "farm_categories": {
       "5": "ex",
@@ -206,6 +206,15 @@
     "auto_collect_reward": true,
     "min_stock_reserve": 500
   },
+  "crafting_village": {
+    "enabled": true,
+    "auto_harvest": true,
+    "auto_mine": true,
+    "auto_refill_energy": true,
+    "auto_buy_tools": true,
+    "coin_protection": true,
+    "preferred_material": "least_stock"
+  },
   "vehicles": {
     "enabled": true,
     "routes": {
@@ -299,5 +308,5 @@
   "poll_interval_seconds": 600,
   "anti_detection_min_delay_ms": 350,
   "anti_detection_max_delay_ms": 900,
-  "_last_saved": "2026-10-01T09:45:13.632737+00:00"
+  "_last_saved": "2026-11-05T04:30:42.189750+00:00"
 }
