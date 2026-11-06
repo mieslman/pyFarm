@@ -109,13 +109,13 @@ class FuelstationConfig(BaseModel):
     auto_harvest: bool = True
     auto_refill: bool = True
     min_reserve: int = 500
-    preferred_pids: list[int] = Field(default_factory=lambda: [2, 18, 17, 1])
+    preferred_pids: list[int] = Field(default_factory=lambda: [113, 2, 18, 17, 1])
     slot_preferred_pids: dict[int, list[int]] = Field(
         default_factory=lambda: {
-            1: [2, 18, 17, 1],  # Slot 1 (Stufe 5): Mais (2) bevorzugt, dann Gurken (18)
-            2: [18, 17, 1],  # Slot 2 (Stufe 3): Gurken (18) bevorzugt (Mais erst ab Stufe 5)
-            3: [17, 113, 33, 31],  # Slot 3 (Stufe 1): Karotten (17), Chili, Himbeeren, Zucchini
-            4: [17, 113, 33, 31],  # Slot 4 (Stufe 1)
+            1: [113, 2, 18, 17, 1],  # Slot 1: Chili (113), Mais (2), Gurken (18)
+            2: [113, 18, 17, 1],  # Slot 2: Chili (113), Gurken (18)
+            3: [113, 17, 33, 31],  # Slot 3: Chili (113), Karotten (17)
+            4: [113, 17, 33, 31],  # Slot 4
         }
     )
 

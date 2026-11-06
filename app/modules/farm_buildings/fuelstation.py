@@ -153,15 +153,13 @@ class Fuelstation:
                         },
                     )
                     datablock = res.get("datablock")
-                    is_ok = (
-                        (
-                            isinstance(datablock, (list, tuple))
-                            and len(datablock) > 0
-                            and datablock[0] == 1
-                        )
-                        or datablock == 1
-                        or bool(res.get("updateblock"))
-                    )
+                    is_ok = False
+                    if isinstance(datablock, (list, tuple)) and len(datablock) > 0:
+                        is_ok = bool(datablock[0] == 1 or datablock[0] == "ok")
+                    elif datablock == 1 or datablock == "ok":
+                        is_ok = True
+                    elif datablock is None and bool(res.get("updateblock")):
+                        is_ok = True
                     if is_ok:
                         harvested_count += 1
                         slot.busy = False
@@ -242,15 +240,13 @@ class Fuelstation:
                         },
                     )
                     datablock = res.get("datablock")
-                    is_ok = (
-                        (
-                            isinstance(datablock, (list, tuple))
-                            and len(datablock) > 0
-                            and datablock[0] == 1
-                        )
-                        or datablock == 1
-                        or bool(res.get("updateblock"))
-                    )
+                    is_ok = False
+                    if isinstance(datablock, (list, tuple)) and len(datablock) > 0:
+                        is_ok = bool(datablock[0] == 1 or datablock[0] == "ok")
+                    elif datablock == 1 or datablock == "ok":
+                        is_ok = True
+                    elif datablock is None and bool(res.get("updateblock")):
+                        is_ok = True
                     if is_ok:
                         stock_service.update(res)
                         slot.current_points += pts_to_add
