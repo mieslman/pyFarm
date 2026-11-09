@@ -117,12 +117,21 @@ Alle Aufrufe erfolgen an das zentrale Skript `ajax/farm.php`:
   - `config.tools`: Meißel-Katalog mit Dimensionen (x, y), Bearbeitungsdauer und Preisen.
   - `config.products`: Skulpturen-Katalog mit benötigtem Gestein (`sandstone`, `granite`), Raster-Dimensionen (x, y) und erlaubten Meißel-Kacheln (`allowed`).
 
-### Steinmetz Aktionen
-- **Kunde zuweisen (`stonemason_set_slot`):** `{customerid: id, slot: slot_id}` weist einen wartenden Kunden einer freien Werkbank zu.
-- **Kachel bearbeiten (`stonemason_click_tile`):** `{customerid: id, tile: tile_id, tool: tool_id}` startet das Abtragen einer Kachel.
-- **Auftrag abschließen (`stonemason_finish_grid`):** `{slot: slot_id}` schließt die fertige Skulptur ab und schüttet Belohnungen aus.
-- **Kunde wegschicken (`stonemason_kick_customer`):** `{id: customer_id}` weist einen unrentablen Kunden ab.
-- **Meißel nachkaufen (`stonemason_buy_tool`):** `{tool: tool_id, currency: "money"}` kauft Meißel für Spielgeld.
+### Steinmetz Aktionen (HAR-02 & HAR-03 verifiziert)
+- **Kunde zuweisen (`stonemason_set_slot`):**
+  - **Endpunkt:** `GET https://s{server}.myfreefarm.de/ajax/farm.php?rid={rid}&customerid={id}&slot={slot_id}&mode=stonemason_set_slot`
+  - **Funktion:** Weist einen wartenden Kunden einer freien Werkbank zu. Zieht die benötigten Rohsteine (`sandstone`, `granite`) sofort aus dem Dorflager (`mine.stock`) ab.
+  - **Response:** `{"datablock": 1, "updateblock": {"stonemason": {...}, "mine": {...}, "stock": {...}}}`
+- **Kachel bearbeiten (`stonemason_click_tile`):**
+  - **Endpunkt:** `GET https://s{server}.myfreefarm.de/ajax/farm.php?rid={rid}&customerid={id}&tile={tile_id}&tool={tool_id}&mode=stonemason_click_tile`
+  - **Funktion:** Startet das Behauen einer erlaubten Kachel (`allowed`) im Kachel-Raster mit dem angegebenen Meißel-Werkzeug (Standard Werkzeug 1). Verbraucht 1 Meißel und setzt die Kachel auf `remain = duration` (z. B. 1800s).
+  - **Response:** `{"datablock": 1, "updateblock": {"stonemason": {...}}}`
+- **Auftrag abschließen (`stonemason_finish_grid`):**
+  - **Endpunkt:** `GET https://s{server}.myfreefarm.de/ajax/farm.php?rid={rid}&slot={slot_id}&mode=stonemason_finish_grid`
+  - **Funktion:** Schließt eine zu 100% gemeißelte Skulptur (alle Kacheln in `allowed` fertiggestellt) ab. Schüttet Farmpunkte, Spielgeld (kT), Steinmetz-Punkte und ggf. Sterne/Errungenschaften aus.
+- **Meißel nachkaufen (`stonemason_buy_tool`):**
+  - **Endpunkt:** `GET https://s{server}.myfreefarm.de/ajax/farm.php?rid={rid}&tool={tool_id}&currency={amount}&mode=stonemason_buy_tool`
+  - **Funktion:** Kauft Meißelpakete (z. B. 10 Meißel für 500 kT mit `tool=1&currency=500`). Werkzeuge 1..4 kosten ausschließlich kT (strikter Coin-Schutz).
 
 ---
 
@@ -143,6 +152,12 @@ Alle Aufrufe erfolgen an das zentrale Skript `ajax/farm.php`:
 
 4. **Arbeiter-Zuweisung:**
    - Wählt untätige Arbeiter mit der höchsten Fertigkeitsstufe für das Zielmaterial und prüft, ob die Energie für den Vorgang ausreicht.
+
+5. **Steinmetz-Automation (`serve_stonemason`):**
+   - **Fertige Skulpturen abholen:** Prüft belegte Werkbänke. Wenn alle Kacheln gemeißelt und deren Dauer abgelaufen ist (`remain <= 0`), wird `stonemason_finish_grid` ausgeführt.
+   - **Kacheln schlagen:** Wenn aktuell kein Meißelvorgang aktiv ist (`is_working == False`), wird die nächste freie Kachel aus `allowed` gewählt und mit Meißel (Tool 1) gestartet.
+   - **Meißel-Nachkauf:** Wenn der Meißelbestand 0 erreicht und `auto_buy_stonemason_tools` aktiv ist, wird automatisch das 10er-Paket für 500 kT nachgekauft.
+   - **Kunden-Zuweisung:** Freie, freigeschaltete Werkbänke werden mit wartenden Kunden belegt, sofern ausreichend Rohmaterial im Dorflager vorhanden ist. Bei mehreren Kunden wird derjenige mit dem höchsten Belohnungsmultiplikator bevorzugt.
 
 ---
 
@@ -169,7 +184,11 @@ Alle Aufrufe erfolgen an das zentrale Skript `ajax/farm.php`:
 | :--- | :--- | :--- |
 | `GET` | `/api/v1/crafting` | Liefert Konfiguration, Zusammenfassung und aktuellen Snapshot. |
 | `GET` | `/api/v1/crafting/settings` | Ruft die aktuellen Automationseinstellungen ab. |
-| `PUT` | `/api/v1/crafting/settings` | Aktualisiert Automationseinstellungen (Auto-Ernte, Material etc.). |
+| `PUT` | `/api/v1/crafting/settings` | Aktualisiert Automationseinstellungen (Auto-Ernte, Steinmetz etc.). |
+| `POST` | `/api/v1/crafting/action/stonemason_set_slot` | Weist einen Kunden einer Werkbank zu. |
+| `POST` | `/api/v1/crafting/action/stonemason_click_tile` | Startet das Behauen einer Kachel. |
+| `POST` | `/api/v1/crafting/action/stonemason_finish_grid` | Schließt eine fertige Skulptur ab. |
+| `POST` | `/api/v1/crafting/action/stonemason_buy_tool` | Kauft Meißelpakete für kT nach. |
 
 ---
 

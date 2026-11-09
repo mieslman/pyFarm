@@ -69,6 +69,10 @@ async def update_crafting_village_settings(
         mat = str(payload["preferred_material"]).strip().lower()
         if mat in ("least_stock", "sandstone", "granite"):
             cfg.preferred_material = mat
+    if "auto_stonemason" in payload:
+        cfg.auto_stonemason = bool(payload["auto_stonemason"])
+    if "auto_buy_stonemason_tools" in payload:
+        cfg.auto_buy_stonemason_tools = bool(payload["auto_buy_stonemason_tools"])
 
     settings_manager.save_settings()
     logger.info(f"Handwerkerdorf-Einstellungen aktualisiert: {cfg.model_dump()}")
@@ -154,3 +158,105 @@ async def buy_tool_action(
 
     success = await cv_svc.buy_shop_item(name=name, amount=amount, stock_service=stock_service)
     return {"status": "ok" if success else "failed", "tool": name, "amount": amount}
+
+
+
+@crafting_village_router.post("/action/stonemason_set_slot", response_model=dict[str, Any])
+async def stonemason_set_slot_action(
+    payload: dict[str, Any] = Body(...),
+    _: dict[str, Any] = Depends(get_current_user),
+):
+    """Assign a waiting customer to a stonemason workbench slot."""
+    cv_svc = worker_scheduler.last_crafting_village_service
+    if not cv_svc or not cv_svc.client:
+        raise HTTPException(
+            status_code=503,
+            detail="Game-Client oder Handwerkerdorf-Service nicht verfügbar.",
+        )
+
+    customer_id = payload.get("customer_id")
+    slot = int(payload.get("slot", 1))
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="customer_id ist erforderlich.")
+
+    stock_service = worker_scheduler.last_stock_service
+    success = await cv_svc.assign_customer_to_slot(
+        customer_id=customer_id, slot=slot, stock_service=stock_service
+    )
+    return {"status": "ok" if success else "failed", "customer_id": str(customer_id), "slot": slot}
+
+
+@crafting_village_router.post("/action/stonemason_click_tile", response_model=dict[str, Any])
+async def stonemason_click_tile_action(
+    payload: dict[str, Any] = Body(...),
+    _: dict[str, Any] = Depends(get_current_user),
+):
+    """Start chiseling a tile on a stonemason workbench slot."""
+    cv_svc = worker_scheduler.last_crafting_village_service
+    if not cv_svc or not cv_svc.client:
+        raise HTTPException(
+            status_code=503,
+            detail="Game-Client oder Handwerkerdorf-Service nicht verfügbar.",
+        )
+
+    customer_id = payload.get("customer_id")
+    tile = int(payload.get("tile", 1))
+    tool_id = int(payload.get("tool_id", 1))
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="customer_id ist erforderlich.")
+
+    stock_service = worker_scheduler.last_stock_service
+    success = await cv_svc.chisel_tile(
+        customer_id=customer_id, tile=tile, tool_id=tool_id, stock_service=stock_service
+    )
+    return {
+        "status": "ok" if success else "failed",
+        "customer_id": str(customer_id),
+        "tile": tile,
+        "tool_id": tool_id,
+    }
+
+
+@crafting_village_router.post("/action/stonemason_finish_grid", response_model=dict[str, Any])
+async def stonemason_finish_grid_action(
+    payload: dict[str, Any] = Body(...),
+    _: dict[str, Any] = Depends(get_current_user),
+):
+    """Finish a completed sculpture grid and collect rewards."""
+    cv_svc = worker_scheduler.last_crafting_village_service
+    if not cv_svc or not cv_svc.client:
+        raise HTTPException(
+            status_code=503,
+            detail="Game-Client oder Handwerkerdorf-Service nicht verfügbar.",
+        )
+
+    slot = int(payload.get("slot", 1))
+    stock_service = worker_scheduler.last_stock_service
+    reward = await cv_svc.finish_grid(slot=slot, stock_service=stock_service)
+    return {"status": "ok" if reward else "failed", "slot": slot, "reward": reward}
+
+
+@crafting_village_router.post("/action/stonemason_buy_tool", response_model=dict[str, Any])
+async def stonemason_buy_tool_action(
+    payload: dict[str, Any] = Body(default_factory=dict),
+    _: dict[str, Any] = Depends(get_current_user),
+):
+    """Buy stonemason tools (Meißel) using kT."""
+    cv_svc = worker_scheduler.last_crafting_village_service
+    if not cv_svc or not cv_svc.client:
+        raise HTTPException(
+            status_code=503,
+            detail="Game-Client oder Handwerkerdorf-Service nicht verfügbar.",
+        )
+
+    tool_id = int(payload.get("tool_id", 1))
+    currency_amount = int(payload.get("currency_amount", 500))
+    stock_service = worker_scheduler.last_stock_service
+    success = await cv_svc.buy_stonemason_tool(
+        tool_id=tool_id, currency_amount=currency_amount, stock_service=stock_service
+    )
+    return {
+        "status": "ok" if success else "failed",
+        "tool_id": tool_id,
+        "currency_amount": currency_amount,
+    }

@@ -725,6 +725,383 @@ class CraftingVillageService:
             )
             return False
 
+    def _update_from_updateblock(
+        self, ub: dict[str, Any], stock_service: Any | None = None
+    ) -> None:
+        """Update mine and stonemason snapshot from game response updateblock."""
+        if not isinstance(ub, dict):
+            return
+
+        if self.snapshot is None:
+            self.snapshot = CraftingVillageSnapshot()
+
+        if stock_service and "stock" in ub and ub["stock"] is not None:
+            stock_service.update({"updateblock": ub})
+
+        if "mine" in ub and isinstance(ub["mine"], dict) and "data" in ub["mine"]:
+            raw_data = ub["mine"]["data"]
+            cfg = (
+                self.snapshot.mine.materials_config
+                if self.snapshot and self.snapshot.mine
+                else {}
+            )
+            shop_cfg = (
+                self.snapshot.mine.shop_items_config
+                if self.snapshot and self.snapshot.mine
+                else {}
+            )
+            raw_cfg = ub["mine"].get("config") or {"material": cfg, "items": shop_cfg}
+            if self.snapshot:
+                self.snapshot.mine = self._parse_mine_data(raw_data, raw_cfg)
+
+        if "stonemason" in ub and isinstance(ub["stonemason"], dict) and "data" in ub["stonemason"]:
+            raw_sm_data = ub["stonemason"]["data"]
+            sm_cfg = ub["stonemason"].get("config") or (
+                {
+                    "tools": {k: v.model_dump() for k, v in self.snapshot.stonemason.tools_config.items()},
+                    "products": {k: v.model_dump() for k, v in self.snapshot.stonemason.products_config.items()},
+                    "slots": {k: v.model_dump() for k, v in self.snapshot.stonemason.slots_config.items()},
+                }
+                if self.snapshot and self.snapshot.stonemason
+                else {}
+            )
+            if self.snapshot:
+                self.snapshot.stonemason = self._parse_stonemason_data(raw_sm_data, sm_cfg)
+
+    async def assign_customer_to_slot(
+        self, customer_id: str | int, slot: int, stock_service: Any | None = None
+    ) -> bool:
+        """Assign a waiting customer to an unlocked workbench slot (stonemason_set_slot)."""
+        cid = str(customer_id)
+        logger.info(f"CraftingVillage (Steinmetz): Weise Kunde {cid} Werkbank-Slot {slot} zu...")
+        try:
+            res = await self.client.api_call(
+                "farm",
+                {
+                    "mode": "stonemason_set_slot",
+                    "customerid": cid,
+                    "slot": int(slot),
+                },
+            )
+            if not res or res.get("datablock") != 1:
+                logger.warning(
+                    f"CraftingVillage (Steinmetz): Kunde {cid} konnte Slot {slot} nicht zugewiesen werden. Response: {res}"
+                )
+                return False
+
+            ub = res.get("updateblock", {})
+            self._update_from_updateblock(ub, stock_service=stock_service)
+            logger.info(f"CraftingVillage (Steinmetz): Kunde {cid} erfolgreich Slot {slot} zugewiesen.")
+            return True
+        except Exception as e:
+            logger.error(
+                f"CraftingVillage (Steinmetz): Fehler bei Zuweisung von Kunde {cid} zu Slot {slot}: {e}"
+            )
+            return False
+
+    async def chisel_tile(
+        self,
+        customer_id: str | int,
+        tile: int,
+        tool_id: int = 1,
+        stock_service: Any | None = None,
+    ) -> bool:
+        """Start chiseling a tile on the sculpture grid (stonemason_click_tile)."""
+        cid = str(customer_id)
+        # Coin protection check
+        if settings.crafting_village.coin_protection:
+            if self.snapshot and self.snapshot.stonemason:
+                tool_cfg = self.snapshot.stonemason.tools_config.get(str(tool_id))
+                if tool_cfg and tool_cfg.costs_coins:
+                    logger.warning(
+                        f"CraftingVillage (Steinmetz): Coin-Schutz verhindert Nutzung von Werkzeug {tool_id} (kostet Coins!)."
+                    )
+                    return False
+
+        logger.info(
+            f"CraftingVillage (Steinmetz): Bearbeite Kachel {tile} von Kunde {cid} mit Werkzeug {tool_id}..."
+        )
+        try:
+            res = await self.client.api_call(
+                "farm",
+                {
+                    "mode": "stonemason_click_tile",
+                    "customerid": cid,
+                    "tile": int(tile),
+                    "tool": int(tool_id),
+                },
+            )
+            if not res or res.get("datablock") != 1:
+                logger.warning(
+                    f"CraftingVillage (Steinmetz): Kachel {tile} konnte nicht bearbeitet werden. Response: {res}"
+                )
+                return False
+
+            ub = res.get("updateblock", {})
+            self._update_from_updateblock(ub, stock_service=stock_service)
+            logger.info(f"CraftingVillage (Steinmetz): Kachel {tile} erfolgreich gestartet.")
+            return True
+        except Exception as e:
+            logger.error(
+                f"CraftingVillage (Steinmetz): Fehler beim Bearbeiten von Kachel {tile}: {e}"
+            )
+            return False
+
+    async def finish_grid(
+        self, slot: int, stock_service: Any | None = None
+    ) -> dict[str, Any] | None:
+        """Complete a fully chiseled sculpture and collect rewards (stonemason_finish_grid)."""
+        logger.info(f"CraftingVillage (Steinmetz): Schließe Werkbank-Slot {slot} ab (Ernte/Fertigstellung)...")
+        try:
+            res = await self.client.api_call(
+                "farm",
+                {
+                    "mode": "stonemason_finish_grid",
+                    "slot": int(slot),
+                },
+            )
+            if not res or ("datablock" not in res and "updateblock" not in res):
+                logger.warning(
+                    f"CraftingVillage (Steinmetz): Slot {slot} konnte nicht abgeschlossen werden. Response: {res}"
+                )
+                return None
+
+            ub = res.get("updateblock", {})
+            self._update_from_updateblock(ub, stock_service=stock_service)
+
+            reward = res.get("datablock") if isinstance(res.get("datablock"), dict) else {}
+            if not reward and isinstance(res.get("reward"), dict):
+                reward = res["reward"]
+
+            logger.info(f"CraftingVillage (Steinmetz): Slot {slot} erfolgreich abgeschlossen! Belohnung: {reward}")
+            # Refresh stonemason remote state
+            await self.init_remote()
+            return reward if isinstance(reward, dict) else {"success": True}
+        except Exception as e:
+            logger.error(
+                f"CraftingVillage (Steinmetz): Fehler beim Fertigstellen von Slot {slot}: {e}"
+            )
+            return None
+
+    async def buy_stonemason_tool(
+        self,
+        tool_id: int = 1,
+        currency_amount: int = 500,
+        stock_service: Any | None = None,
+    ) -> bool:
+        """Buy stonemason tools (chisels) using kT (stonemason_buy_tool). Strictly protects coins."""
+        tid = str(tool_id)
+        if self.snapshot and self.snapshot.stonemason:
+            tool_cfg = self.snapshot.stonemason.tools_config.get(tid)
+            if tool_cfg:
+                if settings.crafting_village.coin_protection and tool_cfg.costs_coins:
+                    logger.warning(
+                        f"CraftingVillage (Steinmetz): Kauf von Werkzeug {tid} abgebrochen (erfordert Coins!)."
+                    )
+                    return False
+                if str(currency_amount) not in tool_cfg.money and currency_amount not in tool_cfg.money:
+                    logger.warning(
+                        f"CraftingVillage (Steinmetz): Ungültiger Preis {currency_amount} kT für Werkzeug {tid} (Gültig: {list(tool_cfg.money.keys())})."
+                    )
+                    return False
+
+        # Check credit budget
+        if stock_service and hasattr(stock_service, "bar"):
+            bar = float(stock_service.bar or 0)
+            min_credit = float(settings.stock.min_credit_kt or 500.0)
+            if bar - currency_amount < min_credit:
+                logger.warning(
+                    f"CraftingVillage (Steinmetz): Barvermögen ({bar:.2f} kT) zu gering für Meißelkauf ({currency_amount} kT) bei Mindestguthaben {min_credit:.2f} kT."
+                )
+                return False
+
+        logger.info(f"CraftingVillage (Steinmetz): Kaufe Meißel-Paket {tid} für {currency_amount} kT...")
+        try:
+            res = await self.client.api_call(
+                "farm",
+                {
+                    "mode": "stonemason_buy_tool",
+                    "tool": int(tool_id),
+                    "currency": int(currency_amount),
+                },
+            )
+            if not res or ("updateblock" not in res and res.get("datablock") != 1):
+                logger.warning(
+                    f"CraftingVillage (Steinmetz): Werkzeugkauf {tid} fehlgeschlagen. Response: {res}"
+                )
+                return False
+
+            ub = res.get("updateblock", {})
+            self._update_from_updateblock(ub, stock_service=stock_service)
+            logger.info(
+                f"CraftingVillage (Steinmetz): Werkzeug {tid} ({currency_amount} kT) erfolgreich gekauft."
+            )
+            return True
+        except Exception as e:
+            logger.error(f"CraftingVillage (Steinmetz): Fehler beim Kauf von Werkzeug {tid}: {e}")
+            return False
+
+    async def serve_stonemason(self, stock_service: Any | None = None) -> dict[str, Any]:
+        """Automate Stonemason workshop: finish completed grids, chisel tiles, and assign waiting customers."""
+        if not settings.crafting_village.auto_stonemason:
+            return {"status": "disabled"}
+
+        if not self.snapshot or not self.snapshot.stonemason:
+            return {"status": "skipped", "reason": "no_snapshot"}
+
+        sm = self.snapshot.stonemason
+        mine = self.snapshot.mine
+
+        finished_count = 0
+        chiseled_count = 0
+        assigned_count = 0
+        bought_tools_count = 0
+
+        # 1. Fertige Werkbänke abschließen
+        for cust in list(sm.customers.values()):
+            if not cust.is_assigned:
+                continue
+            pcfg = sm.products_config.get(cust.pid)
+            if not pcfg or not pcfg.allowed:
+                continue
+
+            tiles = cust.tiles
+            all_chiseled = all(str(t) in tiles for t in pcfg.allowed)
+            all_done = all_chiseled and all(
+                (isinstance(tiles.get(str(t)), dict) and tiles[str(t)].get("remain", 0) <= 0)
+                for t in pcfg.allowed
+            )
+
+            if all_done:
+                slot_num = int(cust.slot)
+                logger.info(
+                    f"CraftingVillage (Steinmetz): Skulptur für {cust.name} (Slot {slot_num}, {pcfg.name}) ist fertiggestellt! Schließe ab..."
+                )
+                res = await self.finish_grid(slot=slot_num, stock_service=stock_service)
+                if res:
+                    finished_count += 1
+                    sm = self.snapshot.stonemason
+                    mine = self.snapshot.mine
+
+        # 2. Prüfen, ob aktuell bereits ein Meißel-Vorgang läuft (is_working)
+        # Wenn kein Vorgang aktiv ist, nächste erlaubte Kachel anschlagen
+        if not sm.is_working:
+            for cust in list(sm.customers.values()):
+                if not cust.is_assigned:
+                    continue
+                pcfg = sm.products_config.get(cust.pid)
+                if not pcfg or not pcfg.allowed:
+                    continue
+
+                tiles = cust.tiles
+                uncarved = [t for t in pcfg.allowed if str(t) not in tiles]
+                if uncarved:
+                    # Wir benötigen Werkzeug 1 (Meißel)
+                    tool_count = sm.tools.get("1", 0)
+                    if tool_count <= 0:
+                        if settings.crafting_village.auto_buy_stonemason_tools:
+                            logger.info("CraftingVillage (Steinmetz): Keine Meißel vorhanden. Kaufe Meißel-Paket...")
+                            bought = await self.buy_stonemason_tool(
+                                tool_id=1, currency_amount=500, stock_service=stock_service
+                            )
+                            if not bought:
+                                bought = await self.buy_stonemason_tool(
+                                    tool_id=1, currency_amount=100, stock_service=stock_service
+                                )
+                            if bought:
+                                bought_tools_count += 1
+                                sm = self.snapshot.stonemason
+
+                    tool_count = sm.tools.get("1", 0)
+                    if tool_count > 0:
+                        next_tile = uncarved[0]
+                        ok = await self.chisel_tile(
+                            customer_id=cust.id,
+                            tile=next_tile,
+                            tool_id=1,
+                            stock_service=stock_service,
+                        )
+                        if ok:
+                            chiseled_count += 1
+                            sm = self.snapshot.stonemason
+                            break
+
+        # 3. Freie, freigeschaltete Werkbänke mit wartenden Kunden belegen
+        current_level = sm.level
+        unlocked_slots = [
+            int(sid)
+            for sid, scfg in sm.slots_config.items()
+            if scfg.level <= current_level
+        ]
+        unlocked_slots.sort()
+
+        occupied_slots = {int(c.slot) for c in sm.customers.values() if c.is_assigned}
+
+        for slot_id in unlocked_slots:
+            if slot_id in occupied_slots:
+                continue
+
+            waiting_customers = [c for c in sm.customers.values() if c.is_waiting]
+            if not waiting_customers:
+                break
+
+            eligible_customers: list[tuple[StonemasonCustomer, float]] = []
+            stock_sandstone = mine.stock.get("sandstone", 0) if mine else 0
+            stock_granite = mine.stock.get("granite", 0) if mine else 0
+
+            for wc in waiting_customers:
+                pcfg = sm.products_config.get(wc.pid)
+                if not pcfg:
+                    continue
+                req_sandstone = pcfg.material.get("sandstone", 0)
+                req_granite = pcfg.material.get("granite", 0)
+
+                if stock_sandstone >= req_sandstone and stock_granite >= req_granite:
+                    pts_multi = wc.reward_multi.get("stonemason_points", 1.0)
+                    money_multi = wc.reward_multi.get("money", 1.0)
+                    score = pts_multi * money_multi
+                    eligible_customers.append((wc, score))
+
+            if not eligible_customers:
+                logger.debug(
+                    f"CraftingVillage (Steinmetz): Slot {slot_id} ist frei, aber kein wartender Kunde hat ausreichend Rohmaterialien im Lager."
+                )
+                continue
+
+            eligible_customers.sort(key=lambda x: x[1], reverse=True)
+            best_customer = eligible_customers[0][0]
+
+            ok = await self.assign_customer_to_slot(
+                customer_id=best_customer.id, slot=slot_id, stock_service=stock_service
+            )
+            if ok:
+                assigned_count += 1
+                occupied_slots.add(slot_id)
+                sm = self.snapshot.stonemason
+                mine = self.snapshot.mine
+
+                # Sofort erste Kachel meißeln, falls Steinmetz frei und Meißel vorhanden
+                if not sm.is_working and sm.tools.get("1", 0) > 0:
+                    pcfg = sm.products_config.get(best_customer.pid)
+                    if pcfg and pcfg.allowed:
+                        ok_chisel = await self.chisel_tile(
+                            customer_id=best_customer.id,
+                            tile=pcfg.allowed[0],
+                            tool_id=1,
+                            stock_service=stock_service,
+                        )
+                        if ok_chisel:
+                            chiseled_count += 1
+                            sm = self.snapshot.stonemason
+
+        return {
+            "status": "ok",
+            "finished": finished_count,
+            "chiseled": chiseled_count,
+            "assigned": assigned_count,
+            "bought_tools": bought_tools_count,
+        }
+
     async def serve(self, stock_service: Any | None = None) -> dict[str, Any]:
         """Perform automated cycle: harvest completed slots, refill energy, buy tools, and start mining."""
         logger.info("========== Handwerkerdorf: Starte Bewirtschaftungszyklus ==========")
@@ -839,6 +1216,11 @@ class CraftingVillageService:
                     mine = self.snapshot.mine
                     continue
 
+        # 5. Steinmetz-Werkstatt Automation
+        stonemason_stats = {}
+        if settings.crafting_village.auto_stonemason:
+            stonemason_stats = await self.serve_stonemason(stock_service=stock_service)
+
         summary = self.get_summary()
         logger.info(
             f"========== Handwerkerdorf: Zyklus beendet (Geerntet: {harvested_count}, "
@@ -850,6 +1232,7 @@ class CraftingVillageService:
             "refilled": refilled_count,
             "bought_tools": bought_tools_count,
             "started": started_count,
+            "stonemason": stonemason_stats,
             "summary": summary.model_dump(),
         }
 

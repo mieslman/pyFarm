@@ -8,6 +8,15 @@ from app.core.auth import create_access_token
 from app.core.client import MFFGameClient
 from app.main import app
 from app.modules.crafting_village.service import CraftingVillageService
+from app.modules.crafting_village.models import (
+    CraftingVillageSnapshot,
+    MineSnapshot,
+    StonemasonCustomer,
+    StonemasonProductConfig,
+    StonemasonSlotConfig,
+    StonemasonSnapshot,
+    StonemasonToolConfig,
+)
 from app.worker.scheduler import worker_scheduler
 
 
@@ -756,3 +765,325 @@ async def test_stonemason_models_and_parsing(dummy_client: MFFGameClient):
     assert summary.stonemason_level == 1
     assert summary.stonemason_customers_count == 4
     assert summary.stonemason_active_slots_count == 0
+
+
+
+@pytest.mark.asyncio
+async def test_stonemason_assign_customer(dummy_client: MFFGameClient):
+    """Test assigning a customer to a workbench slot (stonemason_set_slot)."""
+    service = CraftingVillageService(client=dummy_client)
+
+    mock_resp = {
+        "status": "ok",
+        "datablock": 1,
+        "updateblock": {
+            "stonemason": {
+                "data": {
+                    "id": "104",
+                    "level": 1,
+                    "tools": {"1": 11},
+                    "customers": {
+                        "5597": {
+                            "id": "5597",
+                            "name": "Kennedy",
+                            "pid": "1",
+                            "slot": "1",
+                            "grid": [],
+                            "remain": -3448,
+                            "reward_multi": {"money": 1.05, "points": 0.97, "stonemason_points": 1.19},
+                        }
+                    },
+                }
+            },
+            "mine": {
+                "data": {
+                    "id": "16",
+                    "level": 1,
+                    "stock": {"sandstone": 1278, "granite": 1159},
+                    "workers": {},
+                    "items": {},
+                    "productions": {},
+                }
+            },
+        },
+    }
+
+    dummy_client.api_call = AsyncMock(return_value=mock_resp)
+
+    ok = await service.assign_customer_to_slot(customer_id="5597", slot=1)
+    assert ok is True
+
+    dummy_client.api_call.assert_awaited_once_with(
+        "farm",
+        {
+            "mode": "stonemason_set_slot",
+            "customerid": "5597",
+            "slot": 1,
+        },
+    )
+
+    # Check updated snapshot
+    assert service.snapshot.stonemason is not None
+    cust = service.snapshot.stonemason.customers.get("5597")
+    assert cust is not None
+    assert cust.slot == "1"
+    assert cust.is_assigned is True
+    assert service.snapshot.mine.stock["sandstone"] == 1278
+
+
+@pytest.mark.asyncio
+async def test_stonemason_chisel_tile(dummy_client: MFFGameClient):
+    """Test chiseling a tile on the sculpture grid (stonemason_click_tile)."""
+    service = CraftingVillageService(client=dummy_client)
+
+    mock_resp = {
+        "status": "ok",
+        "datablock": 1,
+        "updateblock": {
+            "stonemason": {
+                "data": {
+                    "id": "104",
+                    "level": 1,
+                    "tools": {"1": 10},
+                    "customers": {
+                        "5597": {
+                            "id": "5597",
+                            "name": "Kennedy",
+                            "pid": "1",
+                            "slot": "1",
+                            "grid": {
+                                "1": {
+                                    "start": 1794245328,
+                                    "duration": 1800,
+                                    "remain": 1800,
+                                }
+                            },
+                            "remain": -5625,
+                        }
+                    },
+                }
+            }
+        },
+    }
+
+    dummy_client.api_call = AsyncMock(return_value=mock_resp)
+
+    ok = await service.chisel_tile(customer_id="5597", tile=1, tool_id=1)
+    assert ok is True
+
+    dummy_client.api_call.assert_awaited_once_with(
+        "farm",
+        {
+            "mode": "stonemason_click_tile",
+            "customerid": "5597",
+            "tile": 1,
+            "tool": 1,
+        },
+    )
+
+    sm = service.snapshot.stonemason
+    assert sm is not None
+    assert sm.tools["1"] == 10
+    cust = sm.customers["5597"]
+    assert "1" in cust.tiles
+    assert cust.tiles["1"]["remain"] == 1800
+    assert sm.is_working is True
+
+
+@pytest.mark.asyncio
+async def test_stonemason_finish_grid(dummy_client: MFFGameClient):
+    """Test finishing a completed grid (stonemason_finish_grid)."""
+    service = CraftingVillageService(client=dummy_client)
+
+    mock_finish_resp = {
+        "status": "ok",
+        "datablock": {
+            "money": 714,
+            "points": 833,
+            "stonemason_points": 10,
+        },
+        "updateblock": {},
+    }
+
+    async def mock_call(action: str, params: dict[str, Any]):
+        if params.get("mode") == "stonemason_finish_grid":
+            return mock_finish_resp
+        return {"status": "ok", "datablock": {"data": {}, "config": {}}}
+
+    dummy_client.api_call = AsyncMock(side_effect=mock_call)
+
+    reward = await service.finish_grid(slot=1)
+    assert reward is not None
+    assert reward["money"] == 714
+    assert reward["stonemason_points"] == 10
+
+
+@pytest.mark.asyncio
+async def test_stonemason_buy_tool_coin_protection(dummy_client: MFFGameClient):
+    """Test buying stonemason tools with kT and rejecting tools costing coins."""
+    service = CraftingVillageService(client=dummy_client)
+
+    # Initialize stonemason config
+    service.snapshot = CraftingVillageSnapshot(
+        stonemason=StonemasonSnapshot(
+            level=1,
+            tools_config={
+                "1": StonemasonToolConfig(
+                    id="1",
+                    name="Meißel",
+                    money={"100": 1, "200": 2, "500": 10},
+                ),
+                "5": StonemasonToolConfig(
+                    id="5",
+                    name="Riesenmeißel",
+                    coins={"2": 1, "4": 2, "20": 10},
+                ),
+            },
+        )
+    )
+
+    dummy_client.api_call = AsyncMock()
+
+    # Tool 5 costs coins -> must be rejected by coin protection
+    ok_coin = await service.buy_stonemason_tool(tool_id=5, currency_amount=2)
+    assert ok_coin is False
+    assert dummy_client.api_call.call_count == 0
+
+    # Tool 1 costs kT -> allowed
+    mock_buy_resp = {
+        "status": "ok",
+        "datablock": 1,
+        "updateblock": {
+            "stonemason": {
+                "data": {
+                    "id": "104",
+                    "level": 1,
+                    "tools": {"1": 15},
+                }
+            }
+        },
+    }
+    dummy_client.api_call = AsyncMock(return_value=mock_buy_resp)
+
+    ok_kt = await service.buy_stonemason_tool(tool_id=1, currency_amount=500)
+    assert ok_kt is True
+    dummy_client.api_call.assert_awaited_once_with(
+        "farm",
+        {
+            "mode": "stonemason_buy_tool",
+            "tool": 1,
+            "currency": 500,
+        },
+    )
+    assert service.snapshot.stonemason.tools["1"] == 15
+
+
+@pytest.mark.asyncio
+async def test_stonemason_serve_flow(dummy_client: MFFGameClient):
+    """Test serve_stonemason: finishes finished grids, chisels next tile, and assigns customer."""
+    service = CraftingVillageService(client=dummy_client)
+
+    # Setup state:
+    # - Customer 1 on slot 1: PID 1, allowed=[1, 16], grid has both tiles with remain <= 0 -> READY TO FINISH!
+    # - Customer 2 waiting: PID 1, requires sandstone: 3. Mine stock has sandstone: 10 -> CAN BE ASSIGNED!
+    # - Tools: 5 chisels
+    cust1 = StonemasonCustomer(
+        id="101",
+        name="FinishedCustomer",
+        pid="1",
+        slot="1",
+        grid={
+            "1": {"remain": 0},
+            "16": {"remain": 0},
+        },
+    )
+    cust2 = StonemasonCustomer(
+        id="102",
+        name="WaitingCustomer",
+        pid="1",
+        slot="0",
+        reward_multi={"money": 1.2, "stonemason_points": 1.2},
+    )
+
+    service.snapshot = CraftingVillageSnapshot(
+        mine=MineSnapshot(
+            level=1,
+            stock={"sandstone": 10, "granite": 5},
+        ),
+        stonemason=StonemasonSnapshot(
+            level=1,
+            tools={"1": 5},
+            slots_config={"1": StonemasonSlotConfig(level=1)},
+            products_config={
+                "1": StonemasonProductConfig(
+                    id="1",
+                    name="Sandstein-Ziegel",
+                    material={"sandstone": 3},
+                    allowed=[1, 16],
+                )
+            },
+            customers={"101": cust1, "102": cust2},
+        ),
+    )
+
+    called_modes = []
+
+    async def mock_api_call(action: str, params: dict[str, Any]):
+        mode = params.get("mode")
+        called_modes.append(mode)
+        if mode == "stonemason_finish_grid":
+            # Slot 1 is now empty
+            cust1.slot = "0"
+            return {"status": "ok", "datablock": {"money": 500}}
+        if mode == "stonemason_set_slot":
+            cust2.slot = "1"
+            cust2.grid = {}
+            return {"status": "ok", "datablock": 1, "updateblock": {}}
+        if mode == "stonemason_click_tile":
+            cust2.grid["1"] = {"remain": 1800}
+            return {"status": "ok", "datablock": 1, "updateblock": {}}
+        if mode == "mine_init":
+            return {"status": "ok", "datablock": {"data": {"level": 1, "stock": {"sandstone": 10, "granite": 5}}, "config": {}}}
+        if mode == "stonemason_init":
+            return {
+                "status": "ok",
+                "datablock": {
+                    "data": {
+                        "level": 1,
+                        "tools": {"1": 5},
+                        "customers": {
+                            "102": {
+                                "id": "102",
+                                "name": "WaitingCustomer",
+                                "pid": "1",
+                                "slot": cust2.slot,
+                                "grid": cust2.grid,
+                                "reward_multi": {"money": 1.2, "stonemason_points": 1.2},
+                            }
+                        },
+                    },
+                    "config": {
+                        "slots": {"1": {"level": 1}},
+                        "tools": {"1": {"name": "Meißel", "duration": 1800, "money": {"500": 10}}},
+                        "products": {
+                            "1": {
+                                "name": "Sandstein-Ziegel",
+                                "material": {"sandstone": 3},
+                                "allowed": [1, 16],
+                            }
+                        },
+                    },
+                },
+            }
+        return {"status": "ok"}
+
+    dummy_client.api_call = AsyncMock(side_effect=mock_api_call)
+
+    res = await service.serve_stonemason()
+    assert res["status"] == "ok"
+    assert res["finished"] == 1
+    assert res["assigned"] == 1
+    assert res["chiseled"] == 1
+    assert "stonemason_finish_grid" in called_modes
+    assert "stonemason_set_slot" in called_modes
+    assert "stonemason_click_tile" in called_modes

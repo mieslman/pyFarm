@@ -152,7 +152,7 @@ class StonemasonCustomer(BaseModel):
     name: str = "Kunde"
     pid: str = "1"
     slot: str = "0"  # "0" = in queue, "1".."4" = on workbench slot
-    grid: dict[str, Any] | None = None  # tile_id -> {remain: int, ...}
+    grid: dict[str, Any] | list[Any] | None = None  # tile_id -> {remain: int, ...}
     reward_multi: dict[str, float] = Field(default_factory=dict)
     remain: int = 0
     createdate: str = ""
@@ -168,11 +168,18 @@ class StonemasonCustomer(BaseModel):
         """Customer is waiting in the queue."""
         return not self.is_assigned
 
+    @property
+    def tiles(self) -> dict[str, Any]:
+        """Return dictionary mapping of tiles in the grid."""
+        if isinstance(self.grid, dict):
+            return self.grid
+        return {}
+
     def calculate_progress_percent(self, allowed_tiles_count: int) -> float:
         """Calculate chiseling progress percentage."""
-        if not allowed_tiles_count or not self.grid:
+        if not allowed_tiles_count or not self.tiles:
             return 0.0
-        finished_tiles = len([k for k in self.grid if str(k).isdigit()])
+        finished_tiles = len([k for k in self.tiles if str(k).isdigit()])
         return min(100.0, round((finished_tiles * 100.0) / allowed_tiles_count, 1))
 
 
@@ -199,6 +206,28 @@ class StonemasonSnapshot(BaseModel):
     products_config: dict[str, StonemasonProductConfig] = Field(default_factory=dict)
     stats: dict[str, str] = Field(default_factory=dict)
     last_updated: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+
+    @property
+    def is_working(self) -> bool:
+        """Returns True if any tile across any active slot is currently being chiseled (remain > 0)."""
+        for cust in self.customers.values():
+            if cust.is_assigned:
+                for tile_data in cust.tiles.values():
+                    if isinstance(tile_data, dict) and tile_data.get("remain", 0) > 0:
+                        return True
+        return False
+
+    def get_customer_on_slot(self, slot: int | str) -> StonemasonCustomer | None:
+        """Get customer assigned to the given slot number."""
+        slot_str = str(slot)
+        for cust in self.customers.values():
+            if cust.slot == slot_str:
+                return cust
+        return None
+
+    def get_waiting_customers(self) -> list[StonemasonCustomer]:
+        """Get all customers waiting in queue."""
+        return [c for c in self.customers.values() if c.is_waiting]
 
     @property
     def active_slots_count(self) -> int:

@@ -1999,8 +1999,16 @@
                 <input type="checkbox" id="craftingCfgAutoEnergy" class="rounded bg-slate-950 border-slate-700 text-amber-600 focus:ring-0">
               </label>
               <label class="flex items-center justify-between cursor-pointer">
-                <span class="text-slate-300">Werkzeuge nachkaufen</span>
+                <span class="text-slate-300">Werkzeuge nachkaufen (Steinbruch)</span>
                 <input type="checkbox" id="craftingCfgAutoBuyTools" class="rounded bg-slate-950 border-slate-700 text-amber-600 focus:ring-0">
+              </label>
+              <label class="flex items-center justify-between cursor-pointer">
+                <span class="text-slate-300">Steinmetz automatisch bewirtschaften</span>
+                <input type="checkbox" id="craftingCfgAutoStonemason" class="rounded bg-slate-950 border-slate-700 text-amber-600 focus:ring-0">
+              </label>
+              <label class="flex items-center justify-between cursor-pointer">
+                <span class="text-slate-300">Meißel automatisch nachkaufen (kT)</span>
+                <input type="checkbox" id="craftingCfgAutoBuyStonemasonTools" class="rounded bg-slate-950 border-slate-700 text-amber-600 focus:ring-0">
               </label>
               <div class="pt-2 border-t border-slate-800">
                 <label class="block text-slate-400 mb-1">Bevorzugtes Gestein</label>
@@ -4699,6 +4707,8 @@
         if (document.getElementById('craftingCfgAutoMine')) document.getElementById('craftingCfgAutoMine').checked = !!cfg.auto_mine;
         if (document.getElementById('craftingCfgAutoEnergy')) document.getElementById('craftingCfgAutoEnergy').checked = !!cfg.auto_refill_energy;
         if (document.getElementById('craftingCfgAutoBuyTools')) document.getElementById('craftingCfgAutoBuyTools').checked = !!cfg.auto_buy_tools;
+        if (document.getElementById('craftingCfgAutoStonemason')) document.getElementById('craftingCfgAutoStonemason').checked = !!cfg.auto_stonemason;
+        if (document.getElementById('craftingCfgAutoBuyStonemasonTools')) document.getElementById('craftingCfgAutoBuyStonemasonTools').checked = !!cfg.auto_buy_stonemason_tools;
         if (document.getElementById('craftingCfgPreferredMaterial') && cfg.preferred_material) {
           document.getElementById('craftingCfgPreferredMaterial').value = cfg.preferred_material;
         }
@@ -5055,6 +5065,23 @@
 
     
     
+    async function buyStonemasonTools() {
+      try {
+        const res = await fetch('/api/v1/crafting/action/stonemason_buy_tool', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ tool_id: 1, currency_amount: 500 })
+        });
+        if (res.ok) {
+          await loadCraftingVillageData();
+        } else {
+          alert("Fehler beim Kauf von Meißeln.");
+        }
+      } catch (e) {
+        alert("Netzwerkfehler beim Kauf von Meißeln.");
+      }
+    }
+
     async function buyBestTool() {
       try {
         const res = await fetch('/api/v1/crafting/action/buy_tool', {
@@ -5097,6 +5124,8 @@
           auto_mine: document.getElementById('craftingCfgAutoMine').checked,
           auto_refill_energy: document.getElementById('craftingCfgAutoEnergy').checked,
           auto_buy_tools: document.getElementById('craftingCfgAutoBuyTools').checked,
+          auto_stonemason: document.getElementById('craftingCfgAutoStonemason').checked,
+          auto_buy_stonemason_tools: document.getElementById('craftingCfgAutoBuyStonemasonTools').checked,
           preferred_material: document.getElementById('craftingCfgPreferredMaterial').value
         };
 

@@ -246,6 +246,8 @@ class CraftingVillageConfig(BaseModel):
     auto_buy_tools: bool = True
     coin_protection: bool = True
     preferred_material: str = "least_stock"  # least_stock, sandstone, granite
+    auto_stonemason: bool = True
+    auto_buy_stonemason_tools: bool = True
 
 
 class StockConfig(BaseModel):
