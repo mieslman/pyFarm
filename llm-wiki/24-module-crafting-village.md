@@ -117,7 +117,7 @@ Alle Aufrufe erfolgen an das zentrale Skript `ajax/farm.php`:
   - `config.tools`: Meißel-Katalog mit Dimensionen (x, y), Bearbeitungsdauer und Preisen.
   - `config.products`: Skulpturen-Katalog mit benötigtem Gestein (`sandstone`, `granite`), Raster-Dimensionen (x, y) und erlaubten Meißel-Kacheln (`allowed`).
 
-### Steinmetz Aktionen (HAR-02 & HAR-03 verifiziert)
+### Steinmetz Aktionen (HAR-02, HAR-03 & HAR-04 verifiziert)
 - **Kunde zuweisen (`stonemason_set_slot`):**
   - **Endpunkt:** `GET https://s{server}.myfreefarm.de/ajax/farm.php?rid={rid}&customerid={id}&slot={slot_id}&mode=stonemason_set_slot`
   - **Funktion:** Weist einen wartenden Kunden einer freien Werkbank zu. Zieht die benötigten Rohsteine (`sandstone`, `granite`) sofort aus dem Dorflager (`mine.stock`) ab.
@@ -129,9 +129,11 @@ Alle Aufrufe erfolgen an das zentrale Skript `ajax/farm.php`:
 - **Auftrag abschließen (`stonemason_finish_grid`):**
   - **Endpunkt:** `GET https://s{server}.myfreefarm.de/ajax/farm.php?rid={rid}&slot={slot_id}&mode=stonemason_finish_grid`
   - **Funktion:** Schließt eine zu 100% gemeißelte Skulptur (alle Kacheln in `allowed` fertiggestellt) ab. Schüttet Farmpunkte, Spielgeld (kT), Steinmetz-Punkte und ggf. Sterne/Errungenschaften aus.
-- **Meißel nachkaufen (`stonemason_buy_tool`):**
+- **Meißel nachkaufen (`stonemason_buy_tool`, HAR-04 verifiziert):**
   - **Endpunkt:** `GET https://s{server}.myfreefarm.de/ajax/farm.php?rid={rid}&tool={tool_id}&currency={amount}&mode=stonemason_buy_tool`
-  - **Funktion:** Kauft Meißelpakete (z. B. 10 Meißel für 500 kT mit `tool=1&currency=500`). Werkzeuge 1..4 kosten ausschließlich kT (strikter Coin-Schutz).
+  - **Parameter:** `tool=1` (Standard-Meißel), `currency=500` (Paketpreis in kT für 10 Stück).
+  - **Funktion:** Kauft Meißelpakete (z. B. 10 Meißel für 500 kT). Werkzeuge 1..4 kosten ausschließlich kT (strikter Coin-Schutz).
+  - **Response:** `{"datablock": 1, "updateblock": {"stonemason": {"data": {"tools": {"1": 18}, "stats": {"buy_tool1": "20"}}}, "menue": {"bar": "4307652.08"}}}`
 
 ---
 
