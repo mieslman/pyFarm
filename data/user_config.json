@@ -10,8 +10,8 @@
     "auto_crop": true,
     "harvest_mode": "all",
     "farm_crops": {
-      "1": 42,
-      "3": 42,
+      "1": 3,
+      "3": 3,
       "4": 113
     },
     "farm_categories": {
@@ -142,10 +142,10 @@
     "enabled": true,
     "auto_harvest": true,
     "auto_produce": true,
-    "auto_train": false,
+    "auto_train": true,
     "auto_farmi": true,
     "production_strategy": "quest5",
-    "fallback_to_balanced": false,
+    "fallback_to_balanced": true,
     "preferred_pids": [],
     "reserve_full_field": true,
     "coin_protection": true
@@ -308,5 +308,5 @@
   "poll_interval_seconds": 600,
   "anti_detection_min_delay_ms": 350,
   "anti_detection_max_delay_ms": 900,
-  "_last_saved": "2026-11-05T04:30:42.189750+00:00"
+  "_last_saved": "2026-11-09T15:59:13.930854+00:00"
 }
