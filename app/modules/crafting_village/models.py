@@ -182,6 +182,42 @@ class StonemasonCustomer(BaseModel):
         finished_tiles = len([k for k in self.tiles if str(k).isdigit()])
         return min(100.0, round((finished_tiles * 100.0) / allowed_tiles_count, 1))
 
+    def calculate_rewards(
+        self, product: StonemasonProductConfig | None
+    ) -> dict[str, float]:
+        """Calculate expected rewards (money, points, stonemason_points) including customer multipliers."""
+        if not product or not product.reward:
+            return {"money": 0.0, "points": 0.0, "stonemason_points": 0.0}
+
+        multi = self.reward_multi
+        base = product.reward
+        return {
+            "money": round(float(base.get("money", 0)) * float(multi.get("money", 1.0)), 2),
+            "points": round(float(base.get("points", 0)) * float(multi.get("points", 1.0)), 2),
+            "stonemason_points": round(
+                float(base.get("stonemason_points", 0)) * float(multi.get("stonemason_points", 1.0)), 2
+            ),
+        }
+
+    def get_reward_score(
+        self, product: StonemasonProductConfig | None, priority: str = "overall"
+    ) -> float:
+        """Calculate a scalar score representing the value of the customer's reward."""
+        rew = self.calculate_rewards(product)
+        m = rew["money"]
+        p = rew["points"]
+        sm = rew["stonemason_points"]
+
+        if priority == "stonemason_points":
+            return sm * 1000.0 + m * 0.1 + p * 0.01
+        elif priority == "money":
+            return m + sm * 10.0 + p * 0.01
+        elif priority == "points":
+            return p + sm * 100.0 + m * 0.1
+        else:  # "overall"
+            # Balanced: 1 Steinmetz-Punkt is weighted as ~100 kT, points as ~0.1 kT
+            return sm * 100.0 + m + p * 0.1
+
 
 class StonemasonSlotConfig(BaseModel):
     """Configuration for a stonemason workbench slot."""

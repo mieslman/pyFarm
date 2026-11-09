@@ -1045,9 +1045,10 @@ class CraftingVillageService:
             if not waiting_customers:
                 break
 
-            eligible_customers: list[tuple[StonemasonCustomer, float]] = []
+            eligible_customers: list[tuple[StonemasonCustomer, StonemasonProductConfig, float]] = []
             stock_sandstone = mine.stock.get("sandstone", 0) if mine else 0
             stock_granite = mine.stock.get("granite", 0) if mine else 0
+            reward_prio = getattr(settings.crafting_village, "stonemason_reward_priority", "overall")
 
             for wc in waiting_customers:
                 pcfg = sm.products_config.get(wc.pid)
@@ -1057,10 +1058,8 @@ class CraftingVillageService:
                 req_granite = pcfg.material.get("granite", 0)
 
                 if stock_sandstone >= req_sandstone and stock_granite >= req_granite:
-                    pts_multi = wc.reward_multi.get("stonemason_points", 1.0)
-                    money_multi = wc.reward_multi.get("money", 1.0)
-                    score = pts_multi * money_multi
-                    eligible_customers.append((wc, score))
+                    score = wc.get_reward_score(pcfg, priority=reward_prio)
+                    eligible_customers.append((wc, pcfg, score))
 
             if not eligible_customers:
                 logger.debug(
@@ -1068,8 +1067,16 @@ class CraftingVillageService:
                 )
                 continue
 
-            eligible_customers.sort(key=lambda x: x[1], reverse=True)
-            best_customer = eligible_customers[0][0]
+            # Wähle den Kunden mit der besten Belohnung (höchster Score)
+            eligible_customers.sort(key=lambda x: x[2], reverse=True)
+            best_customer, best_pcfg, best_score = eligible_customers[0]
+            rewards = best_customer.calculate_rewards(best_pcfg)
+
+            logger.info(
+                f"CraftingVillage (Steinmetz): Bester Kunde für Slot {slot_id} ist '{best_customer.name}' "
+                f"(ID: {best_customer.id}, Produkt: '{best_pcfg.name}', "
+                f"Belohnung: {rewards['money']:.0f} kT, {rewards['points']:.0f} Farm-Pkt, {rewards['stonemason_points']:.1f} Steinmetz-Pkt, Score: {best_score:.1f})."
+            )
 
             ok = await self.assign_customer_to_slot(
                 customer_id=best_customer.id, slot=slot_id, stock_service=stock_service

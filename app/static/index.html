@@ -2018,6 +2018,15 @@
                   <option value="granite">Nur Granit (Dauer 6h)</option>
                 </select>
               </div>
+              <div class="pt-2 border-t border-slate-800">
+                <label class="block text-slate-400 mb-1">Steinmetz: Kunden-Auswahl</label>
+                <select id="craftingCfgStonemasonRewardPriority" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500">
+                  <option value="overall">Beste Gesamtbelohnung (Gewichtet)</option>
+                  <option value="stonemason_points">Fokus: Steinmetz-Punkte</option>
+                  <option value="money">Fokus: kT (Spielgeld)</option>
+                  <option value="points">Fokus: Farm-Punkte</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -4712,6 +4721,9 @@
         if (document.getElementById('craftingCfgPreferredMaterial') && cfg.preferred_material) {
           document.getElementById('craftingCfgPreferredMaterial').value = cfg.preferred_material;
         }
+        if (document.getElementById('craftingCfgStonemasonRewardPriority') && cfg.stonemason_reward_priority) {
+          document.getElementById('craftingCfgStonemasonRewardPriority').value = cfg.stonemason_reward_priority;
+        }
 
         // 3. Render Mining Slots
         const slotsContainer = document.getElementById('craftingSlotsContainer');
@@ -4994,6 +5006,11 @@
               if (multi.points && multi.points !== 1) multiParts.push(`Pkt x${multi.points}`);
               if (multi.stonemason_points && multi.stonemason_points !== 1) multiParts.push(`⭐ x${multi.stonemason_points}`);
 
+              const baseRew = pcfg.reward || {};
+              const rewMoney = Math.round((baseRew.money || 0) * (multi.money || 1));
+              const rewPoints = Math.round((baseRew.points || 0) * (multi.points || 1));
+              const rewSm = Math.round((baseRew.stonemason_points || 0) * (multi.stonemason_points || 1));
+
               return `
                 <div class="bg-slate-950 p-2.5 rounded border border-slate-800 space-y-1 text-xs">
                   <div class="flex items-center justify-between">
@@ -5002,6 +5019,9 @@
                   </div>
                   <div class="text-[10px] text-slate-400">
                     Bedarf: ${matList || 'Kein Material nötig'}
+                  </div>
+                  <div class="text-[10px] text-emerald-400 font-mono">
+                    Ertrag: ${rewMoney.toLocaleString()} kT | ${rewPoints.toLocaleString()} Pkt | ${rewSm} ⭐
                   </div>
                   ${multiParts.length > 0 ? `<div class="text-[9px] text-slate-500">Multiplikatoren: ${multiParts.join(' | ')}</div>` : ''}
                 </div>
@@ -5126,7 +5146,8 @@
           auto_buy_tools: document.getElementById('craftingCfgAutoBuyTools').checked,
           auto_stonemason: document.getElementById('craftingCfgAutoStonemason').checked,
           auto_buy_stonemason_tools: document.getElementById('craftingCfgAutoBuyStonemasonTools').checked,
-          preferred_material: document.getElementById('craftingCfgPreferredMaterial').value
+          preferred_material: document.getElementById('craftingCfgPreferredMaterial').value,
+          stonemason_reward_priority: document.getElementById('craftingCfgStonemasonRewardPriority').value
         };
 
         const res = await fetch('/api/v1/crafting/settings', {

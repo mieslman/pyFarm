@@ -157,7 +157,11 @@ Alle Aufrufe erfolgen an das zentrale Skript `ajax/farm.php`:
    - **Fertige Skulpturen abholen:** Prüft belegte Werkbänke. Wenn alle Kacheln gemeißelt und deren Dauer abgelaufen ist (`remain <= 0`), wird `stonemason_finish_grid` ausgeführt.
    - **Kacheln schlagen:** Wenn aktuell kein Meißelvorgang aktiv ist (`is_working == False`), wird die nächste freie Kachel aus `allowed` gewählt und mit Meißel (Tool 1) gestartet.
    - **Meißel-Nachkauf:** Wenn der Meißelbestand 0 erreicht und `auto_buy_stonemason_tools` aktiv ist, wird automatisch das 10er-Paket für 500 kT nachgekauft.
-   - **Kunden-Zuweisung:** Freie, freigeschaltete Werkbänke werden mit wartenden Kunden belegt, sofern ausreichend Rohmaterial im Dorflager vorhanden ist. Bei mehreren Kunden wird derjenige mit dem höchsten Belohnungsmultiplikator bevorzugt.
+   - **Kunden-Zuweisung (Beste Belohnung):** Freie, freigeschaltete Werkbänke werden mit wartenden Kunden belegt, sofern ausreichend Rohmaterial im Dorflager vorhanden ist. Das System berechnet die effektive Belohnung jedes Kunden (calculate_rewards: Spielgeld kT, Farm-Punkte und Steinmetz-Punkte inklusive Multiplikatoren) und bewertet sie anhand des gewählten Fokus (stonemason_reward_priority):
+     - overall (Standard / Beste Gesamtbelohnung): Gewichteter Gesamtscore (sm_points * 100 + money + points * 0.1).
+     - stonemason_points: Priorisiert maximalen Steinmetz-Punktegewinn für schnellen Werkstatt-Levelaufstieg.
+     - money: Priorisiert maximalen kT-Ertrag.
+     - points: Priorisiert maximale Farm-Erfahrungspunkte.
 
 ---
 

@@ -1087,3 +1087,83 @@ async def test_stonemason_serve_flow(dummy_client: MFFGameClient):
     assert "stonemason_finish_grid" in called_modes
     assert "stonemason_set_slot" in called_modes
     assert "stonemason_click_tile" in called_modes
+
+
+
+@pytest.mark.asyncio
+async def test_stonemason_select_best_reward_customer(dummy_client: MFFGameClient):
+    """Verify that serve_stonemason selects the customer offering the highest reward."""
+    service = CraftingVillageService(client=dummy_client)
+
+    # 3 customers waiting with different reward multipliers
+    cust_low = StonemasonCustomer(
+        id="201",
+        name="LowRewardCust",
+        pid="1",
+        slot="0",
+        reward_multi={"money": 0.85, "points": 0.90, "stonemason_points": 0.85},
+    )
+    cust_med = StonemasonCustomer(
+        id="202",
+        name="MedRewardCust",
+        pid="1",
+        slot="0",
+        reward_multi={"money": 1.0, "points": 1.0, "stonemason_points": 1.0},
+    )
+    cust_high = StonemasonCustomer(
+        id="203",
+        name="HighRewardCust",
+        pid="1",
+        slot="0",
+        reward_multi={"money": 1.20, "points": 1.15, "stonemason_points": 1.20},
+    )
+
+    pcfg = StonemasonProductConfig(
+        id="1",
+        name="Sandstein-Ziegel",
+        material={"sandstone": 3},
+        allowed=[1, 16],
+        reward={"money": 714, "points": 833, "stonemason_points": 10},
+    )
+
+    # Verify score ranking
+    score_low = cust_low.get_reward_score(pcfg, priority="overall")
+    score_med = cust_med.get_reward_score(pcfg, priority="overall")
+    score_high = cust_high.get_reward_score(pcfg, priority="overall")
+    assert score_high > score_med > score_low
+
+    service.snapshot = CraftingVillageSnapshot(
+        mine=MineSnapshot(
+            level=1,
+            stock={"sandstone": 20, "granite": 10},
+        ),
+        stonemason=StonemasonSnapshot(
+            level=1,
+            tools={"1": 5},
+            slots_config={"1": StonemasonSlotConfig(level=1)},
+            products_config={"1": pcfg},
+            customers={"201": cust_low, "202": cust_med, "203": cust_high},
+        ),
+    )
+
+    assigned_customer_id = None
+
+    async def mock_api_call(action: str, params: dict[str, Any]):
+        nonlocal assigned_customer_id
+        mode = params.get("mode")
+        if mode == "stonemason_set_slot":
+            assigned_customer_id = params.get("customerid")
+            cust_high.slot = "1"
+            cust_high.grid = {}
+            return {"status": "ok", "datablock": 1, "updateblock": {}}
+        if mode == "stonemason_click_tile":
+            return {"status": "ok", "datablock": 1, "updateblock": {}}
+        return {"status": "ok"}
+
+    dummy_client.api_call = AsyncMock(side_effect=mock_api_call)
+
+    res = await service.serve_stonemason()
+    assert res["status"] == "ok"
+    assert res["assigned"] == 1
+    # Customer 203 (HighRewardCust) MUST be selected!
+    assert assigned_customer_id == "203"

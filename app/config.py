@@ -248,6 +248,7 @@ class CraftingVillageConfig(BaseModel):
     preferred_material: str = "least_stock"  # least_stock, sandstone, granite
     auto_stonemason: bool = True
     auto_buy_stonemason_tools: bool = True
+    stonemason_reward_priority: str = "overall"  # overall, stonemason_points, money, points
 
 
 class StockConfig(BaseModel):

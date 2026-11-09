@@ -73,6 +73,10 @@ async def update_crafting_village_settings(
         cfg.auto_stonemason = bool(payload["auto_stonemason"])
     if "auto_buy_stonemason_tools" in payload:
         cfg.auto_buy_stonemason_tools = bool(payload["auto_buy_stonemason_tools"])
+    if "stonemason_reward_priority" in payload:
+        prio = str(payload["stonemason_reward_priority"]).strip().lower()
+        if prio in ("overall", "stonemason_points", "money", "points"):
+            cfg.stonemason_reward_priority = prio
 
     settings_manager.save_settings()
     logger.info(f"Handwerkerdorf-Einstellungen aktualisiert: {cfg.model_dump()}")
