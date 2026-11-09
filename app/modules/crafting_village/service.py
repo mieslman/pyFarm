@@ -15,6 +15,11 @@ from app.modules.crafting_village.models import (
     MineProductionSlot,
     MineShopItemConfig,
     MineSnapshot,
+    StonemasonCustomer,
+    StonemasonProductConfig,
+    StonemasonSlotConfig,
+    StonemasonSnapshot,
+    StonemasonToolConfig,
     Worker,
     WorkerSkill,
 )
@@ -168,30 +173,171 @@ class CraftingVillageService:
             last_updated=datetime.now(UTC).isoformat(),
         )
 
+    def _parse_stonemason_data(
+        self, data: dict[str, Any], config: dict[str, Any]
+    ) -> StonemasonSnapshot:
+        """Hydrate StonemasonSnapshot from raw stonemason datablock/config dictionaries."""
+        # 1. Tools inventory
+        raw_tools = data.get("tools") or {}
+        tools_dict = (
+            {str(k): int(v) for k, v in raw_tools.items()} if isinstance(raw_tools, dict) else {}
+        )
+
+        # 2. Customers
+        customers_map: dict[str, StonemasonCustomer] = {}
+        raw_custs = data.get("customers") or {}
+        if isinstance(raw_custs, dict):
+            for cid, c_info in raw_custs.items():
+                if not isinstance(c_info, dict):
+                    continue
+                raw_grid = c_info.get("grid")
+                raw_multi = c_info.get("reward_multi") or {}
+                multi_dict = (
+                    {str(k): float(v) for k, v in raw_multi.items()}
+                    if isinstance(raw_multi, dict)
+                    else {}
+                )
+                customers_map[str(cid)] = StonemasonCustomer(
+                    id=str(c_info.get("id", cid)),
+                    position=str(c_info.get("position", "1")),
+                    name=str(c_info.get("name", "Kunde")),
+                    pid=str(c_info.get("pid", "1")),
+                    slot=str(c_info.get("slot", "0")),
+                    grid=raw_grid if isinstance(raw_grid, dict) else None,
+                    reward_multi=multi_dict,
+                    remain=int(c_info.get("remain", 0)),
+                    createdate=str(c_info.get("createdate", "")),
+                    finishdate=str(c_info.get("finishdate", "")),
+                )
+
+        # 3. Slots Config
+        slots_cfg_map: dict[str, StonemasonSlotConfig] = {}
+        raw_slots = config.get("slots") or {}
+        if isinstance(raw_slots, dict):
+            for sid, s_info in raw_slots.items():
+                if isinstance(s_info, dict):
+                    slots_cfg_map[str(sid)] = StonemasonSlotConfig(
+                        level=int(s_info.get("level", 1))
+                    )
+
+        # 4. Tools Config
+        tools_cfg_map: dict[str, StonemasonToolConfig] = {}
+        raw_tools_cfg = config.get("tools") or {}
+        if isinstance(raw_tools_cfg, dict):
+            for tid, t_info in raw_tools_cfg.items():
+                if isinstance(t_info, dict):
+                    raw_money = t_info.get("money") or {}
+                    raw_coins = t_info.get("coins") or {}
+                    tools_cfg_map[str(tid)] = StonemasonToolConfig(
+                        id=str(tid),
+                        name=str(t_info.get("name", f"Meißel {tid}")),
+                        x=int(t_info.get("x", 1)),
+                        y=int(t_info.get("y", 1)),
+                        duration=int(t_info.get("duration", 1800)),
+                        money=(
+                            {str(k): int(v) for k, v in raw_money.items()}
+                            if isinstance(raw_money, dict)
+                            else {}
+                        ),
+                        coins=(
+                            {str(k): int(v) for k, v in raw_coins.items()}
+                            if isinstance(raw_coins, dict)
+                            else {}
+                        ),
+                        form=str(t_info.get("form")) if t_info.get("form") else None,
+                    )
+
+        # 5. Products Config
+        prods_cfg_map: dict[str, StonemasonProductConfig] = {}
+        raw_prods_cfg = config.get("products") or {}
+        if isinstance(raw_prods_cfg, dict):
+            for pid, p_info in raw_prods_cfg.items():
+                if isinstance(p_info, dict):
+                    raw_mat = p_info.get("material") or {}
+                    raw_allowed = p_info.get("allowed") or []
+                    raw_reward = p_info.get("reward") or {}
+                    prods_cfg_map[str(pid)] = StonemasonProductConfig(
+                        id=str(pid),
+                        name=str(p_info.get("name", f"Produkt {pid}")),
+                        material=(
+                            {str(k): int(v) for k, v in raw_mat.items()}
+                            if isinstance(raw_mat, dict)
+                            else {}
+                        ),
+                        level=int(p_info.get("level", 1)),
+                        x=int(p_info.get("x", 4)),
+                        y=int(p_info.get("y", 4)),
+                        allowed=[int(x) for x in raw_allowed] if isinstance(raw_allowed, list) else [],
+                        reward=(
+                            {str(k): int(v) for k, v in raw_reward.items()}
+                            if isinstance(raw_reward, dict)
+                            else {}
+                        ),
+                    )
+
+        # 6. Stats
+        raw_stats = data.get("stats") or {}
+        stats_dict = (
+            {str(k): str(v) for k, v in raw_stats.items()} if isinstance(raw_stats, dict) else {}
+        )
+
+        return StonemasonSnapshot(
+            id=str(data.get("id")) if data.get("id") else None,
+            level=int(data.get("level", 1)),
+            points=int(data.get("points", 0)),
+            level_percent=float(data.get("level_percent", 0)),
+            level_rest=int(data.get("level_rest", 100)),
+            count=int(data.get("count", 0)),
+            count_alltime=int(data.get("count_alltime", 0)),
+            tools=tools_dict,
+            customers=customers_map,
+            slots_config=slots_cfg_map,
+            tools_config=tools_cfg_map,
+            products_config=prods_cfg_map,
+            stats=stats_dict,
+            last_updated=datetime.now(UTC).isoformat(),
+        )
+
     async def init_remote(self) -> CraftingVillageSnapshot | None:
-        """Fetch quarry and crafting village state from upstream game server."""
+        """Fetch quarry and stonemason state from upstream game server."""
+        mine_snap = None
+        stonemason_snap = None
+
+        # 1. Fetch Steinbruch (Mine)
         try:
             res = await self.client.api_call("farm", {"mode": "mine_init"})
             datablock = res.get("datablock", {})
-            if not datablock or "data" not in datablock:
-                logger.debug("CraftingVillageService: Keine Handwerkerdorf-/Mine-Daten empfangen.")
-                return None
-
-            data = datablock.get("data", {})
-            config = datablock.get("config", {})
-
-            mine_snap = self._parse_mine_data(data, config)
-            self.snapshot = CraftingVillageSnapshot(
-                mine=mine_snap,
-                stonemason=None,
-                quests=[],
-                last_updated=datetime.now(UTC).isoformat(),
-            )
-            return self.snapshot
-
+            if datablock and "data" in datablock:
+                mine_snap = self._parse_mine_data(
+                    datablock.get("data") or {},
+                    datablock.get("config") or {},
+                )
         except Exception as e:
             logger.error(f"CraftingVillageService: Fehler bei mine_init: {e}")
+
+        # 2. Fetch Steinmetz (Stonemason)
+        try:
+            sm_res = await self.client.api_call("farm", {"mode": "stonemason_init"})
+            sm_datablock = sm_res.get("datablock", {})
+            if sm_datablock and "data" in sm_datablock:
+                stonemason_snap = self._parse_stonemason_data(
+                    sm_datablock.get("data") or {},
+                    sm_datablock.get("config") or {},
+                )
+        except Exception as e:
+            logger.debug(f"CraftingVillageService: Steinmetz noch nicht freigeschaltet oder Fehler: {e}")
+
+        if not mine_snap and not stonemason_snap:
+            logger.debug("CraftingVillageService: Weder Mine- noch Steinmetz-Daten empfangen.")
             return None
+
+        self.snapshot = CraftingVillageSnapshot(
+            mine=mine_snap,
+            stonemason=stonemason_snap,
+            quests=[],
+            last_updated=datetime.now(UTC).isoformat(),
+        )
+        return self.snapshot
 
     async def finish_production(
         self, slot: str | int = 1, position: str | int = 1
@@ -709,23 +855,33 @@ class CraftingVillageService:
 
     def get_summary(self) -> CraftingVillageSummary:
         """Provide a high-level summary for the dashboard and API."""
-        if not self.snapshot or not self.snapshot.mine:
+        if not self.snapshot or (not self.snapshot.mine and not self.snapshot.stonemason):
             return CraftingVillageSummary(active=False)
 
         mine = self.snapshot.mine
-        workers_count = len(mine.workers)
-        working_count = sum(1 for w in mine.workers.values() if w.is_working)
-        active_prod_count = len(mine.productions)
-        ready_prod_count = sum(1 for p in mine.productions.values() if p.is_ready)
+        workers_count = len(mine.workers) if mine else 0
+        working_count = sum(1 for w in mine.workers.values() if w.is_working) if mine else 0
+        active_prod_count = len(mine.productions) if mine else 0
+        ready_prod_count = sum(1 for p in mine.productions.values() if p.is_ready) if mine else 0
+
+        sm = self.snapshot.stonemason
+        sm_level = sm.level if sm else 0
+        sm_points = sm.points if sm else 0
+        sm_customers = sm.waiting_customers_count if sm else 0
+        sm_slots = sm.active_slots_count if sm else 0
 
         return CraftingVillageSummary(
             active=True,
-            mine_level=mine.level,
+            mine_level=mine.level if mine else 1,
             workers_count=workers_count,
             working_workers_count=working_count,
             active_productions_count=active_prod_count,
             ready_productions_count=ready_prod_count,
-            sandstone_stock=mine.stock.get("sandstone", 0),
-            granite_stock=mine.stock.get("granite", 0),
-            last_updated=mine.last_updated,
+            sandstone_stock=mine.stock.get("sandstone", 0) if mine else 0,
+            granite_stock=mine.stock.get("granite", 0) if mine else 0,
+            stonemason_level=sm_level,
+            stonemason_points=sm_points,
+            stonemason_customers_count=sm_customers,
+            stonemason_active_slots_count=sm_slots,
+            last_updated=self.snapshot.last_updated,
         )

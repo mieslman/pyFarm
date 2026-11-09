@@ -97,6 +97,7 @@ Die Spielserver antworten standardmäßig im JSON-Format mit folgender Grundstru
 - `mode=sushibar_init`, `sushibar_crop`, `sushibar_startproduction`, `sushibar_loadtrain`, `sushibar_servefarmi`: Sushibar.
 - `mode=stall_init`, `stall_clear_slot`, `stall_fill_slot`, `stall_get_reward`: Obststand.
 - `mode=mine_init`, `mine_finish_production`, `mine_start_production`, `mine_worker_refill`, `mine_buy_shop_item`: Handwerkerdorf Steinbruch (Status, Ernte, Abbau starten, Energie auffüllen, Werkzeuge im Shop kaufen).
+- `mode=stonemason_init`, `stonemason_set_slot`, `stonemason_click_tile`, `stonemason_finish_grid`, `stonemason_kick_customer`, `stonemason_buy_tool`: Handwerkerdorf Steinmetz (Status, Werkbank-Zuweisung, Kacheln meißeln, Skulptur abschließen, Kunde abweisen, Meißel kaufen).
 - `mode=insecthotel_init`, `insecthotel_set_stockslot`, `insecthotel_collect_checkout`: Insektenhotel.
 - `mode=dogbonus`, `dailydonkey`: Tägliche Tierboni.
 

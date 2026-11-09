@@ -1851,36 +1851,87 @@
             </div>
           </div>
 
-          <!-- Future Buildings Preview (Steinmetz & Quests) -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div class="bg-slate-900/60 border border-slate-800/80 rounded-lg p-4 relative overflow-hidden">
-              <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-lg bg-amber-950/50 border border-amber-800/30 flex items-center justify-center text-amber-400 text-lg">
+          <!-- Steinmetz (Stonemason Workshop) -->
+          <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-2.5 gap-2">
+              <div class="flex items-center space-x-2.5">
+                <div class="w-8 h-8 rounded-lg bg-amber-950/60 border border-amber-800/40 flex items-center justify-center text-amber-400 text-sm">
                   <i class="fa-solid fa-monument"></i>
                 </div>
                 <div>
-                  <h4 class="text-xs font-bold text-slate-300">Steinmetz</h4>
-                  <p class="text-[11px] text-slate-500">Weiterverarbeitung von Werksteinen</p>
+                  <h3 class="text-sm font-bold text-slate-200 flex items-center space-x-2">
+                    <span>Steinmetz-Werkstatt</span>
+                    <span id="stonemasonLevelBadge" class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded font-mono font-semibold">Stufe 1</span>
+                  </h3>
+                  <p class="text-[11px] text-slate-400">Veredelung von Natursteinen & Bearbeitung von Kundenaufträgen</p>
                 </div>
               </div>
-              <div class="mt-3 flex items-center text-[10px] text-amber-500/80 font-semibold uppercase tracking-wider bg-amber-950/30 px-2 py-1 rounded border border-amber-900/40 w-fit">
-                <i class="fa-solid fa-lock mr-1.5"></i> Demnächst freigeschaltet
+              <div class="flex items-center space-x-2 text-xs">
+                <span title="Steinmetz-Punkte" class="bg-slate-950 px-2.5 py-1 rounded border border-slate-800 text-slate-300 font-mono flex items-center space-x-1.5">
+                  <span class="text-amber-400">⭐</span>
+                  <span id="stonemasonPointsBadge">0 Pkt</span>
+                </span>
+                <span title="Verfügbare Meißel" class="bg-slate-950 px-2.5 py-1 rounded border border-slate-800 text-slate-300 font-mono flex items-center space-x-1.5">
+                  <span class="text-amber-400">🔨</span>
+                  <span id="stonemasonToolsBadge">0 Meißel</span>
+                </span>
               </div>
             </div>
 
-            <div class="bg-slate-900/60 border border-slate-800/80 rounded-lg p-4 relative overflow-hidden">
-              <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-lg bg-emerald-950/50 border border-emerald-800/30 flex items-center justify-center text-emerald-400 text-lg">
-                  <i class="fa-solid fa-scroll"></i>
+            <!-- Level Progress Bar -->
+            <div class="space-y-1">
+              <div class="flex justify-between text-[11px] font-mono text-slate-400">
+                <span>Stufenfortschritt: <span id="stonemasonLevelPercent">0%</span></span>
+                <span>Noch <span id="stonemasonLevelRest">100</span> Pkt bis Stufe <span id="stonemasonNextLevel">2</span></span>
+              </div>
+              <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+                <div id="stonemasonProgressBar" class="bg-amber-500 h-full transition-all" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <!-- Werkbänke & Kunden in 2 Spalten -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              <!-- Werkbänke (Slots 1..4) -->
+              <div class="space-y-2">
+                <div class="flex items-center justify-between text-xs font-bold text-slate-300 border-b border-slate-800/80 pb-1">
+                  <span>Werkbänke (Slots)</span>
+                  <span id="stonemasonSlotsBadge" class="text-[10px] text-slate-400">0 aktiv</span>
                 </div>
-                <div>
-                  <h4 class="text-xs font-bold text-slate-300">Dorf-Questreihe</h4>
-                  <p class="text-[11px] text-slate-500">Handwerker-Aufträge & Belohnungen</p>
+                <div id="stonemasonSlotsContainer" class="space-y-2">
+                  <div class="p-3 text-center text-slate-500 text-xs bg-slate-950/60 rounded border border-slate-800">
+                    Lade Werkbänke...
+                  </div>
                 </div>
               </div>
-              <div class="mt-3 flex items-center text-[10px] text-emerald-500/80 font-semibold tracking-wider bg-emerald-950/30 px-2 py-1 rounded border border-emerald-900/40 w-fit">
-                <i class="fa-solid fa-info-circle mr-1.5"></i> Vorbereitung in Arbeit
+
+              <!-- Kundenschlange (Customers 1..4) -->
+              <div class="space-y-2">
+                <div class="flex items-center justify-between text-xs font-bold text-slate-300 border-b border-slate-800/80 pb-1">
+                  <span>Wartende Kunden</span>
+                  <span id="stonemasonCustomersBadge" class="text-[10px] text-slate-400">0 wartend</span>
+                </div>
+                <div id="stonemasonCustomersContainer" class="space-y-2">
+                  <div class="p-3 text-center text-slate-500 text-xs bg-slate-950/60 rounded border border-slate-800">
+                    Lade Kundenschlange...
+                  </div>
+                </div>
               </div>
+            </div>
+          </div>
+
+          <!-- Dorf-Questreihe Preview -->
+          <div class="bg-slate-900/60 border border-slate-800/80 rounded-lg p-3.5 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <div class="w-8 h-8 rounded-lg bg-emerald-950/50 border border-emerald-800/30 flex items-center justify-center text-emerald-400 text-base">
+                <i class="fa-solid fa-scroll"></i>
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-slate-300">Dorf-Questreihe</h4>
+                <p class="text-[11px] text-slate-500">Handwerker-Aufträge & Belohnungen</p>
+              </div>
+            </div>
+            <div class="flex items-center text-[10px] text-emerald-500/80 font-semibold tracking-wider bg-emerald-950/30 px-2 py-1 rounded border border-emerald-900/40">
+              <i class="fa-solid fa-info-circle mr-1.5"></i> Vorbereitung in Arbeit
             </div>
           </div>
         </div>
@@ -4802,6 +4853,147 @@
                   <div class="flex flex-wrap gap-1 pt-1">
                     ${skillsHtml || '<span class="text-[10px] text-slate-500">Keine Fertigkeiten</span>'}
                   </div>
+                </div>
+              `;
+            }).join('');
+          }
+        }
+
+        // 6. Render Stonemason
+        const sm = snap.stonemason || {};
+        const smLevel = sm.level || 1;
+        const smPoints = sm.points !== undefined ? sm.points : 0;
+        const smPercent = sm.level_percent !== undefined ? sm.level_percent : 0;
+        const smRest = sm.level_rest !== undefined ? sm.level_rest : 100;
+        const smTools = sm.tools || {};
+        const meisselCount = smTools['1'] || 0;
+
+        if (document.getElementById('stonemasonLevelBadge')) {
+          document.getElementById('stonemasonLevelBadge').textContent = `Stufe ${smLevel}`;
+        }
+        if (document.getElementById('stonemasonPointsBadge')) {
+          document.getElementById('stonemasonPointsBadge').textContent = `${smPoints} Pkt`;
+        }
+        if (document.getElementById('stonemasonToolsBadge')) {
+          document.getElementById('stonemasonToolsBadge').textContent = `${meisselCount} Meißel`;
+        }
+        if (document.getElementById('stonemasonLevelPercent')) {
+          document.getElementById('stonemasonLevelPercent').textContent = `${smPercent}%`;
+        }
+        if (document.getElementById('stonemasonLevelRest')) {
+          document.getElementById('stonemasonLevelRest').textContent = smRest;
+        }
+        if (document.getElementById('stonemasonNextLevel')) {
+          document.getElementById('stonemasonNextLevel').textContent = smLevel + 1;
+        }
+        if (document.getElementById('stonemasonProgressBar')) {
+          document.getElementById('stonemasonProgressBar').style.width = `${smPercent}%`;
+        }
+
+        // Render Slots
+        const smSlotsContainer = document.getElementById('stonemasonSlotsContainer');
+        const smSlotsConfig = sm.slots_config || { '1': { level: 1 }, '2': { level: 5 }, '3': { level: 10 }, '4': { level: 15 } };
+        const smCustomers = sm.customers ? Object.values(sm.customers) : [];
+        const activeCustsOnSlots = smCustomers.filter(c => c.slot && String(c.slot) !== '0');
+
+        if (document.getElementById('stonemasonSlotsBadge')) {
+          document.getElementById('stonemasonSlotsBadge').textContent = `${activeCustsOnSlots.length} aktiv`;
+        }
+
+        if (smSlotsContainer) {
+          const slotIds = Object.keys(smSlotsConfig).sort((a,b) => Number(a) - Number(b));
+          smSlotsContainer.innerHTML = slotIds.map(sid => {
+            const scfg = smSlotsConfig[sid] || { level: 1 };
+            const isUnlocked = smLevel >= scfg.level;
+            const assignedCust = activeCustsOnSlots.find(c => String(c.slot) === String(sid));
+
+            if (!isUnlocked) {
+              return `
+                <div class="bg-slate-950/40 p-2.5 rounded border border-dashed border-slate-800/60 flex items-center justify-between text-xs text-slate-500">
+                  <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-lock text-slate-600 text-[11px]"></i>
+                    <span>Werkbank ${sid}</span>
+                  </div>
+                  <span class="text-[10px] text-slate-600">Freischaltung ab Stufe ${scfg.level}</span>
+                </div>
+              `;
+            }
+
+            if (assignedCust) {
+              const pid = assignedCust.pid || '1';
+              const pcfg = (sm.products_config && sm.products_config[pid]) || { name: `Produkt ${pid}`, allowed: [] };
+              const allowedCount = (pcfg.allowed || []).length;
+              const gridTiles = assignedCust.grid ? Object.keys(assignedCust.grid).filter(k => !isNaN(k)).length : 0;
+              const progressPct = allowedCount > 0 ? Math.min(100, Math.round((gridTiles * 100) / allowedCount)) : 0;
+
+              return `
+                <div class="bg-slate-950 p-2.5 rounded border border-slate-800 space-y-1.5">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="font-bold text-slate-200">Werkbank ${sid}: ${assignedCust.name}</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                      ${pcfg.name}
+                    </span>
+                  </div>
+                  <div class="space-y-1">
+                    <div class="flex justify-between text-[10px] font-mono text-slate-400">
+                      <span>Fortschritt: ${gridTiles}/${allowedCount} Kacheln</span>
+                      <span>${progressPct}%</span>
+                    </div>
+                    <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                      <div class="bg-amber-500 h-full transition-all" style="width: ${progressPct}%"></div>
+                    </div>
+                  </div>
+                </div>
+              `;
+            } else {
+              return `
+                <div class="bg-slate-950/60 p-2.5 rounded border border-slate-800 flex items-center justify-between text-xs">
+                  <span class="font-medium text-slate-400">Werkbank ${sid}</span>
+                  <span class="text-[10px] text-emerald-400 bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-900/40">Bereit</span>
+                </div>
+              `;
+            }
+          }).join('');
+        }
+
+        // Render Customers
+        const smCustContainer = document.getElementById('stonemasonCustomersContainer');
+        const waitingCusts = smCustomers.filter(c => !c.slot || String(c.slot) === '0');
+        if (document.getElementById('stonemasonCustomersBadge')) {
+          document.getElementById('stonemasonCustomersBadge').textContent = `${waitingCusts.length} wartend`;
+        }
+
+        if (smCustContainer) {
+          if (waitingCusts.length === 0) {
+            smCustContainer.innerHTML = '<div class="text-center text-slate-500 text-xs py-2 bg-slate-950/60 rounded border border-slate-800">Keine Kunden in der Warteschlange.</div>';
+          } else {
+            smCustContainer.innerHTML = waitingCusts.map(c => {
+              const pid = c.pid || '1';
+              const pcfg = (sm.products_config && sm.products_config[pid]) || { name: `Produkt ${pid}`, material: {} };
+              const matList = Object.entries(pcfg.material || {}).map(([mName, amount]) => {
+                const stockAmt = (mine.stock && mine.stock[mName] !== undefined) ? mine.stock[mName] : 0;
+                const hasEnough = stockAmt >= amount;
+                const label = mName === 'sandstone' ? 'Sandstein' : (mName === 'granite' ? 'Granit' : mName);
+                const color = hasEnough ? 'text-emerald-400' : 'text-rose-400';
+                return `<span class="${color}">${amount}x ${label} (${stockAmt} vorh.)</span>`;
+              }).join(', ');
+
+              const multi = c.reward_multi || {};
+              const multiParts = [];
+              if (multi.money && multi.money !== 1) multiParts.push(`kT x${multi.money}`);
+              if (multi.points && multi.points !== 1) multiParts.push(`Pkt x${multi.points}`);
+              if (multi.stonemason_points && multi.stonemason_points !== 1) multiParts.push(`⭐ x${multi.stonemason_points}`);
+
+              return `
+                <div class="bg-slate-950 p-2.5 rounded border border-slate-800 space-y-1 text-xs">
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold text-slate-200">${c.name} (Pos. ${c.position})</span>
+                    <span class="text-[10px] text-amber-400 font-medium">${pcfg.name}</span>
+                  </div>
+                  <div class="text-[10px] text-slate-400">
+                    Bedarf: ${matList || 'Kein Material nötig'}
+                  </div>
+                  ${multiParts.length > 0 ? `<div class="text-[9px] text-slate-500">Multiplikatoren: ${multiParts.join(' | ')}</div>` : ''}
                 </div>
               `;
             }).join('');

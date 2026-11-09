@@ -28,6 +28,17 @@ Das Handwerkerdorf ist ein Wirtschafts- und Verarbeitungsbereich in MyFreeFarm. 
   - Im Einsatz befindliche Ausrüstung ist an den Produktionsslot gebunden (`stock: 0`), freie Ausrüstung liegt im Inventar (`stock: 1`).
   - Abgenutzte Werkzeuge müssen im Steinbruch-Shop nachgekauft werden.
 
+### Steinmetz (Stonemason Workshop)
+- **Werkstatt & Werkbänke:** Der Steinmetz veredelt die im Steinbruch gewonnenen Natursteine zu Werksteinen, Skulpturen und Ziegeln für Kunden.
+- **Slots / Werkbänke:** Werkbank-Slots 1 bis 4 (Slot 1 ab Stufe 1, Slot 2 ab Stufe 5, Slot 3 ab Stufe 10, Slot 4 ab Stufe 15 freigeschaltet).
+- **Kundenaufträge (Customers):** Bis zu 4 Kunden warten mit konkreten Wünschen (z. B. Sandstein-Ziegel, Granitziegel, Ziegelmauerstein).
+- **Materialbedarf:** Kundenaufträge verbrauchen Natursteine direkt aus dem Dorflager (`mine.stock`, z. B. 3x Sandstein).
+- **Meißel & Kachel-Raster:** Das Werkstück besitzt ein Raster (z. B. 4x4 Kacheln). Durch Meißel-Werkzeuge werden erlaubte Kacheln (`allowed`) schrittweise abgetragen.
+- **Werkzeug-Katalog:**
+  - Meißel 1..4 kosten Spielgeld (kT), z. B. Meißel (1x1), Langer Meißel (2x1), Dünner Meißel (1x2), Großer Meißel (2x2).
+  - Meißel 5..7 (Riesenmeißel 3x3, Kreuzmeißel, Rundmeißel) kosten Coins.
+- **Belohnungen & Punkte:** Fertiggestellte Kundenaufträge liefern Farm-Punkte, Spielgeld (kT), Steinmetz-Punkte sowie Multiplikatoren (`reward_multi`).
+
 ---
 
 ## 2. Externe Spielserver-Schnittstelle
@@ -93,6 +104,26 @@ Alle Aufrufe erfolgen an das zentrale Skript `ajax/farm.php`:
   - `updateblock.mine`: Enthält das neue Werkzeug mit voller Haltbarkeit (`durability: 20`, `stock: 1`).
   - `updateblock.menue.bar`: Aktualisierter Kontostand in kT.
 
+### Steinmetz Initialisierung (`stonemason_init`)
+- **Endpunkt:** `GET https://s{server}.myfreefarm.de/ajax/farm.php?rid={rid}&mode=stonemason_init`
+- **Response (`datablock`):**
+  - `data.level`: Stufe der Steinmetz-Werkstatt.
+  - `data.points`: Aktuelle Steinmetz-Punkte.
+  - `data.level_percent`: Fortschritt zur nächsten Stufe in Prozent.
+  - `data.level_rest`: Verbleibende Punkte bis zum nächsten Stufenaufstieg.
+  - `data.tools`: Mapping von Werkzeug-ID auf die Stückzahl im Inventar (z. B. `{"1": 11}`).
+  - `data.customers`: Wartende und zugewiesene Kunden mit Position (1..4), Produktwunsch (`pid`), Werkbank-Slot (`slot`), Belohnungsmultiplikatoren (`reward_multi`) und Kachel-Raster (`grid`).
+  - `config.slots`: Slot-Freischaltlevel (Slot 1: Stufe 1, Slot 2: Stufe 5, Slot 3: Stufe 10, Slot 4: Stufe 15).
+  - `config.tools`: Meißel-Katalog mit Dimensionen (x, y), Bearbeitungsdauer und Preisen.
+  - `config.products`: Skulpturen-Katalog mit benötigtem Gestein (`sandstone`, `granite`), Raster-Dimensionen (x, y) und erlaubten Meißel-Kacheln (`allowed`).
+
+### Steinmetz Aktionen
+- **Kunde zuweisen (`stonemason_set_slot`):** `{customerid: id, slot: slot_id}` weist einen wartenden Kunden einer freien Werkbank zu.
+- **Kachel bearbeiten (`stonemason_click_tile`):** `{customerid: id, tile: tile_id, tool: tool_id}` startet das Abtragen einer Kachel.
+- **Auftrag abschließen (`stonemason_finish_grid`):** `{slot: slot_id}` schließt die fertige Skulptur ab und schüttet Belohnungen aus.
+- **Kunde wegschicken (`stonemason_kick_customer`):** `{id: customer_id}` weist einen unrentablen Kunden ab.
+- **Meißel nachkaufen (`stonemason_buy_tool`):** `{tool: tool_id, currency: "money"}` kauft Meißel für Spielgeld.
+
 ---
 
 ## 3. Automationsstrategien (`CraftingVillageService.serve`)
@@ -122,7 +153,12 @@ Alle Aufrufe erfolgen an das zentrale Skript `ajax/farm.php`:
 - `MineItem`: ID, Typ, Haltbarkeit, Status (`is_available`, `is_in_use`).
 - `MineProductionSlot`: Slot-Nummer, Gestein, Ertrag, Dauer, Restzeit (`remain`, `is_ready`).
 - `MineSnapshot`: Vollständiger Runtime-Zustand des Steinbruchs.
-- `CraftingVillageSnapshot`: Übergreifender Zustand inkl. Steinmetz- und Quest-Platzhalter.
+- `StonemasonToolConfig`: Meißel-Typ, Dimensionen (x, y), Bearbeitungsdauer, Kosten.
+- `StonemasonProductConfig`: Skulpturen-Katalog, Materialbedarf, Raster, erlaubte Kacheln.
+- `StonemasonCustomer`: Kunde in Warteschlange oder auf Werkbank mit Produktwunsch, Multiplikatoren und Kachelfortschritt.
+- `StonemasonSlotConfig`: Werkbank-Konfiguration mit Freischaltstufe.
+- `StonemasonSnapshot`: Vollständiger Runtime-Zustand des Steinmetzes (Stufe, Punkte, Werkzeuge, Kunden, Slots).
+- `CraftingVillageSnapshot`: Übergreifender Zustand inkl. Steinbruch, Steinmetz und Dorf-Quests.
 - `CraftingVillageSummary`: Kompakte Metriken für API und UI-Dashboard.
 
 ---
@@ -145,4 +181,9 @@ Im Web-Dashboard (`app/static/index.html`):
 - Dynamische Slot-Anzeige mit visuellem Fortschrittsbalken und Restzeit-Countdown.
 - Arbeiter-Übersicht mit interaktivem Energiebalken und Fähigkeitsleveln.
 - Werkzeug-Inventarliste mit Farbcodierung für die Rest-Haltbarkeit.
+- **Steinmetz-Werkstatt-Bereich:**
+  - Statuskarte mit Werkstatt-Stufe, Steinmetz-Punkten und Meißel-Bestand.
+  - Interaktiver Stufen-Fortschrittsbalken mit Anzeige der benötigten Punkte bis zum nächsten Aufstieg.
+  - Werkbänke (Slots 1..4): Anzeige von Belegung, geschnitztem Produkt, Kachelfortschritt und Status.
+  - Wartende Kunden: Kundenliste mit gewünschtem Produkt, Material-Verfügbarkeitsprüfung (grün/rot) und Multiplikatoren.
 - Strategie-Auswahl: *Abwechselnd (geringster Lagerbestand)*, *Nur Sandstein*, *Nur Granit*.

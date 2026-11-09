@@ -108,11 +108,114 @@ class MineSnapshot(BaseModel):
     last_updated: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
+# =====================================================================
+# Steinmetz (Stonemason) Models
+# =====================================================================
+
+
+class StonemasonToolConfig(BaseModel):
+    """Tool catalogue item for stonemason carving (Meißel etc.)."""
+
+    id: str
+    name: str = "Meißel"
+    x: int = 1
+    y: int = 1
+    duration: int = 1800
+    money: dict[str, int] = Field(default_factory=dict)
+    coins: dict[str, int] = Field(default_factory=dict)
+    form: str | None = None
+
+    @property
+    def costs_coins(self) -> bool:
+        """Returns True if the tool requires coins to buy."""
+        return bool(self.coins)
+
+
+class StonemasonProductConfig(BaseModel):
+    """Recipe / sculpture pattern produced by the stonemason."""
+
+    id: str
+    name: str
+    material: dict[str, int] = Field(default_factory=dict)
+    level: int = 1
+    x: int = 4
+    y: int = 4
+    allowed: list[int] = Field(default_factory=list)
+    reward: dict[str, int] = Field(default_factory=dict)
+
+
+class StonemasonCustomer(BaseModel):
+    """Customer visiting the stonemason with a sculpture request."""
+
+    id: str
+    position: str = "1"
+    name: str = "Kunde"
+    pid: str = "1"
+    slot: str = "0"  # "0" = in queue, "1".."4" = on workbench slot
+    grid: dict[str, Any] | None = None  # tile_id -> {remain: int, ...}
+    reward_multi: dict[str, float] = Field(default_factory=dict)
+    remain: int = 0
+    createdate: str = ""
+    finishdate: str = ""
+
+    @property
+    def is_assigned(self) -> bool:
+        """Customer is assigned to a workbench slot."""
+        return self.slot not in ("0", 0, None)
+
+    @property
+    def is_waiting(self) -> bool:
+        """Customer is waiting in the queue."""
+        return not self.is_assigned
+
+    def calculate_progress_percent(self, allowed_tiles_count: int) -> float:
+        """Calculate chiseling progress percentage."""
+        if not allowed_tiles_count or not self.grid:
+            return 0.0
+        finished_tiles = len([k for k in self.grid if str(k).isdigit()])
+        return min(100.0, round((finished_tiles * 100.0) / allowed_tiles_count, 1))
+
+
+class StonemasonSlotConfig(BaseModel):
+    """Configuration for a stonemason workbench slot."""
+
+    level: int = 1
+
+
+class StonemasonSnapshot(BaseModel):
+    """Complete runtime state of the Steinmetz (Stonemason)."""
+
+    id: str | None = None
+    level: int = 1
+    points: int = 0
+    level_percent: float = 0.0
+    level_rest: int = 100
+    count: int = 0
+    count_alltime: int = 0
+    tools: dict[str, int] = Field(default_factory=dict)  # tool_id -> quantity
+    customers: dict[str, StonemasonCustomer] = Field(default_factory=dict)
+    slots_config: dict[str, StonemasonSlotConfig] = Field(default_factory=dict)
+    tools_config: dict[str, StonemasonToolConfig] = Field(default_factory=dict)
+    products_config: dict[str, StonemasonProductConfig] = Field(default_factory=dict)
+    stats: dict[str, str] = Field(default_factory=dict)
+    last_updated: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+
+    @property
+    def active_slots_count(self) -> int:
+        """Number of customers currently assigned to a slot."""
+        return sum(1 for c in self.customers.values() if c.is_assigned)
+
+    @property
+    def waiting_customers_count(self) -> int:
+        """Number of customers waiting in line."""
+        return sum(1 for c in self.customers.values() if c.is_waiting)
+
+
 class CraftingVillageSnapshot(BaseModel):
-    """Overall state of the Handwerkerdorf (Mine, upcoming Stonemason, Quests)."""
+    """Overall state of the Handwerkerdorf (Mine, Stonemason, Quests)."""
 
     mine: MineSnapshot | None = None
-    stonemason: dict[str, Any] | None = None  # Placeholder for future Stonemason (Steinmetz)
+    stonemason: StonemasonSnapshot | None = None
     quests: list[dict[str, Any]] = Field(default_factory=list)
     last_updated: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
@@ -128,4 +231,8 @@ class CraftingVillageSummary(BaseModel):
     ready_productions_count: int = 0
     sandstone_stock: int = 0
     granite_stock: int = 0
+    stonemason_level: int = 0
+    stonemason_points: int = 0
+    stonemason_customers_count: int = 0
+    stonemason_active_slots_count: int = 0
     last_updated: str | None = None
