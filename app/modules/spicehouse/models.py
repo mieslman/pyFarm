@@ -63,6 +63,12 @@ class SpicehouseConfig(BaseModel):
     min_crop_reserve: int = Field(
         default=500, description="Sicherheitsreserve auf Farm 10 für Acker-Gewürze"
     )
+    min_dried_reserve: int = Field(
+        default=500, description="Mindestreserve auf Farm 10 für getrocknete Gewürze"
+    )
+    min_ground_reserve: int = Field(
+        default=500, description="Mindestreserve auf Farm 10 für gemahlene Gewürze"
+    )
 
 
 class OvenSlotInfo(BaseModel):
@@ -138,10 +144,13 @@ class SpiceCustomer(BaseModel):
     reward_money: float = 0.0
     reward_spicehouse_points: int = 0
 
-    def is_satisfied(self, stock: dict[int, int]) -> bool:
-        """Check if all demanded spice amounts are available in the given stock dictionary."""
+    def is_satisfied(
+        self, stock: dict[int, int], reserves: dict[int, int] | None = None
+    ) -> bool:
+        """Check if all demanded spice amounts are available in the given stock dictionary above reserves."""
         for pid, amt in self.data.items():
-            if stock.get(pid, 0) < amt:
+            reserve = reserves.get(pid, 0) if reserves else 0
+            if (stock.get(pid, 0) - reserve) < amt:
                 return False
         return True
 

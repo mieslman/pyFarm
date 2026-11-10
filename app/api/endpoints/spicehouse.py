@@ -49,6 +49,16 @@ async def update_spicehouse_settings(
             cfg.min_crop_reserve = int(payload["min_crop_reserve"])
         except (ValueError, TypeError):
             pass
+    if "min_dried_reserve" in payload:
+        try:
+            cfg.min_dried_reserve = int(payload["min_dried_reserve"])
+        except (ValueError, TypeError):
+            pass
+    if "min_ground_reserve" in payload:
+        try:
+            cfg.min_ground_reserve = int(payload["min_ground_reserve"])
+        except (ValueError, TypeError):
+            pass
 
     # Propagate to active service instance
     if worker_scheduler.last_spicehouse_service:
@@ -57,6 +67,8 @@ async def update_spicehouse_settings(
         worker_scheduler.last_spicehouse_service.config.auto_mill = cfg.auto_mill
         worker_scheduler.last_spicehouse_service.config.auto_customer = cfg.auto_customer
         worker_scheduler.last_spicehouse_service.config.min_crop_reserve = cfg.min_crop_reserve
+        worker_scheduler.last_spicehouse_service.config.min_dried_reserve = cfg.min_dried_reserve
+        worker_scheduler.last_spicehouse_service.config.min_ground_reserve = cfg.min_ground_reserve
 
     settings_manager.save()
     logger.info(f"Gewürzhaus: Konfiguration aktualisiert: {cfg.model_dump()}")

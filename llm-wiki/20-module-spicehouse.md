@@ -1,10 +1,10 @@
 ---
-title: Gewürzhaus-Modul (Farm 10, Veredelung & Kunden)
+title: Gewürzhaus-Modul (Farm 10, Veredelung, Mindestreserven & Kunden)
 author: System
-date: 2026-09-20
+date: 2026-11-10
 type: module
-description: Vollständige Spezifikation und Dokumentation des Gewürzhauses auf Farm 10 (Position 2) mit Trockenofen (Bleche 1-4), kontinuierlichen Gewürzmühlen (Slots 1-4), Kunden-System, Gewürzstreuer-Währung, PIDs 1100-1126 und Upstream-API.
-tags: [module, spicehouse, farm10, spice, oven, mill, customers, spices]
+description: Vollständige Spezifikation und Dokumentation des Gewürzhauses auf Farm 10 (Position 2) mit Trockenofen (Bleche 1-4), kontinuierlichen Gewürzmühlen (Slots 1-4), Kunden-System, Mindestreserven (Roh, Getrocknet, Gemahlen je 500), Gewürzstreuer-Währung, PIDs 1100-1126 und Upstream-API.
+tags: [module, spicehouse, farm10, spice, oven, mill, customers, spices, reserves]
 ---
 # Gewürzhaus-Modul (Farm 10, Position 2)
 
@@ -154,5 +154,34 @@ Das Gewürzhaus kommuniziert ausschließlich über `farm.php` mit dem Spielserve
 ## 7. Logistische Regeln (Farm 10)
 
 1. **Kein Rücktransport von Rohgewürzen:** Rohgewürze (`spice`) werden auf Farm 10 angebaut und verbleiben dort als Vorrat für den Trockenofen. Sie dürfen nicht als Ernteüberschuss an die Hauptfarm gesendet werden.
-2. **Transport von gemahlenen Gewürzen:** Gemahlene Gewürze (`spiceground`) sind die transportfähigen Endprodukte für Hauptquests (Reihe 6) und Marktverkäufe. Der Fahrzeugtransporter (Route 5) transportiert gemahlene Produkte nach Farm 1.
+2. **Transport von gemahlenen Gewürzen:** Gemahlene Gewürze (`spiceground`) sind die transportfähigen Endprodukte für Hauptquests (Reihe 6) und Marktverkäufe. Der Fahrzeugtransporter (Route 5) transportiert gemahlene Produkte nach Farm 1, behält dabei jedoch die Mindestreserve (`min_ground_reserve = 500`) auf Farm 10 ein.
 3. **Zulieferung von Grundgewürzen:** Chili (113), Salbei (701) und Kümmel (703) müssen bei Bedarf von Farm 1 nach Farm 10 transportiert werden.
+
+---
+
+## 8. Dreistufige Mindestreserven & Bestandschutz
+
+Um zu verhindern, dass die Veredelungskette trockenläuft oder Quests/Farmis die Lagerbestände komplett aufbrauchen, sind für alle drei Produktstufen im Gewürzhaus konfigurierbare Mindestreserven implementiert:
+
+| Stufe | Kategorie / PIDs | Konfigurationsschlüssel | Default | Wirkung & Schutzmechanismus |
+| :--- | :--- | :--- | :--- | :--- |
+| **Rohgewürze** | `spice`<br>(1100..1106, 113, 701, 703) | `min_crop_reserve` | `500` | • **Ofen:** Bleche werden nur mit Beständen belegt, die `> 500` Einheiten liegen.<br>• **Farmis:** Aufträge werden abgelehnt, wenn `Bestand - 500 < Anforderung`.<br>• **Fahrzeug:** Farm-10-Bestand wird bis 500 geschützt. |
+| **Getrocknet** | `spicedried`<br>(1107..1116) | `min_dried_reserve` | `500` | • **Mühlen:** Es werden nur Einheiten oberhalb der Reserve von 500 gemahlen (`surplus = max(0, avail - min_dried_reserve)`).<br>• **Solver:** Wenn `getrocknet <= 500`, plant der Solver prioritär das Trocknen von Rohgewürzen im Ofen ein.<br>• **Farmis:** Aufträge werden abgelehnt, falls `Bestand - 500 < Anforderung`. |
+| **Gemahlen** | `spiceground`<br>(1117..1126) | `min_ground_reserve` | `500` | • **Farmis:** Aufträge werden abgelehnt, falls `Bestand - 500 < Anforderung`.<br>• **Fahrzeug:** Route 5 nach Farm 1 transportiert ausschließlich den Überschuss oberhalb von 500 Einheiten ab. |
+
+### Konfiguration & REST-API
+* Die Reserven sind in `user_config.json` unter dem Knoten `"spicehouse"` hinterlegt:
+  ```json
+  "spicehouse": {
+    "enabled": true,
+    "auto_oven": true,
+    "auto_mill": true,
+    "auto_customer": true,
+    "min_crop_reserve": 500,
+    "min_dried_reserve": 500,
+    "min_ground_reserve": 500
+  }
+  ```
+* Anpassbar über das Dashboard UI (Settings-Card Gewürzhaus) sowie die REST-API:
+  * `GET /api/v1/spicehouse/settings`
+  * `PUT /api/v1/spicehouse/settings` (inkl. `min_crop_reserve`, `min_dried_reserve`, `min_ground_reserve`)

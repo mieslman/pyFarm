@@ -1611,6 +1611,18 @@
               <p class="text-[10px] text-slate-500 mt-1">Erst oberhalb dieser Reserve wird in den Trockenofen gefüllt.</p>
             </div>
 
+            <div class="pt-2 border-t border-slate-800">
+              <label class="block text-slate-300 font-medium mb-1">Mindestreserve Getrocknet</label>
+              <input type="number" id="shCfgMinDriedReserve" class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-slate-100 text-xs focus:outline-none focus:border-amber-500">
+              <p class="text-[10px] text-slate-500 mt-1">Erst oberhalb dieser Reserve wird in die Gewürzmühlen gefüllt.</p>
+            </div>
+
+            <div class="pt-2 border-t border-slate-800">
+              <label class="block text-slate-300 font-medium mb-1">Mindestreserve Gemahlen</label>
+              <input type="number" id="shCfgMinGroundReserve" class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-slate-100 text-xs focus:outline-none focus:border-amber-500">
+              <p class="text-[10px] text-slate-500 mt-1">Sicherheitsbestand für Quests und Kundenbedienung.</p>
+            </div>
+
             <button onclick="saveSpicehouseSettings()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2 rounded-md transition shadow mt-3">
               Einstellungen speichern
             </button>
@@ -4141,6 +4153,10 @@
         if (elCustomer) elCustomer.checked = !!cfg.auto_customer;
         const elReserve = document.getElementById('shCfgMinCropReserve');
         if (elReserve) elReserve.value = cfg.min_crop_reserve ?? 500;
+        const elDriedReserve = document.getElementById('shCfgMinDriedReserve');
+        if (elDriedReserve) elDriedReserve.value = cfg.min_dried_reserve ?? 500;
+        const elGroundReserve = document.getElementById('shCfgMinGroundReserve');
+        if (elGroundReserve) elGroundReserve.value = cfg.min_ground_reserve ?? 500;
 
         // 4 Mühlen rendern
         const millGrid = document.getElementById('shMillSlotsGrid');
@@ -4324,7 +4340,9 @@
           auto_oven: document.getElementById('shCfgAutoOven').checked,
           auto_mill: document.getElementById('shCfgAutoMill').checked,
           auto_customer: document.getElementById('shCfgAutoCustomer').checked,
-          min_crop_reserve: parseInt(document.getElementById('shCfgMinCropReserve').value) || 300,
+          min_crop_reserve: parseInt(document.getElementById('shCfgMinCropReserve').value) || 500,
+          min_dried_reserve: parseInt(document.getElementById('shCfgMinDriedReserve').value) || 500,
+          min_ground_reserve: parseInt(document.getElementById('shCfgMinGroundReserve').value) || 500,
         };
         const res = await fetch('/api/v1/spicehouse/settings', {
           method: 'PUT',

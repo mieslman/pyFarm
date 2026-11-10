@@ -137,6 +137,7 @@ class SpicehouseService:
                 quest_solver=self.solver,
                 quest_demands=quest_demands,
                 min_crop_reserve=self.config.min_crop_reserve,
+                min_dried_reserve=self.config.min_dried_reserve,
             )
 
         # 2. Gewürzmühlen
@@ -146,10 +147,16 @@ class SpicehouseService:
                 stock_service=stock_service,
                 quest_solver=self.solver,
                 quest_demands=quest_demands,
+                min_dried_reserve=self.config.min_dried_reserve,
             )
 
         # 3. Kunden
         if self.config.auto_customer:
-            await self.customer.collect(stock_service=stock_service)
+            await self.customer.collect(
+                stock_service=stock_service,
+                min_crop_reserve=self.config.min_crop_reserve,
+                min_dried_reserve=self.config.min_dried_reserve,
+                min_ground_reserve=self.config.min_ground_reserve,
+            )
 
         logger.info("========== Gewürzhaus: Zyklus abgeschlossen ==========")

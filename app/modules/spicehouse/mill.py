@@ -195,10 +195,11 @@ class SpiceMillService:
         stock_service: StockService,
         quest_solver: SpiceQuestSolver,
         quest_demands: dict[int, int],
+        min_dried_reserve: int = 500,
     ) -> int:
         """Fill and start idle mills according to priority rules:
         1. Prioritize dried spices needed for active Questreihe 6.
-        2. Otherwise, grind the dried spices with the largest stock on Farm 10.
+        2. Otherwise, grind the dried spices with the largest stock on Farm 10 (> min_dried_reserve).
         """
         # Find idle slots (never rent slot 4 with coins; use it only if already rented)
         idle_slots = [s for s in self.slots.values() if s.is_idle and s.is_available]
@@ -206,7 +207,9 @@ class SpiceMillService:
             return 0
 
         # 1. Priorität 1: Quest 6 Bedarfe
-        quest_prio_items = quest_solver.get_mill_quest_priorities(quest_demands, stock_service)
+        quest_prio_items = quest_solver.get_mill_quest_priorities(
+            quest_demands, stock_service, min_dried_reserve=min_dried_reserve
+        )
         quest_pids_order = [pid for pid, _ in quest_prio_items]
 
         # 2. Priorität 2: Größte Bestände an getrockneten Gewürzen auf Farm 10
@@ -214,8 +217,9 @@ class SpiceMillService:
         stock_items: list[tuple[int, int]] = []
         for pid in valid_dried_pids:
             cur_amt = stock_service.get_farm_amount(self.farm_id, pid)
-            if cur_amt > 0:
-                stock_items.append((pid, cur_amt))
+            surplus = max(0, cur_amt - min_dried_reserve)
+            if surplus > 0:
+                stock_items.append((pid, surplus))
 
         # Sort descending by quantity
         stock_items.sort(key=lambda x: x[1], reverse=True)
@@ -224,13 +228,14 @@ class SpiceMillService:
         ordered_candidates = quest_pids_order + fallback_pids_order
         if not ordered_candidates:
             logger.debug(
-                f"Gewürzhaus: Keine getrockneten Gewürze auf Farm {self.farm_id} zum Mahlen vorhanden."
+                f"Gewürzhaus: Keine getrockneten Gewürze über der Mindestreserve ({min_dried_reserve}) auf Farm {self.farm_id} zum Mahlen vorhanden."
             )
             return 0
 
-        # Local tracking of remaining stock
+        # Local tracking of remaining stock above reserve
         remaining_stock = {
-            pid: stock_service.get_farm_amount(self.farm_id, pid) for pid in ordered_candidates
+            pid: max(0, stock_service.get_farm_amount(self.farm_id, pid) - min_dried_reserve)
+            for pid in ordered_candidates
         }
 
         started_count = 0

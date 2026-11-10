@@ -181,6 +181,8 @@ class SpicehouseSettingsConfig(BaseModel):
     auto_mill: bool = True
     auto_customer: bool = True
     min_crop_reserve: int = 500
+    min_dried_reserve: int = 500
+    min_ground_reserve: int = 500
 
 
 class SeasonpassSettingsConfig(BaseModel):

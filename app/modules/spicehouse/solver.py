@@ -70,6 +70,7 @@ class SpiceQuestSolver:
         self,
         quest_demands: dict[int, int],
         stock_service: StockService,
+        min_dried_reserve: int = 500,
     ) -> list[tuple[int, int]]:
         """Identify which dried spices should be milled for Quest 6.
 
@@ -86,14 +87,15 @@ class SpiceQuestSolver:
                 current_ground_main = stock_service.get_farm_amount(1, req_pid)
                 missing = max(0, needed_total - current_ground_main)
                 if missing > 0:
-                    # Check if dried precursor is available on Farm 10
+                    # Check if dried precursor is available on Farm 10 above reserve
                     avail_dried = stock_service.get_farm_amount(self.farm_id, dried_pid)
-                    if avail_dried > 0:
+                    usable_dried = max(0, avail_dried - min_dried_reserve)
+                    if usable_dried > 0:
                         priorities.append((dried_pid, missing))
                         logger.debug(
                             f"SpiceQuestSolver (Mühle): Quest 6 verlangt PID {req_pid} "
                             f"(Fehlmenge: {missing}). Verwende getrocknete Vorstufe PID {dried_pid} "
-                            f"(Vorrat auf Farm {self.farm_id}: {avail_dried})."
+                            f"(Vorrat auf Farm {self.farm_id}: {avail_dried}, Überschuss: {usable_dried})."
                         )
 
         return priorities
@@ -103,6 +105,7 @@ class SpiceQuestSolver:
         quest_demands: dict[int, int],
         stock_service: StockService,
         min_crop_reserve: int = 500,
+        min_dried_reserve: int = 500,
     ) -> list[tuple[int, int]]:
         """Identify which raw spices should be dried in the oven for Quest 6.
 
@@ -120,7 +123,10 @@ class SpiceQuestSolver:
                 current_dried_main = stock_service.get_farm_amount(1, req_pid)
                 missing = max(0, needed_total - current_dried_main)
                 if missing > 0:
-                    raw_pid = SPICE_DRIED_TO_RAW[req_pid]
+                    avail_dried = stock_service.get_farm_amount(self.farm_id, req_pid)
+                    usable_dried = max(0, avail_dried - min_dried_reserve)
+                    if usable_dried < missing:
+                        raw_pid = SPICE_DRIED_TO_RAW[req_pid]
 
             # Case B: Quest requires ground spice (PIDs 1117..1126)
             elif req_pid in SPICE_GROUND_TO_DRIED:
@@ -130,7 +136,8 @@ class SpiceQuestSolver:
                     dried_pid = SPICE_GROUND_TO_DRIED[req_pid]
                     # If we don't have enough dried spice on Farm 10, we must dry raw spice!
                     avail_dried = stock_service.get_farm_amount(self.farm_id, dried_pid)
-                    if avail_dried < missing:
+                    usable_dried = max(0, avail_dried - min_dried_reserve)
+                    if usable_dried < missing:
                         raw_pid = SPICE_DRIED_TO_RAW.get(dried_pid)
 
             if raw_pid and missing > 0:

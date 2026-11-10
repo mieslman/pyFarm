@@ -95,6 +95,7 @@ class SpiceOvenService:
         quest_solver: SpiceQuestSolver,
         quest_demands: dict[int, int],
         min_crop_reserve: int = 500,
+        min_dried_reserve: int = 500,
     ) -> dict[str, dict[str, dict[str, int]]]:
         """Plan loading configuration for available oven lines based on Quest 6 priorities and stock surplus."""
         available_lines = [
@@ -109,6 +110,7 @@ class SpiceOvenService:
             quest_demands,
             stock_service,
             min_crop_reserve=min_crop_reserve,
+            min_dried_reserve=min_dried_reserve,
         )
         quest_pids_order = [pid for pid, _ in quest_prio_items]
 
@@ -173,6 +175,7 @@ class SpiceOvenService:
         quest_solver: SpiceQuestSolver,
         quest_demands: dict[int, int],
         min_crop_reserve: int = 500,
+        min_dried_reserve: int = 500,
     ) -> bool:
         """Fill and start the drying oven according to priority rules:
         1. Prioritize raw spices required for active Questreihe 6.
@@ -186,6 +189,7 @@ class SpiceOvenService:
             quest_solver=quest_solver,
             quest_demands=quest_demands,
             min_crop_reserve=min_crop_reserve,
+            min_dried_reserve=min_dried_reserve,
         )
         if not setup:
             return False

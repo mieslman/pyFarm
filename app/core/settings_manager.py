@@ -2,6 +2,7 @@ import contextlib
 import json
 import os
 import threading
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -251,8 +252,16 @@ class SettingsManager:
                 f.flush()
                 os.fsync(f.fileno())
 
-            # Atomic replace
-            os.replace(tmp_file, self._config_path)
+            # Atomic replace (with retry for Windows file locking / antivirus)
+            max_retries = 5
+            for attempt in range(max_retries):
+                try:
+                    os.replace(tmp_file, self._config_path)
+                    break
+                except PermissionError:
+                    if attempt == max_retries - 1:
+                        raise
+                    time.sleep(0.05)
             self._last_saved_at = now_iso
             logger.debug(
                 f"SettingsManager: Konfiguration atomar gespeichert nach {self._config_path}"

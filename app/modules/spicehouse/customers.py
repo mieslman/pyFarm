@@ -3,7 +3,12 @@ from typing import Any
 from loguru import logger
 
 from app.core.client import MFFGameClient
-from app.modules.spicehouse.models import SpiceCustomer
+from app.modules.spicehouse.models import (
+    SPICE_DRIED_TO_GROUND,
+    SPICE_GROUND_TO_DRIED,
+    SPICE_RAW_TO_DRIED,
+    SpiceCustomer,
+)
 from app.services.stock_service import StockService
 
 
@@ -51,19 +56,35 @@ class SpiceCustomerService:
                     reward_spicehouse_points=reward_streuer,
                 )
 
-    async def collect(self, stock_service: StockService) -> int:
-        """Serve customers whose spice demands are fully available in Farm 10 stock."""
+    async def collect(
+        self,
+        stock_service: StockService,
+        min_crop_reserve: int = 500,
+        min_dried_reserve: int = 500,
+        min_ground_reserve: int = 500,
+    ) -> int:
+        """Serve customers whose spice demands are fully available in Farm 10 stock above reserves."""
         served_count = 0
 
         for slot_nr, customer in list(self.customers.items()):
             if not customer.data:
                 continue
 
-            # Check if all products are satisfied in Farm 10 rack
+            # Check if all products are satisfied in Farm 10 rack respecting safety reserves
             can_satisfy = True
             for pid, needed_amt in customer.data.items():
                 avail = stock_service.get_farm_amount(self.farm_id, pid)
-                if avail < needed_amt:
+                if pid in SPICE_RAW_TO_DRIED:
+                    reserve = min_crop_reserve
+                elif pid in SPICE_DRIED_TO_GROUND:
+                    reserve = min_dried_reserve
+                elif pid in SPICE_GROUND_TO_DRIED:
+                    reserve = min_ground_reserve
+                else:
+                    reserve = 0
+
+                usable = max(0, avail - reserve)
+                if usable < needed_amt:
                     can_satisfy = False
                     break
 

@@ -210,12 +210,12 @@ async def test_mill_priority_and_fallback():
 
     stock_svc = StockService(client)
     # Farm 10 stock:
-    # Pfeffer getrocknet (1110): 20 units -> needed for Quest 6 (1120)
-    # Zimt getrocknet (1111): 80 units
+    # Pfeffer getrocknet (1110): 520 units (surplus = 20 > 500 reserve) -> needed for Quest 6 (1120)
+    # Zimt getrocknet (1111): 580 units (surplus = 80 > 500 reserve)
     stock_svc.farm_stocks = {
         10: {
-            1110: 20,
-            1111: 80,
+            1110: 520,
+            1111: 580,
             1120: 0,
         },
         1: {
@@ -223,8 +223,8 @@ async def test_mill_priority_and_fallback():
         },
     }
     stock_svc.products = {
-        1110: Product(pid=1110, name="Pfeffer getrocknet", amount=20),
-        1111: Product(pid=1111, name="Zimt getrocknet", amount=80),
+        1110: Product(pid=1110, name="Pfeffer getrocknet", amount=520),
+        1111: Product(pid=1111, name="Zimt getrocknet", amount=580),
         1120: Product(pid=1120, name="Pfeffer gemahlen", amount=0),
     }
 
@@ -243,9 +243,9 @@ async def test_mill_priority_and_fallback():
             quest_demands={1120: 30},
         )
         assert started == 2
-        assert stock_svc.products[1110].amount == 0  # 20 - 20 = 0
+        assert stock_svc.products[1110].amount == 500  # 520 - 20 = 500 (reserve reached)
 
-        # Scenario B: Next cycle, 1110 is empty, only 1111 (Zimt getrocknet) has stock -> fallback
+        # Scenario B: Next cycle, 1110 is down to reserve (500), only 1111 (Zimt getrocknet) has surplus -> fallback
         mill.slots = {1: MillSlotInfo(slot=1, capacity=10, remain=0, pid=None)}
         started_fallback = await mill.produce(
             stock_service=stock_svc,
@@ -253,7 +253,7 @@ async def test_mill_priority_and_fallback():
             quest_demands={},
         )
         assert started_fallback == 1
-        assert stock_svc.products[1111].amount == 70  # 80 - 10 = 70
+        assert stock_svc.products[1111].amount == 570  # 580 - 10 = 570
 
 
 @pytest.mark.asyncio
@@ -264,20 +264,20 @@ async def test_customer_collection():
     cust_svc = SpiceCustomerService(client, farm_id=10)
 
     cust_svc.customers = {
-        1: SpiceCustomer(id="c1", slot=1, data={1120: 5}),  # Satisfied
-        2: SpiceCustomer(id="c2", slot=2, data={1121: 50}),  # Insufficient stock
+        1: SpiceCustomer(id="c1", slot=1, data={1120: 5}),  # Satisfied (510 - 500 = 10 >= 5)
+        2: SpiceCustomer(id="c2", slot=2, data={1121: 50}),  # Insufficient stock (505 - 500 = 5 < 50)
     }
 
     stock_svc = StockService(client)
     stock_svc.farm_stocks = {
         10: {
-            1120: 10,
-            1121: 5,
+            1120: 510,
+            1121: 505,
         }
     }
     stock_svc.products = {
-        1120: Product(pid=1120, name="Pfeffer gemahlen", amount=10),
-        1121: Product(pid=1121, name="Zimt gemahlen", amount=5),
+        1120: Product(pid=1120, name="Pfeffer gemahlen", amount=510),
+        1121: Product(pid=1121, name="Zimt gemahlen", amount=505),
     }
 
     with respx.mock:
@@ -289,8 +289,8 @@ async def test_customer_collection():
 
         accepted = await cust_svc.collect(stock_service=stock_svc)
         assert accepted == 1
-        # Stock of 1120 should be deducted by 5
-        assert stock_svc.products[1120].amount == 5
+        # Stock of 1120 should be deducted by 5 (510 - 5 = 505)
+        assert stock_svc.products[1120].amount == 505
 
 
 def test_spicehouse_api_endpoints():
@@ -307,6 +307,8 @@ def test_spicehouse_api_endpoints():
     assert "auto_oven" in data
     assert "auto_mill" in data
     assert "auto_customer" in data
+    assert "min_dried_reserve" in data
+    assert "min_ground_reserve" in data
 
     # 2. PUT /api/v1/spicehouse/settings
     update_res = client.put(
@@ -317,6 +319,8 @@ def test_spicehouse_api_endpoints():
             "auto_mill": True,
             "auto_customer": True,
             "min_crop_reserve": 300,
+            "min_dried_reserve": 400,
+            "min_ground_reserve": 450,
         },
         headers=headers,
     )
@@ -324,6 +328,8 @@ def test_spicehouse_api_endpoints():
     updated_cfg = update_res.json()["config"]
     assert updated_cfg["auto_mill"] is True
     assert updated_cfg["min_crop_reserve"] == 300
+    assert updated_cfg["min_dried_reserve"] == 400
+    assert updated_cfg["min_ground_reserve"] == 450
 
     # 3. GET /api/v1/spicehouse (status)
     status_res = client.get("/api/v1/spicehouse", headers=headers)
@@ -414,12 +420,12 @@ async def test_mill_harvest_dict_and_refill_cycle():
     stock_svc = StockService(client)
     stock_svc.farm_stocks = {
         10: {
-            1110: 100,  # 100x Pfeffer getrocknet available to refill
+            1110: 600,  # 600x Pfeffer getrocknet available to refill (surplus = 100 > 500 reserve)
             1125: 0,
         }
     }
     stock_svc.products = {
-        1110: Product(pid=1110, name="Pfeffer getrocknet", amount=100),
+        1110: Product(pid=1110, name="Pfeffer getrocknet", amount=600),
         1125: Product(pid=1125, name="Piment gemahlen", amount=0),
     }
 
@@ -480,4 +486,104 @@ async def test_mill_harvest_dict_and_refill_cycle():
         assert mill.slots[3].pid == 1110
         assert mill.slots[3].amount == 50
         assert mill.slots[3].is_idle is False
-        assert stock_svc.farm_stocks[10][1110] == 50  # 100 - 50 = 50
+        assert stock_svc.farm_stocks[10][1110] == 550  # 600 - 50 = 550
+
+
+@pytest.mark.asyncio
+async def test_mill_respects_min_dried_reserve():
+    """Verify that mill only grinds dried spices exceeding min_dried_reserve."""
+    client = MFFGameClient(server=1, username="test", password="pwd")
+    client.rid = "test_rid"
+    mill = SpiceMillService(client, farm_id=10)
+    solver = SpiceQuestSolver(farm_id=10)
+
+    # Slot with capacity 10
+    mill.slots = {1: MillSlotInfo(slot=1, capacity=10, remain=0, pid=None)}
+
+    stock_svc = StockService(client)
+    # 500 units = exactly at reserve -> surplus = 0 -> nothing should be milled
+    stock_svc.farm_stocks = {10: {1110: 500}}
+    stock_svc.products = {1110: Product(pid=1110, name="Pfeffer getrocknet", amount=500)}
+
+    started = await mill.produce(
+        stock_service=stock_svc,
+        quest_solver=solver,
+        quest_demands={},
+        min_dried_reserve=500,
+    )
+    assert started == 0
+    assert stock_svc.products[1110].amount == 500
+
+    # Increase stock to 506 units -> surplus = 6 (< slot capacity 10)
+    # Mill should take exactly 6 units, leaving 500 in stock!
+    stock_svc.farm_stocks = {10: {1110: 506}}
+    stock_svc.products = {1110: Product(pid=1110, name="Pfeffer getrocknet", amount=506)}
+
+    with respx.mock:
+        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
+            return_value=httpx.Response(
+                200, json={"status": "ok", "datablock": 1, "updateblock": {}}
+            )
+        )
+        started_partial = await mill.produce(
+            stock_service=stock_svc,
+            quest_solver=solver,
+            quest_demands={},
+            min_dried_reserve=500,
+        )
+        assert started_partial == 1
+        assert mill.slots[1].amount == 6
+        assert stock_svc.products[1110].amount == 500
+
+
+@pytest.mark.asyncio
+async def test_customer_respects_all_spice_reserves():
+    """Verify customer service enforces raw, dried, and ground reserves."""
+    client = MFFGameClient(server=1, username="test", password="pwd")
+    client.rid = "test_rid"
+    cust_svc = SpiceCustomerService(client, farm_id=10)
+
+    # Customer 1 wants 20 Pfeffer (raw 1100)
+    # Customer 2 wants 15 Pfeffer getrocknet (dried 1110)
+    # Customer 3 wants 10 Pfeffer gemahlen (ground 1120)
+    cust_svc.customers = {
+        1: SpiceCustomer(id="c1", slot=1, data={1100: 20}),
+        2: SpiceCustomer(id="c2", slot=2, data={1110: 15}),
+        3: SpiceCustomer(id="c3", slot=3, data={1120: 10}),
+    }
+
+    stock_svc = StockService(client)
+    # Raw 1100: 510 (surplus 10 < 20 needed) -> Rejected
+    # Dried 1110: 520 (surplus 20 >= 15 needed) -> Accepted
+    # Ground 1120: 505 (surplus 5 < 10 needed) -> Rejected
+    stock_svc.farm_stocks = {
+        10: {
+            1100: 510,
+            1110: 520,
+            1120: 505,
+        }
+    }
+    stock_svc.products = {
+        1100: Product(pid=1100, name="Pfeffer", amount=510),
+        1110: Product(pid=1110, name="Pfeffer getrocknet", amount=520),
+        1120: Product(pid=1120, name="Pfeffer gemahlen", amount=505),
+    }
+
+    with respx.mock:
+        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
+            return_value=httpx.Response(
+                200, json={"status": "ok", "datablock": 1, "updateblock": {}}
+            )
+        )
+
+        accepted = await cust_svc.collect(
+            stock_service=stock_svc,
+            min_crop_reserve=500,
+            min_dried_reserve=500,
+            min_ground_reserve=500,
+        )
+        # Only customer 2 should be accepted
+        assert accepted == 1
+        assert stock_svc.products[1100].amount == 510  # Unchanged
+        assert stock_svc.products[1110].amount == 505  # 520 - 15 = 505
+        assert stock_svc.products[1120].amount == 505  # Unchanged

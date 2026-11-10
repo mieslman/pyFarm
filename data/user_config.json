@@ -161,7 +161,9 @@
     "auto_oven": true,
     "auto_mill": true,
     "auto_customer": true,
-    "min_crop_reserve": 500
+    "min_crop_reserve": 500,
+    "min_dried_reserve": 500,
+    "min_ground_reserve": 500
   },
   "seasonpass": {
     "enabled": true,

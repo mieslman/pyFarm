@@ -359,6 +359,13 @@ class Vehicle:
                                         min_reserve = max(
                                             min_reserve, self.route_config.min_crop_reserve
                                         )
+                                elif is_farm_10:
+                                    if "gemahlen" in p.name.lower() or p.category == "spiceground":
+                                        min_reserve = settings.spicehouse.min_ground_reserve
+                                    elif p.category == "spicedried":
+                                        min_reserve = settings.spicehouse.min_dried_reserve
+                                    elif p.category in ("spice", "v"):
+                                        min_reserve = settings.spicehouse.min_crop_reserve
                                 outer_surplus = max(0, outer_amt - min_reserve)
                                 total_outer_quest_surplus += outer_surplus
 
@@ -452,7 +459,7 @@ class Vehicle:
 
             available_products.append(p)
 
-        # Seed reserve & safety reserve check: e.g. 500 safety reserve for water plants
+        # Seed reserve & safety reserve check: e.g. 500 safety reserve for water plants / spices
         def get_surplus(p: Product) -> int:
             current_amt = stock_service.get_temp_amount(self.target_farm_id, p.pid)
             min_reserve = 0
@@ -461,6 +468,13 @@ class Vehicle:
                     min_reserve = 120 // (p.size_x * p.size_y)
                 if self.route_config.min_crop_reserve > 0:
                     min_reserve = max(min_reserve, self.route_config.min_crop_reserve)
+            elif is_farm_10:
+                if "gemahlen" in p.name.lower() or p.category == "spiceground":
+                    min_reserve = settings.spicehouse.min_ground_reserve
+                elif p.category == "spicedried":
+                    min_reserve = settings.spicehouse.min_dried_reserve
+                elif p.category in ("spice", "v"):
+                    min_reserve = settings.spicehouse.min_crop_reserve
             return max(0, current_amt - min_reserve)
 
         # Split into Priority 1 (Quest-Bedarfe) and Priority 2 (Ernteüberschuss)
