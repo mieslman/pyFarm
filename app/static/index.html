@@ -4906,7 +4906,7 @@
         const smPercent = sm.level_percent !== undefined ? sm.level_percent : 0;
         const smRest = sm.level_rest !== undefined ? sm.level_rest : 100;
         const smTools = sm.tools || {};
-        const meisselCount = smTools['1'] || 0;
+        const meisselCount = Object.values(smTools).reduce((sum, val) => sum + (Number(val) || 0), 0);
 
         if (document.getElementById('stonemasonLevelBadge')) {
           document.getElementById('stonemasonLevelBadge').textContent = `Stufe ${smLevel}`;
@@ -4915,7 +4915,16 @@
           document.getElementById('stonemasonPointsBadge').textContent = `${smPoints} Pkt`;
         }
         if (document.getElementById('stonemasonToolsBadge')) {
-          document.getElementById('stonemasonToolsBadge').textContent = `${meisselCount} Meißel`;
+          const badge = document.getElementById('stonemasonToolsBadge');
+          badge.textContent = `${meisselCount} Meißel`;
+          const tCfg = sm.tools_config || {};
+          const breakdown = Object.entries(smTools)
+            .filter(([, qty]) => Number(qty) > 0)
+            .map(([tid, qty]) => `${tCfg[tid]?.name || `Werkzeug ${tid}`}: ${qty}`)
+            .join(', ');
+          if (badge.parentElement) {
+            badge.parentElement.title = breakdown || 'Verfügbare Meißel';
+          }
         }
         if (document.getElementById('stonemasonLevelPercent')) {
           document.getElementById('stonemasonLevelPercent').textContent = `${smPercent}%`;

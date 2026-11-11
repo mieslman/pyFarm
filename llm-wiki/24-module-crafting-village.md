@@ -157,13 +157,16 @@ Alle Aufrufe erfolgen an das zentrale Skript `ajax/farm.php`:
 
 5. **Steinmetz-Automation (`serve_stonemason`):**
    - **Fertige Skulpturen abholen:** Prüft belegte Werkbänke. Wenn alle Kacheln gemeißelt und deren Dauer abgelaufen ist (`remain <= 0`), wird `stonemason_finish_grid` ausgeführt.
-   - **Kacheln schlagen:** Wenn aktuell kein Meißelvorgang aktiv ist (`is_working == False`), wird die nächste freie Kachel aus `allowed` gewählt und mit Meißel (Tool 1) gestartet.
-   - **Meißel-Nachkauf:** Wenn der Meißelbestand 0 erreicht und `auto_buy_stonemason_tools` aktiv ist, wird automatisch das 10er-Paket für 500 kT nachgekauft.
-   - **Kunden-Zuweisung (Beste Belohnung):** Freie, freigeschaltete Werkbänke werden mit wartenden Kunden belegt, sofern ausreichend Rohmaterial im Dorflager vorhanden ist. Das System berechnet die effektive Belohnung jedes Kunden (calculate_rewards: Spielgeld kT, Farm-Punkte und Steinmetz-Punkte inklusive Multiplikatoren) und bewertet sie anhand des gewählten Fokus (stonemason_reward_priority):
-     - overall (Standard / Beste Gesamtbelohnung): Gewichteter Gesamtscore (sm_points * 100 + money + points * 0.1).
-     - stonemason_points: Priorisiert maximalen Steinmetz-Punktegewinn für schnellen Werkstatt-Levelaufstieg.
-     - money: Priorisiert maximalen kT-Ertrag.
-     - points: Priorisiert maximale Farm-Erfahrungspunkte.
+   - **Intelligente Meißel- und Kachelauswahl (`select_best_chisel_move` / `get_tool_footprint`):**
+     - Wertet alle kT-Meißel (`1`: 1x1 / 1800s, `2`: 2x1 / 2700s, `3`: 1x2 / 2700s, `4`: 2x2 / 3200s) anhand der Rastergeometrie (`x`, `y`, `allowed`) aus und ignoriert Coin-Werkzeuge strikt (`coin_protection`).
+     - Bildet exakt die Client-Logik (`hoverGridTile`) ab: Teile außerhalb des Rasters werden an den Rändern abgeschnitten (Rand-Clipping, z. B. `2x2` auf Kacheln `24,25` eines 5x5-Granitziegels), während blockierte Felder im Raster die Platzierung verbieten.
+     - Minimiert `Dauer / neu_abgedeckte_Kacheln` (z. B. `2x2` auf 4 Feldern = 800 s/Feld, `2x2` auf 3 Feldern = 1067 s/Feld, `2x1`/`1x2` auf 2 Feldern = 1350 s/Feld, `1x1` = 1800 s/Feld) und bevorzugt Ecken/Ränder bei Gleichstand, damit größere Blöcke zusammenhängend bleiben.
+   - **Meißel-Nachkauf & Bestands-Fallback (`_ensure_stonemason_tool`):** Ist der optimale kT-Meißel nicht im Inventar und `auto_buy_stonemason_tools` aktiv, wird bevorzugt das günstigste Großpaket (z. B. 10er-Paket für 500/1000/1500 kT) bzw. bei knapperem Budget ein kleineres kT-Paket nachgekauft. Schlägt der Nachkauf fehl oder ist deaktiviert, weicht die Automation automatisch auf die beste gültige Platzierung mit vorhandenen Inventar-Meißeln aus (`owned_only=True`).
+   - **Kunden-Zuweisung (Beste Belohnung):** Freie, freigeschaltete Werkbänke werden mit wartenden Kunden belegt, sofern ausreichend Rohmaterial im Dorflager vorhanden ist. Das System berechnet die effektive Belohnung jedes Kunden (`calculate_rewards`: Spielgeld kT, Farm-Punkte und Steinmetz-Punkte inklusive Multiplikatoren) und bewertet sie anhand des gewählten Fokus (`stonemason_reward_priority`):
+     - `overall` (Standard / Beste Gesamtbelohnung): Gewichteter Gesamtscore (`sm_points * 100 + money + points * 0.1`).
+     - `stonemason_points`: Priorisiert maximalen Steinmetz-Punktegewinn für schnellen Werkstatt-Levelaufstieg.
+     - `money`: Priorisiert maximalen kT-Ertrag.
+     - `points`: Priorisiert maximale Farm-Erfahrungspunkte.
 
 ---
 
@@ -174,11 +177,11 @@ Alle Aufrufe erfolgen an das zentrale Skript `ajax/farm.php`:
 - `MineItem`: ID, Typ, Haltbarkeit, Status (`is_available`, `is_in_use`).
 - `MineProductionSlot`: Slot-Nummer, Gestein, Ertrag, Dauer, Restzeit (`remain`, `is_ready`).
 - `MineSnapshot`: Vollständiger Runtime-Zustand des Steinbruchs.
-- `StonemasonToolConfig`: Meißel-Typ, Dimensionen (x, y), Bearbeitungsdauer, Kosten.
-- `StonemasonProductConfig`: Skulpturen-Katalog, Materialbedarf, Raster, erlaubte Kacheln.
+- `StonemasonToolConfig`: Meißel-Typ, Dimensionen (`x`, `y`), Bearbeitungsdauer, Kosten.
+- `StonemasonProductConfig`: Skulpturen-Katalog, Materialbedarf, Raster (`x`, `y`), erlaubte Kacheln (`get_tool_footprint`).
 - `StonemasonCustomer`: Kunde in Warteschlange oder auf Werkbank mit Produktwunsch, Multiplikatoren und Kachelfortschritt.
 - `StonemasonSlotConfig`: Werkbank-Konfiguration mit Freischaltstufe.
-- `StonemasonSnapshot`: Vollständiger Runtime-Zustand des Steinmetzes (Stufe, Punkte, Werkzeuge, Kunden, Slots).
+- `StonemasonSnapshot`: Vollständiger Runtime-Zustand des Steinmetzes (Stufe, Punkte, Werkzeuge, Kunden, Slots, `select_best_chisel_move`).
 - `CraftingVillageSnapshot`: Übergreifender Zustand inkl. Steinbruch, Steinmetz und Dorf-Quests.
 - `CraftingVillageSummary`: Kompakte Metriken für API und UI-Dashboard.
 

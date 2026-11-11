@@ -1167,3 +1167,204 @@ async def test_stonemason_select_best_reward_customer(dummy_client: MFFGameClien
     assert res["assigned"] == 1
     # Customer 203 (HighRewardCust) MUST be selected!
     assert assigned_customer_id == "203"
+
+
+def _default_stonemason_tools_config() -> dict[str, StonemasonToolConfig]:
+    return {
+        "1": StonemasonToolConfig(
+            id="1", name="Meißel", x=1, y=1, duration=1800,
+            money={"100": 1, "200": 2, "500": 10},
+        ),
+        "2": StonemasonToolConfig(
+            id="2", name="Langer Meißel", x=2, y=1, duration=2700,
+            money={"200": 1, "400": 2, "1000": 10},
+        ),
+        "3": StonemasonToolConfig(
+            id="3", name="Dünner Meißel", x=1, y=2, duration=2700,
+            money={"200": 1, "400": 2, "1000": 10},
+        ),
+        "4": StonemasonToolConfig(
+            id="4", name="Großer Meißel", x=2, y=2, duration=3200,
+            money={"300": 1, "600": 2, "1500": 10},
+        ),
+        "5": StonemasonToolConfig(
+            id="5", name="Presslufthammer", x=3, y=3, duration=3200,
+            coins={"2": 1},
+        ),
+        "6": StonemasonToolConfig(
+            id="6", name="Diamantbohrer", x=1, y=1, duration=3200,
+            coins={"2": 1}, form="+",
+        ),
+    }
+
+
+def test_stonemason_chisel_footprint_and_selection():
+    """Verify exact grid clipping/blocked rules and optimal kT chisel selection."""
+    tools_cfg = _default_stonemason_tools_config()
+    pid1 = StonemasonProductConfig(id="1", name="Sandstein-Ziegel", x=4, y=4, allowed=[1, 16])
+    pid2 = StonemasonProductConfig(
+        id="2", name="Granitziegel", x=5, y=5, allowed=[1, 2, 6, 20, 21, 24, 25]
+    )
+    pid3 = StonemasonProductConfig(
+        id="3",
+        name="Ziegelmauerstein",
+        x=6,
+        y=6,
+        allowed=[1, 2, 3, 6, 7, 8, 24, 29, 30, 31, 34, 35, 36],
+    )
+
+    # Blocked in-bounds tile 7 invalidates 2x2 at anchor 1 on PID 2
+    assert pid2.get_tool_footprint(1, 2, 2) is None
+    # Bottom edge clipping on PID 2: 2x2 at anchor 24 only covers {24, 25} (neither blocked)
+    assert pid2.get_tool_footprint(24, 2, 2) == frozenset({24, 25})
+    # Blocked tile 22 invalidates 2x2 at anchor 21
+    assert pid2.get_tool_footprint(21, 2, 2) is None
+
+    snap = StonemasonSnapshot(
+        tools={"4": 9, "1": 1},
+        tools_config=tools_cfg,
+        products_config={"1": pid1, "2": pid2, "3": pid3},
+    )
+
+    # PID 1: disconnected tiles -> must pick Tool 1 (1x1)
+    move1 = snap.select_best_chisel_move(pid1, pid1.allowed, coin_protection=True)
+    assert move1 is not None
+    assert move1[1] == 1
+    assert move1[2] in ((1,), (16,))
+
+    # PID 2 fresh: must pick 2x1 (Tool 2) or 1x2 (Tool 3) covering 2 tiles, never Coin tools (5/6)
+    move2 = snap.select_best_chisel_move(pid2, pid2.allowed, coin_protection=True)
+    assert move2 is not None
+    assert move2[1] in (2, 3)
+    assert len(move2[2]) == 2
+
+    # PID 2 with only [24, 25] left (as in HAR-05 screenshot) & only Tools 4+1 owned:
+    # Tool 4 clipped on bottom edge beats 2x Tool 1 (3200s vs 3600s)
+    move2_owned = snap.select_best_chisel_move(
+        pid2, [24, 25], coin_protection=True, owned_only=True
+    )
+    assert move2_owned == (24, 4, (24, 25))
+
+    # PID 3: has full 2x2 blocks ([1,2,7,8] and [29,30,35,36]) -> selects Tool 4 (2x2)
+    move3 = snap.select_best_chisel_move(pid3, pid3.allowed, coin_protection=True)
+    assert move3 is not None
+    assert move3[1] == 4
+    assert len(move3[2]) == 4
+
+
+@pytest.mark.asyncio
+async def test_serve_stonemason_buys_and_uses_optimal_chisel(
+    dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch
+):
+    """Verify serve_stonemason buys missing optimal kT chisel (e.g. Tool 4 for 2x2) and uses it."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings.crafting_village, "auto_stonemason", True)
+    monkeypatch.setattr(settings.crafting_village, "auto_buy_stonemason_tools", True)
+    monkeypatch.setattr(settings.crafting_village, "coin_protection", True)
+
+    pid3 = StonemasonProductConfig(
+        id="3",
+        name="Ziegelmauerstein",
+        x=6,
+        y=6,
+        allowed=[1, 2, 3, 6, 7, 8, 24, 29, 30, 31, 34, 35, 36],
+    )
+    cust = StonemasonCustomer(id="301", name="Karl", pid="3", slot="1", grid={})
+
+    service = CraftingVillageService(client=dummy_client)
+    service.snapshot = CraftingVillageSnapshot(
+        mine=MineSnapshot(level=1),
+        stonemason=StonemasonSnapshot(
+            level=2,
+            tools={"1": 3},
+            slots_config={"1": StonemasonSlotConfig(level=1)},
+            tools_config=_default_stonemason_tools_config(),
+            products_config={"3": pid3},
+            customers={"301": cust},
+        ),
+    )
+
+    calls: list[dict[str, Any]] = []
+
+    async def mock_api_call(action: str, params: dict[str, Any]):
+        calls.append(dict(params))
+        mode = params.get("mode")
+        if mode == "stonemason_buy_tool":
+            assert params["tool"] == 4
+            assert params["currency"] == 1500
+            service.snapshot.stonemason.tools["4"] = 10
+            return {"status": "ok", "datablock": 1, "updateblock": {}}
+        if mode == "stonemason_click_tile":
+            assert params["tool"] == 4
+            assert params["tile"] in (1, 29)
+            return {"status": "ok", "datablock": 1, "updateblock": {}}
+        return {"status": "ok"}
+
+    dummy_client.api_call = AsyncMock(side_effect=mock_api_call)
+
+    res = await service.serve_stonemason()
+    assert res["status"] == "ok"
+    assert res["bought_tools"] == 1
+    assert res["chiseled"] == 1
+    assert [c["mode"] for c in calls] == ["stonemason_buy_tool", "stonemason_click_tile"]
+
+
+@pytest.mark.asyncio
+async def test_serve_stonemason_fallback_to_owned_tools_when_autobuy_disabled(
+    dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch
+):
+    """Verify fallback to owned tools (Tool 4 edge-clipped on 24..25) when auto-buy is off."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings.crafting_village, "auto_stonemason", True)
+    monkeypatch.setattr(settings.crafting_village, "auto_buy_stonemason_tools", False)
+    monkeypatch.setattr(settings.crafting_village, "coin_protection", True)
+
+    pid2 = StonemasonProductConfig(
+        id="2", name="Granitziegel", x=5, y=5, allowed=[1, 2, 6, 20, 21, 24, 25]
+    )
+    cust = StonemasonCustomer(
+        id="6115",
+        name="Finn",
+        pid="2",
+        slot="1",
+        grid={
+            "1": {"remain": 0},
+            "2": {"remain": 0},
+            "6": {"remain": 0},
+            "20": {"remain": 0},
+            "21": {"remain": 0},
+        },
+    )
+
+    service = CraftingVillageService(client=dummy_client)
+    service.snapshot = CraftingVillageSnapshot(
+        mine=MineSnapshot(level=1),
+        stonemason=StonemasonSnapshot(
+            level=2,
+            tools={"4": 9, "1": 1},
+            slots_config={"1": StonemasonSlotConfig(level=1)},
+            tools_config=_default_stonemason_tools_config(),
+            products_config={"2": pid2},
+            customers={"6115": cust},
+        ),
+    )
+
+    clicked: list[dict[str, Any]] = []
+
+    async def mock_api_call(action: str, params: dict[str, Any]):
+        if params.get("mode") == "stonemason_click_tile":
+            clicked.append(dict(params))
+            return {"status": "ok", "datablock": 1, "updateblock": {}}
+        return {"status": "ok"}
+
+    dummy_client.api_call = AsyncMock(side_effect=mock_api_call)
+
+    res = await service.serve_stonemason()
+    assert res["status"] == "ok"
+    assert res["bought_tools"] == 0
+    assert res["chiseled"] == 1
+    assert clicked == [
+        {"mode": "stonemason_click_tile", "customerid": "6115", "tile": 24, "tool": 4}
+    ]

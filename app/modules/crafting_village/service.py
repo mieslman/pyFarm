@@ -941,6 +941,117 @@ class CraftingVillageService:
             logger.error(f"CraftingVillage (Steinmetz): Fehler beim Kauf von Werkzeug {tid}: {e}")
             return False
 
+    async def _ensure_stonemason_tool(
+        self, tool_id: int, stock_service: Any | None = None
+    ) -> tuple[bool, bool]:
+        """Ensure at least one unit of tool_id is in stock, buying kT packages if needed.
+
+        Returns (is_available, bought_now).
+        """
+        if not self.snapshot or not self.snapshot.stonemason:
+            return False, False
+
+        sm = self.snapshot.stonemason
+        tid = str(tool_id)
+        if sm.tools.get(tid, 0) > 0:
+            return True, False
+
+        if not settings.crafting_village.auto_buy_stonemason_tools:
+            return False, False
+
+        tool_cfg = sm.tools_config.get(tid)
+        if tool_cfg:
+            if settings.crafting_village.coin_protection and tool_cfg.costs_coins:
+                return False, False
+            candidate_amounts = sorted(
+                (int(k) for k in tool_cfg.money.keys() if str(k).isdigit()),
+                reverse=True,
+            )
+        else:
+            candidate_amounts = [500, 100] if tool_id == 1 else []
+
+        if not candidate_amounts:
+            return False, False
+
+        tool_name = tool_cfg.name if tool_cfg else f"Werkzeug {tid}"
+        logger.info(
+            f"CraftingVillage (Steinmetz): Kein {tool_name} (ID {tid}) vorhanden. Versuche Nachkauf..."
+        )
+        for amount in candidate_amounts:
+            bought = await self.buy_stonemason_tool(
+                tool_id=tool_id,
+                currency_amount=amount,
+                stock_service=stock_service,
+            )
+            if bought:
+                return True, True
+
+        return False, False
+
+    async def _chisel_optimal_tile(
+        self,
+        cust: StonemasonCustomer,
+        pcfg: StonemasonProductConfig,
+        stock_service: Any | None = None,
+    ) -> tuple[bool, bool]:
+        """Select optimal chisel & anchor tile for customer's uncarved grid and start chiseling.
+
+        Prefers optimal multi-tile kT chisels (auto-buying if enabled and affordable),
+        with automatic fallback to available in-stock kT tools.
+        Returns (chiseled, bought_tool).
+        """
+        if not self.snapshot or not self.snapshot.stonemason:
+            return False, False
+
+        sm = self.snapshot.stonemason
+        uncarved = [t for t in pcfg.allowed if str(t) not in cust.tiles]
+        if not uncarved:
+            return False, False
+
+        coin_prot = settings.crafting_village.coin_protection
+        move = sm.select_best_chisel_move(
+            pcfg, uncarved, coin_protection=coin_prot, owned_only=False
+        )
+
+        bought_now = False
+        if move:
+            anchor_tile, tool_id, covered = move
+            available, bought_now = await self._ensure_stonemason_tool(
+                tool_id, stock_service=stock_service
+            )
+            if not available:
+                # Fallback to best placement using tools currently in stock
+                sm = self.snapshot.stonemason
+                fallback_move = sm.select_best_chisel_move(
+                    pcfg, uncarved, coin_protection=coin_prot, owned_only=True
+                )
+                if not fallback_move:
+                    return False, bought_now
+                anchor_tile, tool_id, covered = fallback_move
+        else:
+            # Minimal snapshot without tools_config: default to Meißel 1 on first uncarved tile
+            anchor_tile, tool_id, covered = uncarved[0], 1, (uncarved[0],)
+            available, bought_now = await self._ensure_stonemason_tool(
+                tool_id, stock_service=stock_service
+            )
+            if not available:
+                return False, bought_now
+
+        sm = self.snapshot.stonemason
+        tool_cfg = sm.tools_config.get(str(tool_id))
+        tool_label = f"{tool_cfg.name} ({tool_cfg.x}x{tool_cfg.y})" if tool_cfg else f"Werkzeug {tool_id}"
+        logger.info(
+            f"CraftingVillage (Steinmetz): Optimale Auswahl für '{pcfg.name}' ({cust.name}): "
+            f"{tool_label} auf Kachel {anchor_tile} -> bearbeitet Felder {list(covered)}."
+        )
+        ok = await self.chisel_tile(
+            customer_id=cust.id,
+            tile=anchor_tile,
+            tool_id=tool_id,
+            stock_service=stock_service,
+        )
+        return ok, bought_now
+
     async def serve_stonemason(self, stock_service: Any | None = None) -> dict[str, Any]:
         """Automate Stonemason workshop: finish completed grids, chisel tiles, and assign waiting customers."""
         if not settings.crafting_village.auto_stonemason:
@@ -984,7 +1095,7 @@ class CraftingVillageService:
                     mine = self.snapshot.mine
 
         # 2. Prüfen, ob aktuell bereits ein Meißel-Vorgang läuft (is_working)
-        # Wenn kein Vorgang aktiv ist, nächste erlaubte Kachel anschlagen
+        # Wenn kein Vorgang aktiv ist, nächste erlaubte Kachel(n) mit optimalem Meißel anschlagen
         if not sm.is_working:
             for cust in list(sm.customers.values()):
                 if not cust.is_assigned:
@@ -993,38 +1104,16 @@ class CraftingVillageService:
                 if not pcfg or not pcfg.allowed:
                     continue
 
-                tiles = cust.tiles
-                uncarved = [t for t in pcfg.allowed if str(t) not in tiles]
-                if uncarved:
-                    # Wir benötigen Werkzeug 1 (Meißel)
-                    tool_count = sm.tools.get("1", 0)
-                    if tool_count <= 0:
-                        if settings.crafting_village.auto_buy_stonemason_tools:
-                            logger.info("CraftingVillage (Steinmetz): Keine Meißel vorhanden. Kaufe Meißel-Paket...")
-                            bought = await self.buy_stonemason_tool(
-                                tool_id=1, currency_amount=500, stock_service=stock_service
-                            )
-                            if not bought:
-                                bought = await self.buy_stonemason_tool(
-                                    tool_id=1, currency_amount=100, stock_service=stock_service
-                                )
-                            if bought:
-                                bought_tools_count += 1
-                                sm = self.snapshot.stonemason
-
-                    tool_count = sm.tools.get("1", 0)
-                    if tool_count > 0:
-                        next_tile = uncarved[0]
-                        ok = await self.chisel_tile(
-                            customer_id=cust.id,
-                            tile=next_tile,
-                            tool_id=1,
-                            stock_service=stock_service,
-                        )
-                        if ok:
-                            chiseled_count += 1
-                            sm = self.snapshot.stonemason
-                            break
+                ok, bought_now = await self._chisel_optimal_tile(
+                    cust, pcfg, stock_service=stock_service
+                )
+                if bought_now:
+                    bought_tools_count += 1
+                    sm = self.snapshot.stonemason
+                if ok:
+                    chiseled_count += 1
+                    sm = self.snapshot.stonemason
+                    break
 
         # 3. Freie, freigeschaltete Werkbänke mit wartenden Kunden belegen
         current_level = sm.level
@@ -1087,16 +1176,17 @@ class CraftingVillageService:
                 sm = self.snapshot.stonemason
                 mine = self.snapshot.mine
 
-                # Sofort erste Kachel meißeln, falls Steinmetz frei und Meißel vorhanden
-                if not sm.is_working and sm.tools.get("1", 0) > 0:
-                    pcfg = sm.products_config.get(best_customer.pid)
+                # Sofort erste Kachel(n) mit optimalem Meißel anschlagen, falls Steinmetz frei
+                if not sm.is_working:
+                    refreshed_cust = sm.customers.get(best_customer.id, best_customer)
+                    pcfg = sm.products_config.get(refreshed_cust.pid)
                     if pcfg and pcfg.allowed:
-                        ok_chisel = await self.chisel_tile(
-                            customer_id=best_customer.id,
-                            tile=pcfg.allowed[0],
-                            tool_id=1,
-                            stock_service=stock_service,
+                        ok_chisel, bought_now = await self._chisel_optimal_tile(
+                            refreshed_cust, pcfg, stock_service=stock_service
                         )
+                        if bought_now:
+                            bought_tools_count += 1
+                            sm = self.snapshot.stonemason
                         if ok_chisel:
                             chiseled_count += 1
                             sm = self.snapshot.stonemason

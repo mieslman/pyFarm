@@ -143,6 +143,32 @@ class StonemasonProductConfig(BaseModel):
     allowed: list[int] = Field(default_factory=list)
     reward: dict[str, int] = Field(default_factory=dict)
 
+    def get_tool_footprint(
+        self, anchor_tile: int, tool_x: int, tool_y: int
+    ) -> frozenset[int] | None:
+        """Compute covered tiles for a rectangular tool at 1-based anchor_tile.
+
+        Mirrors the client's hoverGridTile logic: out-of-bounds parts beyond grid
+        edges are clipped, whereas hitting any blocked (non-allowed) in-bounds
+        tile invalidates the placement and returns None.
+        """
+        if self.x <= 0 or self.y <= 0 or tool_x <= 0 or tool_y <= 0:
+            return None
+        allowed_set = set(self.allowed)
+        if anchor_tile not in allowed_set:
+            return None
+
+        col = ((anchor_tile - 1) % self.x) + 1
+        row = ((anchor_tile - 1) // self.x) + 1
+        covered: set[int] = set()
+        for r in range(row, min(row + tool_y, self.y + 1)):
+            for c in range(col, min(col + tool_x, self.x + 1)):
+                tile_id = (r - 1) * self.x + c
+                if tile_id not in allowed_set:
+                    return None
+                covered.add(tile_id)
+        return frozenset(covered)
+
 
 class StonemasonCustomer(BaseModel):
     """Customer visiting the stonemason with a sculpture request."""
@@ -274,6 +300,80 @@ class StonemasonSnapshot(BaseModel):
     def waiting_customers_count(self) -> int:
         """Number of customers waiting in line."""
         return sum(1 for c in self.customers.values() if c.is_waiting)
+
+    def select_best_chisel_move(
+        self,
+        product: StonemasonProductConfig,
+        uncarved_tiles: list[int] | set[int],
+        *,
+        coin_protection: bool = True,
+        owned_only: bool = False,
+    ) -> tuple[int, int, tuple[int, ...]] | None:
+        """Select the optimal (anchor_tile, tool_id, covered_uncarved_tiles) move.
+
+        Evaluates all legal placements across eligible tools (excluding Coin tools
+        when coin_protection is active) and minimizes total carving time per
+        newly covered tile while breaking ties in favor of edge/corner clusters
+        so larger rectangular blocks remain intact.
+        """
+        uncarved_set = set(uncarved_tiles)
+        if not uncarved_set or not product.allowed:
+            return None
+
+        eligible_tools: list[tuple[int, StonemasonToolConfig]] = []
+        for tid_str, tcfg in self.tools_config.items():
+            if not tid_str.isdigit():
+                continue
+            if coin_protection and tcfg.costs_coins:
+                continue
+            if tcfg.form or tcfg.x < 1 or tcfg.y < 1 or tcfg.duration <= 0:
+                continue
+            if owned_only and self.tools.get(tid_str, 0) <= 0:
+                continue
+            eligible_tools.append((int(tid_str), tcfg))
+
+        if not eligible_tools:
+            return None
+
+        # Precompute 4-neighbor counts inside uncarved_set to prefer carving edges/corners first.
+        neighbor_count: dict[int, int] = {}
+        width, height = product.x, product.y
+        for tile in uncarved_set:
+            c = ((tile - 1) % width) + 1
+            r = ((tile - 1) // width) + 1
+            neighbors = 0
+            for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nc, nr = c + dc, r + dr
+                if 1 <= nc <= width and 1 <= nr <= height:
+                    if (nr - 1) * width + nc in uncarved_set:
+                        neighbors += 1
+            neighbor_count[tile] = neighbors
+
+        candidates: list[tuple[tuple[float, int, int, int, int, int, int], int, int, tuple[int, ...]]] = []
+        for anchor in sorted(uncarved_set):
+            for tool_id, tcfg in eligible_tools:
+                footprint = product.get_tool_footprint(anchor, tcfg.x, tcfg.y)
+                if footprint is None:
+                    continue
+                new_cov = footprint & uncarved_set
+                if not new_cov:
+                    continue
+                score = (
+                    tcfg.duration / len(new_cov),
+                    -len(new_cov),
+                    tcfg.duration,
+                    sum(neighbor_count[t] for t in new_cov),
+                    len(footprint) - len(new_cov),
+                    anchor,
+                    tool_id,
+                )
+                candidates.append((score, anchor, tool_id, tuple(sorted(new_cov))))
+
+        if not candidates:
+            return None
+
+        _, best_anchor, best_tool_id, best_cov = min(candidates, key=lambda item: item[0])
+        return best_anchor, best_tool_id, best_cov
 
 
 class CraftingVillageSnapshot(BaseModel):
