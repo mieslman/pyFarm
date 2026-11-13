@@ -394,8 +394,8 @@ async def test_farm8_only_quest_products_and_crop_reserve(fast_client):
 
 
 @pytest.mark.asyncio
-async def test_farm8_sushi_supply_threshold_500(fast_client):
-    """Verify Farm 1 supplies Sushi-Bar ingredients only when Farm 8 stock < 500."""
+async def test_farm8_sushi_supply_reorder_threshold(fast_client):
+    """Verify Farm 1 supplies Sushi-Bar ingredients when Farm 8 stock <= sushi_reorder_threshold."""
     stock = StockService(fast_client)
     # PIDs: 12 (Honig), 17 (Karotten), 9 (Eier)
     stock.products = {
@@ -404,14 +404,14 @@ async def test_farm8_sushi_supply_threshold_500(fast_client):
         9: Product(pid=9, name="Eier", category="e", amount=3000),
     }
     # Farm 8 stock:
-    # 12: 450 (< 500) -> send!
-    # 17: 350 (< 500) -> send!
-    # 9: 600 (>= 500) -> skip!
+    # 12: 50 (<= 100) -> send batch!
+    # 17: 80 (<= 100) -> send batch!
+    # 9: 200 (> 100) -> skip!
     stock.farm_temp_stocks = {
         8: {
-            12: 450,
-            17: 350,
-            9: 600,
+            12: 50,
+            17: 80,
+            9: 200,
         }
     }
 
@@ -423,6 +423,8 @@ async def test_farm8_sushi_supply_threshold_500(fast_client):
         transport=True,
         sushi_supply=True,
         sushi_reserve_threshold=500,
+        sushi_reorder_threshold=100,
+        sushi_batch_amount=375,
     )
 
     v = Vehicle(fast_client, state, config, route_cfg)
@@ -448,7 +450,7 @@ async def test_farm8_sushi_supply_threshold_500(fast_client):
         )
         res = await v.loop(stock, sushibar_service=MockSushiBar())
         assert res is True
-        # 17 (350) and 12 (450) must be loaded; 9 (600) must NOT be loaded
+        # 17 (80) and 12 (50) must be loaded; 9 (200) must NOT be loaded
         assert "17" in v.last_sent_cart
         assert "12" in v.last_sent_cart
         assert ",9," not in v.last_sent_cart
@@ -456,6 +458,9 @@ async def test_farm8_sushi_supply_threshold_500(fast_client):
         assert 17 in loaded_pids
         assert 12 in loaded_pids
         assert 9 not in loaded_pids
+        # Batch load check: capacity 750 / 2 slots = 375 each
+        for item in v.current_cargo:
+            assert item.amount == 375
 
 
 @pytest.mark.asyncio

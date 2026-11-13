@@ -284,7 +284,9 @@
         "only_quest_products": true,
         "sushi_supply": true,
         "sushi_reserve_threshold": 500,
-        "min_crop_reserve": 500
+        "min_crop_reserve": 500,
+        "sushi_reorder_threshold": 100,
+        "sushi_batch_amount": 400
       },
       "10": {
         "farm_id": 10,

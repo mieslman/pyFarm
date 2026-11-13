@@ -81,7 +81,15 @@ class VehicleRouteConfig(BaseModel):
     )
     sushi_reserve_threshold: int = Field(
         default=500,
-        description="Threshold below which Sushi-Bar ingredients are supplied from main farm",
+        description="Target reserve amount on outer farm for Sushi-Bar ingredients",
+    )
+    sushi_reorder_threshold: int = Field(
+        default=100,
+        description="Threshold at or below which Sushi-Bar ingredients are reordered from main farm",
+    )
+    sushi_batch_amount: int = Field(
+        default=400,
+        description="Standard batch amount to transport per Sushi-Bar ingredient slot",
     )
     min_crop_reserve: int = Field(
         default=0,

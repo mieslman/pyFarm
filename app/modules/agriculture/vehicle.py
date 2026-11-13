@@ -253,7 +253,7 @@ class Vehicle:
                 if outer_stock < target_amount:
                     products_to_send.append(pid)
 
-        # 2. Sushi-Bar ingredients (Farm 8) - only supply when reserve < threshold (500)
+        # 2. Sushi-Bar ingredients (Farm 8) - only supply when reserve <= reorder_threshold (default 100)
         if self.route_config.sushi_supply:
             sushi_ingredients = get_sushibar_needed_ingredients(
                 sushibar_service or self.sushibar_service,
@@ -267,7 +267,8 @@ class Vehicle:
                 if p_obj and (p_obj.category == "water" or p_obj.category == farm_cat):
                     continue
                 outer_stock = stock_service.get_temp_amount(self.target_farm_id, s_pid)
-                if outer_stock < self.route_config.sushi_reserve_threshold:
+                # Trigger batch delivery only when outer stock drops to or below sushi_reorder_threshold
+                if outer_stock <= self.route_config.sushi_reorder_threshold:
                     deficient_sushi.append((outer_stock, s_pid))
 
             # Prioritize by lowest stock on outer farm first
@@ -293,10 +294,12 @@ class Vehicle:
                 req_name = p_obj.name if p_obj else None
                 target_amount = self.route_config.get_product_target(pid=pid, name=req_name)
                 reorder_thresh = self.route_config.get_reorder_threshold(pid=pid, name=req_name)
-                if self.route_config.sushi_supply and pid not in [
+                is_sushi_ingredient = self.route_config.sushi_supply and pid not in [
                     resolve_pid(r, stock_service) for r in self.route_config.required_products
-                ]:
-                    target_amount = self.route_config.sushi_reserve_threshold
+                ]
+                if is_sushi_ingredient:
+                    target_amount = self.route_config.sushi_batch_amount
+                    reorder_thresh = self.route_config.sushi_reorder_threshold
 
                 if reorder_thresh is not None:
                     # In batch mode, always transport the configured full batch size (e.g. 400), capped at slot capacity
@@ -587,7 +590,8 @@ class Vehicle:
                 if self.route_config.sushi_supply and pid not in [
                     resolve_pid(r, stock_service) for r in self.route_config.required_products
                 ]:
-                    reorder_thresh = self.route_config.sushi_reserve_threshold
+                    # For sushi supply ingredients, urgent return is triggered if stock drops to or below sushi_reorder_threshold
+                    reorder_thresh = self.route_config.sushi_reorder_threshold
 
                 urgency_threshold = reorder_thresh if reorder_thresh is not None else target_amount
                 if outer_stock <= urgency_threshold:
