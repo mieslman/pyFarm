@@ -4747,19 +4747,27 @@
         const slotsContainer = document.getElementById('craftingSlotsContainer');
         if (slotsContainer) {
           const prods = mine.productions || {};
-          const slotsList = [
+          const slotsSlots = mine.slots_slots || {};
+          const displayPositions = [];
+          [
             { slot: '1', name: 'Sandstein-Bruch', mat: 'sandstone' },
             { slot: '2', name: 'Granit-Bruch', mat: 'granite' }
-          ];
+          ].forEach(base => {
+            displayPositions.push({ slot: base.slot, position: '1', name: `${base.name} (Platz 1)`, mat: base.mat, key: base.slot });
+            const hasPos2 = (slotsSlots[base.slot] && slotsSlots[base.slot]['2']) || prods[`${base.slot}_2`];
+            if (hasPos2) {
+              displayPositions.push({ slot: base.slot, position: '2', name: `${base.name} (Platz 2)`, mat: base.mat, key: `${base.slot}_2` });
+            }
+          });
 
           craftingActiveProductions = [];
 
-          slotsContainer.innerHTML = slotsList.map(s => {
-            const p = prods[s.slot];
+          slotsContainer.innerHTML = displayPositions.map(s => {
+            const p = prods[s.key] || (s.position === '1' ? prods[s.slot] : null);
             if (p) {
               const duration = p.duration || 18000;
               const remain = Math.max(0, p.remain || 0);
-              craftingActiveProductions.push({ slot: s.slot, remain: remain, duration: duration, name: p.name });
+              craftingActiveProductions.push({ key: s.key, slot: s.slot, position: s.position, remain: remain, duration: duration, name: p.name });
 
               const isReady = remain <= 0;
               const elapsed = Math.max(0, duration - remain);
@@ -4777,19 +4785,19 @@
                     <div class="flex items-center space-x-2">
                       <span class="text-xl">🪨</span>
                       <div>
-                        <div class="font-bold text-xs text-slate-200">Slot ${s.slot}: ${p.name.toUpperCase()}</div>
+                        <div class="font-bold text-xs text-slate-200">Slot ${s.slot} (Platz ${s.position}): ${p.name.toUpperCase()}</div>
                         <div class="text-[10px] text-slate-400">Ertrag: ${p.amount} Stück</div>
                       </div>
                     </div>
-                    <span id="craftingSlotBadge_${s.slot}" class="text-[10px] px-2 py-0.5 rounded font-medium ${badgeClass}">${isReady ? 'Bereit' : 'Abbau läuft'}</span>
+                    <span id="craftingSlotBadge_${s.key}" class="text-[10px] px-2 py-0.5 rounded font-medium ${badgeClass}">${isReady ? 'Bereit' : 'Abbau läuft'}</span>
                   </div>
                   <div class="space-y-1">
                     <div class="flex justify-between text-[11px] font-mono text-slate-400">
-                      <span id="craftingSlotTimer_${s.slot}">${timeStr}</span>
-                      <span id="craftingSlotPct_${s.slot}">${pct}%</span>
+                      <span id="craftingSlotTimer_${s.key}">${timeStr}</span>
+                      <span id="craftingSlotPct_${s.key}">${pct}%</span>
                     </div>
                     <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden">
-                      <div id="craftingSlotBar_${s.slot}" class="${isReady ? 'bg-emerald-500' : 'bg-amber-500'} h-full transition-all" style="width: ${pct}%"></div>
+                      <div id="craftingSlotBar_${s.key}" class="${isReady ? 'bg-emerald-500' : 'bg-amber-500'} h-full transition-all" style="width: ${pct}%"></div>
                     </div>
                   </div>
                 </div>
@@ -4797,7 +4805,7 @@
             } else {
               return `
                 <div class="bg-slate-950/60 p-3.5 rounded-lg border border-dashed border-slate-800 space-y-3 text-center">
-                  <div class="text-slate-400 font-bold text-xs">Slot ${s.slot}: ${s.name}</div>
+                  <div class="text-slate-400 font-bold text-xs">${s.name}</div>
                   <div class="text-slate-500 text-[11px]">Aktuell kein Abbau aktiv.</div>
                   <div class="text-[10px] text-slate-600 uppercase font-semibold">Bereit für nächsten Zyklus</div>
                 </div>
@@ -4810,28 +4818,29 @@
           if (craftingActiveProductions.length > 0) {
             craftingCountdownTimer = setInterval(() => {
               craftingActiveProductions.forEach(item => {
+                const k = item.key || item.slot;
                 if (item.remain > 0) {
                   item.remain -= 1;
                   const h = Math.floor(item.remain / 3600);
                   const m = Math.floor((item.remain % 3600) / 60);
                   const sec = item.remain % 60;
-                  const elTimer = document.getElementById(`craftingSlotTimer_${item.slot}`);
+                  const elTimer = document.getElementById(`craftingSlotTimer_${k}`);
                   if (elTimer) elTimer.textContent = `${h}h ${m}m ${sec}s`;
                   const elapsed = Math.max(0, item.duration - item.remain);
                   const pct = item.duration > 0 ? Math.min(100, Math.round((elapsed / item.duration) * 100)) : 100;
-                  const elPct = document.getElementById(`craftingSlotPct_${item.slot}`);
+                  const elPct = document.getElementById(`craftingSlotPct_${k}`);
                   if (elPct) elPct.textContent = `${pct}%`;
-                  const elBar = document.getElementById(`craftingSlotBar_${item.slot}`);
+                  const elBar = document.getElementById(`craftingSlotBar_${k}`);
                   if (elBar) elBar.style.width = `${pct}%`;
                 } else {
-                  const elTimer = document.getElementById(`craftingSlotTimer_${item.slot}`);
+                  const elTimer = document.getElementById(`craftingSlotTimer_${k}`);
                   if (elTimer) elTimer.textContent = 'Fertig zur Ernte';
-                  const elBadge = document.getElementById(`craftingSlotBadge_${item.slot}`);
+                  const elBadge = document.getElementById(`craftingSlotBadge_${k}`);
                   if (elBadge) {
                     elBadge.textContent = 'Bereit';
                     elBadge.className = 'text-[10px] px-2 py-0.5 rounded font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/40';
                   }
-                  const elBar = document.getElementById(`craftingSlotBar_${item.slot}`);
+                  const elBar = document.getElementById(`craftingSlotBar_${k}`);
                   if (elBar) {
                     elBar.className = 'bg-emerald-500 h-full transition-all';
                     elBar.style.width = '100%';

@@ -101,11 +101,49 @@ class MineSnapshot(BaseModel):
     workers: dict[str, Worker] = Field(default_factory=dict)
     items: dict[str, MineItem] = Field(default_factory=dict)
     productions: dict[str, MineProductionSlot] = Field(default_factory=dict)
+    slots_slots: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    workers_slots: dict[str, Any] = Field(default_factory=dict)
     stats: dict[str, str] = Field(default_factory=dict)
     validenergyproducts: dict[str, int] = Field(default_factory=dict)
     materials_config: dict[str, MineMaterialConfig] = Field(default_factory=dict)
     shop_items_config: dict[str, MineShopItemConfig] = Field(default_factory=dict)
     last_updated: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+
+    def get_unlocked_positions(self, slot: int | str) -> list[int]:
+        """Returns list of unlocked positions for the given mine slot (e.g. [1, 2])."""
+        slot_str = str(slot)
+        # Position 1 is always unlocked by default for valid mine slots
+        positions = [1]
+        slot_data = self.slots_slots.get(slot_str) or {}
+        if isinstance(slot_data, dict):
+            for pos_str, pos_info in slot_data.items():
+                if str(pos_str).isdigit() and int(pos_str) > 1:
+                    if isinstance(pos_info, dict) and "remain" in pos_info:
+                        if pos_info["remain"] <= 0:
+                            continue
+                    positions.append(int(pos_str))
+        return sorted(positions)
+
+    def get_production(
+        self, slot: int | str, position: int | str = 1
+    ) -> MineProductionSlot | None:
+        """Retrieve production for slot and position if exists."""
+        slot_s = str(slot)
+        pos_s = str(position)
+        key = f"{slot_s}_{pos_s}"
+        if key in self.productions:
+            return self.productions[key]
+        if pos_s == "1" and slot_s in self.productions:
+            return self.productions[slot_s]
+        for p in self.productions.values():
+            if str(p.slot) == slot_s and str(p.position) == pos_s:
+                return p
+        return None
+
+    def is_position_busy(self, slot: int | str, position: int | str = 1) -> bool:
+        """Check if the given slot position is actively running a production (not finished)."""
+        prod = self.get_production(slot, position)
+        return prod is not None and not prod.is_ready
 
 
 # =====================================================================

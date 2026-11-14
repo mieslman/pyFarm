@@ -1368,3 +1368,316 @@ async def test_serve_stonemason_fallback_to_owned_tools_when_autobuy_disabled(
     assert clicked == [
         {"mode": "stonemason_click_tile", "customerid": "6115", "tile": 24, "tool": 4}
     ]
+
+
+@pytest.mark.asyncio
+async def test_parse_mine_data_with_multi_position_and_slots_slots(dummy_client: MFFGameClient):
+    """Verify that multiple positions per slot and slots_slots are correctly parsed and queried."""
+    mock_mine_data = {
+        "status": "ok",
+        "datablock": {
+            "data": {
+                "id": "16",
+                "workers_slots": {"2": 1793036440, "3": 1794682813},
+                "slots_slots": {
+                    "1": {"2": {"buytime": 1794682764}},
+                    "2": {"2": {"buytime": 1794682757}},
+                },
+                "stock": {"sandstone": 2090, "granite": 1739},
+                "workers": {
+                    "16": {
+                        "id": "16",
+                        "name": "Skyler",
+                        "energy": "100",
+                        "productionid": "21069",
+                        "data": {"granite": {"level": 16, "points": 1586, "percent": 47.8}},
+                    },
+                    "402": {
+                        "id": "402",
+                        "name": "Charlie",
+                        "energy": "100",
+                        "productionid": "21129",
+                        "data": {"sandstone": {"level": 16, "points": 1742, "percent": 85.0}},
+                    },
+                    "587": {
+                        "id": "587",
+                        "name": "Kennedy",
+                        "energy": "100",
+                        "productionid": "0",
+                        "data": None,
+                    },
+                },
+                "items": {
+                    "3565": {"id": "3565", "name": "shoes", "durability": "12", "stock": "1"},
+                    "3566": {"id": "3566", "name": "shoes", "durability": "12", "stock": "1"},
+                },
+                "productions": {
+                    "2": {
+                        "1": {
+                            "id": "21069",
+                            "slot": "2",
+                            "position": "1",
+                            "name": "granite",
+                            "amount": "20",
+                            "workers": {"1": 16},
+                            "items": {"1": 3554, "2": 3555},
+                            "duration": "10800",
+                            "remain": 2222,
+                        }
+                    },
+                    "1": {
+                        "1": {
+                            "id": "21129",
+                            "slot": "1",
+                            "position": "1",
+                            "name": "sandstone",
+                            "amount": "20",
+                            "workers": {"1": 402},
+                            "items": {"1": 3563, "2": 3564},
+                            "duration": "9000",
+                            "remain": 4497,
+                        }
+                    },
+                },
+            },
+            "config": {
+                "material": {
+                    "sandstone": {"name": "Sandstein", "duration": 9000, "energy": 10},
+                    "granite": {"name": "Granit", "duration": 10800, "energy": 15},
+                },
+                "items": {
+                    "shoes": {"name": "Schuhe", "durability": 20, "bonus": {"xp": 0.8}, "money": 5000}
+                },
+            },
+        },
+    }
+
+    dummy_client.api_call = AsyncMock(return_value=mock_mine_data)
+    service = CraftingVillageService(client=dummy_client)
+    snap = await service.init_remote()
+
+    assert snap is not None
+    assert snap.mine is not None
+    mine = snap.mine
+
+    # 3 workers parsed correctly
+    assert len(mine.workers) == 3
+    assert mine.workers["16"].is_working is True
+    assert mine.workers["402"].is_working is True
+    assert mine.workers["587"].is_working is False
+    assert mine.workers["587"].data == {}
+
+    # Unlocked positions per slot
+    assert mine.get_unlocked_positions("1") == [1, 2]
+    assert mine.get_unlocked_positions("2") == [1, 2]
+    assert mine.get_unlocked_positions("3") == [1]
+
+    # Check busy positions
+    assert mine.is_position_busy("1", 1) is True
+    assert mine.is_position_busy("1", 2) is False
+    assert mine.is_position_busy("2", 1) is True
+    assert mine.is_position_busy("2", 2) is False
+
+    # Production retrieval
+    p1 = mine.get_production("1", 1)
+    assert p1 is not None
+    assert p1.name == "sandstone"
+    assert p1.position == "1"
+
+    p2 = mine.get_production("2", 1)
+    assert p2 is not None
+    assert p2.name == "granite"
+
+
+@pytest.mark.asyncio
+async def test_serve_starts_third_worker_in_free_position(
+    dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch
+):
+    """Verify serve() starts idle 3rd worker (Kennedy) on free position (Slot 2 Pos 2) when Granit has lower stock."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings.crafting_village, "auto_mine", True)
+    monkeypatch.setattr(settings.crafting_village, "auto_harvest", False)
+    monkeypatch.setattr(settings.crafting_village, "auto_refill_energy", False)
+    monkeypatch.setattr(settings.crafting_village, "auto_buy_tools", False)
+    monkeypatch.setattr(settings.crafting_village, "auto_stonemason", False)
+    monkeypatch.setattr(settings.crafting_village, "preferred_material", "least_stock")
+
+    # Initial state: Slot 1 Pos 1 busy (sandstone), Slot 2 Pos 1 busy (granite).
+    # Stock: sandstone=2090, granite=1739 -> target is granite!
+    # Slot 2 Pos 2 is free! Kennedy (worker 587) is idle with 100 energy.
+    initial_mine_data = {
+        "status": "ok",
+        "datablock": {
+            "data": {
+                "id": "16",
+                "workers_slots": {"2": 1793036440, "3": 1794682813},
+                "slots_slots": {
+                    "1": {"2": {"buytime": 1794682764}},
+                    "2": {"2": {"buytime": 1794682757}},
+                },
+                "stock": {"sandstone": 2090, "granite": 1739},
+                "workers": {
+                    "16": {"id": "16", "name": "Skyler", "energy": "100", "productionid": "21069"},
+                    "402": {"id": "402", "name": "Charlie", "energy": "100", "productionid": "21129"},
+                    "587": {"id": "587", "name": "Kennedy", "energy": "100", "productionid": "0"},
+                },
+                "items": {
+                    "3565": {"id": "3565", "name": "shoes", "durability": "12", "stock": "1"},
+                    "3566": {"id": "3566", "name": "shoes", "durability": "12", "stock": "1"},
+                },
+                "productions": {
+                    "2": {
+                        "1": {
+                            "id": "21069",
+                            "slot": "2",
+                            "position": "1",
+                            "name": "granite",
+                            "remain": 2200,
+                        }
+                    },
+                    "1": {
+                        "1": {
+                            "id": "21129",
+                            "slot": "1",
+                            "position": "1",
+                            "name": "sandstone",
+                            "remain": 4400,
+                        }
+                    },
+                },
+            },
+            "config": {
+                "material": {
+                    "sandstone": {"name": "Sandstein", "duration": 9000, "energy": 10},
+                    "granite": {"name": "Granit", "duration": 10800, "energy": 15},
+                },
+                "items": {
+                    "shoes": {"name": "Schuhe", "durability": 20, "bonus": {"xp": 0.8}, "money": 5000}
+                },
+            },
+        },
+    }
+
+    started_setups: list[dict[str, Any]] = []
+
+    async def mock_api_call(action: str, params: dict[str, Any]):
+        mode = params.get("mode")
+        if mode == "mine_init":
+            return initial_mine_data
+        if mode == "mine_start_production":
+            setup = json.loads(params["setup"])
+            started_setups.append(setup)
+            # Update Kennedy to working
+            initial_mine_data["datablock"]["data"]["workers"]["587"]["productionid"] = "21150"
+            initial_mine_data["datablock"]["data"]["productions"]["2"]["2"] = {
+                "id": "21150",
+                "slot": "2",
+                "position": "2",
+                "name": "granite",
+                "remain": 10800,
+            }
+            return {"status": "ok", "datablock": 1, "updateblock": {}}
+        return {"status": "ok"}
+
+    import json
+    dummy_client.api_call = AsyncMock(side_effect=mock_api_call)
+    service = CraftingVillageService(client=dummy_client)
+
+    res = await service.serve()
+    assert res["status"] == "ok"
+    assert res["started"] == 1
+    assert len(started_setups) == 1
+
+    setup = started_setups[0]
+    # Kennedy must be started on Slot 2, Position 2 with Granite!
+    assert setup["slot"] == 2
+    assert setup["position"] == 2
+    assert setup["name"] == "granite"
+    assert setup["workers"] == {"1": 587}
+    assert list(setup["items"].values()) == [3565, 3566]
+
+
+@pytest.mark.asyncio
+async def test_serve_starts_two_workers_in_same_mine(
+    dummy_client: MFFGameClient, monkeypatch: pytest.MonkeyPatch
+):
+    """Verify serve() can assign two workers to Position 1 and Position 2 in the same mine."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings.crafting_village, "auto_mine", True)
+    monkeypatch.setattr(settings.crafting_village, "auto_harvest", False)
+    monkeypatch.setattr(settings.crafting_village, "auto_refill_energy", False)
+    monkeypatch.setattr(settings.crafting_village, "auto_buy_tools", False)
+    monkeypatch.setattr(settings.crafting_village, "auto_stonemason", False)
+    monkeypatch.setattr(settings.crafting_village, "preferred_material", "granite")
+
+    initial_mine_data = {
+        "status": "ok",
+        "datablock": {
+            "data": {
+                "id": "16",
+                "slots_slots": {
+                    "2": {"2": {"buytime": 1794682757}},
+                },
+                "stock": {"granite": 100},
+                "workers": {
+                    "16": {"id": "16", "name": "Skyler", "energy": "100", "productionid": "0"},
+                    "587": {"id": "587", "name": "Kennedy", "energy": "100", "productionid": "0"},
+                },
+                "items": {
+                    "1": {"id": "1", "name": "shoes", "durability": "10", "stock": "1"},
+                    "2": {"id": "2", "name": "shoes", "durability": "10", "stock": "1"},
+                    "3": {"id": "3", "name": "shoes", "durability": "10", "stock": "1"},
+                    "4": {"id": "4", "name": "shoes", "durability": "10", "stock": "1"},
+                },
+                "productions": {},
+            },
+            "config": {
+                "material": {
+                    "granite": {"name": "Granit", "duration": 10800, "energy": 15},
+                },
+                "items": {
+                    "shoes": {"name": "Schuhe", "durability": 20, "bonus": {"xp": 0.8}, "money": 5000}
+                },
+            },
+        },
+    }
+
+    started_setups: list[dict[str, Any]] = []
+
+    async def mock_api_call(action: str, params: dict[str, Any]):
+        mode = params.get("mode")
+        if mode == "mine_init":
+            return initial_mine_data
+        if mode == "mine_start_production":
+            setup = json.loads(params["setup"])
+            started_setups.append(setup)
+            worker_id = str(list(setup["workers"].values())[0])
+            pos = str(setup["position"])
+            initial_mine_data["datablock"]["data"]["workers"][worker_id]["productionid"] = f"prod_{pos}"
+            if "2" not in initial_mine_data["datablock"]["data"]["productions"]:
+                initial_mine_data["datablock"]["data"]["productions"]["2"] = {}
+            initial_mine_data["datablock"]["data"]["productions"]["2"][pos] = {
+                "id": f"prod_{pos}",
+                "slot": "2",
+                "position": pos,
+                "name": "granite",
+                "remain": 10800,
+            }
+            return {"status": "ok", "datablock": 1, "updateblock": {}}
+        return {"status": "ok"}
+
+    import json
+    dummy_client.api_call = AsyncMock(side_effect=mock_api_call)
+    service = CraftingVillageService(client=dummy_client)
+
+    res = await service.serve()
+    assert res["status"] == "ok"
+    assert res["started"] == 2
+    assert len(started_setups) == 2
+
+    # Both positions 1 and 2 in Slot 2 started!
+    assert [s["slot"] for s in started_setups] == [2, 2]
+    assert [s["position"] for s in started_setups] == [1, 2]
+    assert [s["name"] for s in started_setups] == ["granite", "granite"]

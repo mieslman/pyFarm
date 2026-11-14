@@ -90,10 +90,10 @@ class CraftingVillageService:
                             p_id = str(p_info.get("id", f"{slot_key}_{sub_key}"))
                             raw_p_workers = p_info.get("workers") or {}
                             raw_p_items = p_info.get("items") or {}
-                            productions_map[str(slot_key)] = MineProductionSlot(
+                            prod_slot = MineProductionSlot(
                                 id=p_id,
                                 slot=str(p_info.get("slot", slot_key)),
-                                position=str(p_info.get("position", "1")),
+                                position=str(p_info.get("position", sub_key)),
                                 name=str(p_info.get("name", "sandstone")),
                                 amount=int(p_info.get("amount", 0)),
                                 workers={
@@ -111,6 +111,9 @@ class CraftingVillageService:
                                 createdate=str(p_info.get("createdate", "")),
                                 finishdate=str(p_info.get("finishdate", "")),
                             )
+                            # Key: "1" for pos 1 (backward-compatible), "1_2" for pos 2
+                            key = str(slot_key) if str(sub_key) == "1" else f"{slot_key}_{sub_key}"
+                            productions_map[key] = prod_slot
 
         # 4. Parse Material Config
         materials_map: dict[str, MineMaterialConfig] = {}
@@ -159,6 +162,16 @@ class CraftingVillageService:
         )
         raw_stats = data.get("stats") or {}
         stats = {str(k): str(v) for k, v in raw_stats.items()} if isinstance(raw_stats, dict) else {}
+        raw_slots_slots = data.get("slots_slots") or {}
+        slots_slots = (
+            {str(k): dict(v) for k, v in raw_slots_slots.items() if isinstance(v, dict)}
+            if isinstance(raw_slots_slots, dict)
+            else {}
+        )
+        raw_workers_slots = data.get("workers_slots") or {}
+        workers_slots = (
+            dict(raw_workers_slots) if isinstance(raw_workers_slots, dict) else {}
+        )
 
         return MineSnapshot(
             level=int(data.get("level", 1)),
@@ -166,6 +179,8 @@ class CraftingVillageService:
             workers=workers_map,
             items=items_map,
             productions=productions_map,
+            slots_slots=slots_slots,
+            workers_slots=workers_slots,
             stats=stats,
             validenergyproducts=energy_prods,
             materials_config=materials_map,
@@ -1240,14 +1255,19 @@ class CraftingVillageService:
             best_buyable = self.get_best_buyable_tool()
             if best_buyable:
                 tool_name, _ = best_buyable
-                # Wie viele dieses Spitzenwerkzeugs sind noch im Rucksack verfügbar?
                 available_count = sum(
                     1
                     for item in mine.items.values()
                     if item.name == tool_name and item.stock > 0 and item.durability > 0
                 )
-                if available_count < 2:
-                    needed_to_buy = 2 - available_count
+                idle_workers_count = sum(
+                    1
+                    for w in mine.workers.values()
+                    if not w.is_working and w.energy >= 10
+                )
+                needed_tools_target = max(2, idle_workers_count * 2)
+                if available_count < needed_tools_target:
+                    needed_to_buy = needed_tools_target - available_count
                     ok = await self.buy_shop_item(
                         name=tool_name,
                         amount=needed_to_buy,
@@ -1258,50 +1278,97 @@ class CraftingVillageService:
                         if self.snapshot and self.snapshot.mine:
                             mine = self.snapshot.mine
 
-        # 4. Neuen Abbau starten
+        # 4. Neuen Abbau starten (unterstützt mehrere Positionen pro Mine und mehrere Arbeiter)
         if settings.crafting_village.auto_mine:
-            target_mat = self.select_next_material()
-            logger.debug(
-                f"CraftingVillage: Ziel-Material laut Bestandsabgleich: {target_mat} "
-                f"(Sandstein: {mine.stock.get('sandstone', 0)}, Granit: {mine.stock.get('granite', 0)})"
-            )
+            pref = settings.crafting_village.preferred_material
+            while True:
+                idle_workers = [
+                    w
+                    for w in mine.workers.values()
+                    if not w.is_working and w.energy >= 10
+                ]
+                if not idle_workers:
+                    break
 
-            # Priorisiere Ziel-Material
-            if target_mat == "granite":
-                slots_to_check = [("2", "granite"), ("1", "sandstone")]
-            else:
-                slots_to_check = [("1", "sandstone"), ("2", "granite")]
+                target_mat = self.select_next_material()
+                logger.debug(
+                    f"CraftingVillage: Ziel-Material laut Bestandsabgleich: {target_mat} "
+                    f"(Sandstein: {mine.stock.get('sandstone', 0)}, Granit: {mine.stock.get('granite', 0)})"
+                )
 
-            for s_id, mat in slots_to_check:
-                existing_prod = mine.productions.get(s_id)
-                if existing_prod and not existing_prod.is_ready:
-                    continue
+                if pref == "granite":
+                    slots_to_check = [("2", "granite")]
+                elif pref == "sandstone":
+                    slots_to_check = [("1", "sandstone")]
+                elif target_mat == "granite":
+                    slots_to_check = [("2", "granite"), ("1", "sandstone")]
+                else:
+                    slots_to_check = [("1", "sandstone"), ("2", "granite")]
+
+                assigned_slot: int | None = None
+                assigned_pos: int | None = None
+                assigned_mat: str | None = None
+
+                for s_id, mat in slots_to_check:
+                    unlocked_positions = mine.get_unlocked_positions(s_id)
+                    for pos in unlocked_positions:
+                        if not mine.is_position_busy(s_id, pos):
+                            assigned_slot = int(s_id)
+                            assigned_pos = int(pos)
+                            assigned_mat = mat
+                            break
+                    if assigned_slot is not None:
+                        break
+
+                if assigned_slot is None:
+                    logger.debug("CraftingVillage: Keine freien Abbau-Positionen mehr verfügbar.")
+                    break
+
+                worker = self.get_best_worker_for_material(assigned_mat)
+                if not worker:
+                    all_busy = all(w.is_working for w in mine.workers.values())
+                    if all_busy:
+                        logger.debug(
+                            "CraftingVillage: Alle Arbeiter sind aktuell beschäftigt."
+                        )
+                    else:
+                        logger.debug(
+                            f"CraftingVillage: Slot {assigned_slot} Pos {assigned_pos} ({assigned_mat}) "
+                            f"kann nicht gestartet werden: Kein freier Arbeiter mit genügend Energie."
+                        )
+                    break
 
                 tools = self.get_best_tools_for_mining(count=2)
+                if len(tools) < 2 and settings.crafting_village.auto_buy_tools:
+                    best_buyable = self.get_best_buyable_tool()
+                    if best_buyable:
+                        tool_name, _ = best_buyable
+                        needed = 2 - len(tools)
+                        logger.info(
+                            f"CraftingVillage: Kaufe {needed}x '{tool_name}' für Arbeiter {worker.name}..."
+                        )
+                        bought = await self.buy_shop_item(
+                            name=tool_name,
+                            amount=needed,
+                            stock_service=stock_service,
+                        )
+                        if bought:
+                            bought_tools_count += needed
+                            if self.snapshot and self.snapshot.mine:
+                                mine = self.snapshot.mine
+                            tools = self.get_best_tools_for_mining(count=2)
+
                 if len(tools) < 2:
                     logger.warning(
                         "CraftingVillage: Nicht genügend verfügbare Werkzeuge für Abbau (mindestens 2 benötigt)."
                     )
                     break
 
-                worker = self.get_best_worker_for_material(mat)
-                if not worker:
-                    all_busy = all(w.is_working for w in mine.workers.values())
-                    if all_busy:
-                        logger.debug(
-                            f"CraftingVillage: Slot {s_id} ({mat}) kann nicht gestartet werden: Alle Arbeiter sind aktuell beschäftigt."
-                        )
-                    else:
-                        logger.debug(
-                            f"CraftingVillage: Slot {s_id} ({mat}) kann nicht gestartet werden: Kein freier Arbeiter mit genügend Energie."
-                        )
-                    continue
-
                 tool_ids = [t.id for t in tools]
                 success = await self.start_mining(
-                    slot=int(s_id),
-                    position=1,
-                    material=mat,
+                    slot=assigned_slot,
+                    position=assigned_pos,
+                    material=assigned_mat,
                     worker_id=worker.id,
                     item_ids=tool_ids,
                 )
@@ -1311,7 +1378,11 @@ class CraftingVillageService:
                     if not self.snapshot or not self.snapshot.mine:
                         break
                     mine = self.snapshot.mine
-                    continue
+                else:
+                    logger.warning(
+                        f"CraftingVillage: Abbau-Start in Slot {assigned_slot} Pos {assigned_pos} fehlgeschlagen."
+                    )
+                    break
 
         # 5. Steinmetz-Werkstatt Automation
         stonemason_stats = {}

@@ -152,8 +152,11 @@ Alle Aufrufe erfolgen an das zentrale Skript `ajax/farm.php`:
    - Sortiert nach dem XP-Bonus (`bonus.xp`) absteigend (z. B. Funkgerät 1.6 > Schuhe 0.8 > Spitzhacke 0.4).
    - Wählt die besten 2 verfügbaren Werkzeuge für den Abbau aus.
 
-4. **Arbeiter-Zuweisung:**
-   - Wählt untätige Arbeiter mit der höchsten Fertigkeitsstufe für das Zielmaterial und prüft, ob die Energie für den Vorgang ausreicht.
+4. **Arbeiter- und Positionen-Zuweisung (Multi-Worker & Multi-Position):**
+   - Jede Mine (Slot 1 für Sandstein, Slot 2 für Granit) verfügt über mehrere Abbau-Positionen (Platz 1 standardmäßig freigeschaltet, Platz 2 via `slots_slots` für je 100.000 kT erwerbbar).
+   - Die Automation prüft in jedem Durchlauf alle untätigen Arbeiter mit mindestens 10 Energie.
+   - Weist freie Plätze gemäß Material-Präferenz (`least_stock`, `granite` oder `sandstone`) zu. Ist die bevorzugte Mine voll belegt, weicht die Automation auf freie Positionen der anderen Mine aus, sodass alle verfügbaren Arbeiter parallel arbeiten.
+   - Bei Werkzeugmangel kauft `auto_buy_tools` automatisch Spitzenwerkzeuge im Shop nach, damit kein Arbeiter blockiert wird.
 
 5. **Steinmetz-Automation (`serve_stonemason`):**
    - **Fertige Skulpturen abholen:** Prüft belegte Werkbänke. Wenn alle Kacheln gemeißelt und deren Dauer abgelaufen ist (`remain <= 0`), wird `stonemason_finish_grid` ausgeführt.
