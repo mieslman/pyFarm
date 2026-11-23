@@ -7,6 +7,15 @@ from loguru import logger
 from app.core.client import MFFGameClient
 from app.models.product import Product
 
+# In-memory template catalog cache keyed by versioned jsconstants_*.js URL.
+# Each entry stores pristine Product templates (amount=0, tmp_amount=0).
+_catalog_cache: dict[str, dict[int, Product]] = {}
+
+
+def clear_catalog_cache() -> None:
+    """Clear the cached product catalogs."""
+    _catalog_cache.clear()
+
 
 def parse_js_dict(text: str, var_name: str) -> dict[int, Any]:
     """Extract a JavaScript object literal (var var_name = {...};) and parse it as a dict."""
@@ -77,9 +86,24 @@ def build_catalog(html_content: str, js_constants_content: str) -> dict[int, Pro
     return catalog
 
 
-async def load_remote_catalog(client: MFFGameClient, login_html: str) -> dict[int, Product]:
-    """Fetch external JS constants and assemble the full product catalog."""
+async def load_remote_catalog(
+    client: MFFGameClient, login_html: str, *, use_cache: bool = True
+) -> dict[int, Product]:
+    """Fetch external JS constants and assemble the full product catalog.
+
+    Caches the assembled catalog per versioned ``jsconstants_*.js`` URL so subsequent
+    scheduler cycles avoid redundant HTTP downloads and JS parsing. Always returns
+    fresh ``Product`` copies so in-memory stock mutations never leak into the cache.
+    """
     constants_url = extract_constants_url(login_html, client.server)
+
+    if use_cache and constants_url in _catalog_cache:
+        cached = _catalog_cache[constants_url]
+        logger.debug(
+            f"Verwende gecachten Produktkatalog für {constants_url} ({len(cached)} Produkte)."
+        )
+        return {pid: product.model_copy() for pid, product in cached.items()}
+
     logger.debug(f"Lade JS-Konstanten von: {constants_url}")
 
     res = await client.client.get(constants_url)
@@ -89,4 +113,10 @@ async def load_remote_catalog(client: MFFGameClient, login_html: str) -> dict[in
     else:
         constants_text = res.text
 
-    return build_catalog(login_html, constants_text)
+    catalog = build_catalog(login_html, constants_text)
+    if res.status_code == 200 and catalog:
+        _catalog_cache[constants_url] = {
+            pid: product.model_copy() for pid, product in catalog.items()
+        }
+
+    return catalog

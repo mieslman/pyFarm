@@ -34,6 +34,8 @@ class MFFGameClient:
     - Detection of maintenance mode and captchas.
     """
 
+    DEFAULT_FARMS_CACHE_TTL: float = 30.0
+
     def __init__(
         self,
         server: int,
@@ -42,6 +44,7 @@ class MFFGameClient:
         min_jitter_ms: int = 350,
         max_jitter_ms: int = 900,
         circuit_breaker_instance: CircuitBreaker | None = None,
+        farms_cache_ttl: float = DEFAULT_FARMS_CACHE_TTL,
     ):
         self.server = server
         self.username = username
@@ -49,8 +52,11 @@ class MFFGameClient:
         self.min_jitter_ms = min_jitter_ms
         self.max_jitter_ms = max_jitter_ms
         self.circuit_breaker = circuit_breaker_instance or circuit_breaker
+        self.farms_cache_ttl = farms_cache_ttl
         self.rid: str | None = None
         self._client: httpx.AsyncClient | None = None
+        self._farms_cache: dict[str, Any] | None = None
+        self._farms_cached_at: float = 0.0
         self.headers = {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -290,6 +296,33 @@ class MFFGameClient:
         self.circuit_breaker.record_success()
         return data
 
+    def invalidate_farms_cache(self) -> None:
+        """Clear the cached getfarms snapshot so the next call fetches fresh data."""
+        self._farms_cache = None
+        self._farms_cached_at = 0.0
+
+    async def get_farms(self, *, force_refresh: bool = False) -> dict[str, Any]:
+        """Fetch getfarms snapshot with short-lived in-memory caching to avoid redundant calls."""
+        if (
+            not force_refresh
+            and self.farms_cache_ttl > 0
+            and self._farms_cache is not None
+            and (time.monotonic() - self._farms_cached_at) < self.farms_cache_ttl
+        ):
+            age = time.monotonic() - self._farms_cached_at
+            logger.debug(f"Verwende gecachten getfarms-Snapshot (Alter: {age:.1f}s)")
+            return self._farms_cache
+
+        data = await self.api_call("farm", {"mode": "getfarms", "farm": 1, "position": 0})
+        if (
+            self.farms_cache_ttl > 0
+            and isinstance(data, dict)
+            and isinstance(data.get("updateblock"), dict)
+        ):
+            self._farms_cache = data
+            self._farms_cached_at = time.monotonic()
+        return data
+
     async def logout(self):
         """Cleanly terminate session on game server."""
         if self._client:
@@ -307,6 +340,7 @@ class MFFGameClient:
             await self._client.aclose()
         self._client = None
         self.rid = None
+        self.invalidate_farms_cache()
 
 
 # ---------------------------------------------------------------------------

@@ -128,3 +128,64 @@ async def test_client_logout(fast_client, mock_game_api):
     await fast_client.logout()
     assert fast_client.rid is None
     assert fast_client._client is None
+
+
+@pytest.mark.asyncio
+async def test_client_get_farms_caching(fast_client):
+    """Test that get_farms caches valid responses within TTL and respects invalidation/force_refresh."""
+    fast_client.rid = "test_rid"
+
+    with respx.mock:
+        route = respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
+            return_value=httpx.Response(
+                200,
+                json={"updateblock": {"menue": {"bar": "1000.00"}, "farms": {}}},
+            )
+        )
+
+        # First call hits API
+        res1 = await fast_client.get_farms()
+        assert res1["updateblock"]["menue"]["bar"] == "1000.00"
+        assert route.call_count == 1
+
+        # Second call reuses cache
+        res2 = await fast_client.get_farms()
+        assert res2 is res1
+        assert route.call_count == 1
+
+        # force_refresh bypasses cache
+        await fast_client.get_farms(force_refresh=True)
+        assert route.call_count == 2
+
+        # Explicit invalidation clears cache
+        fast_client.invalidate_farms_cache()
+        await fast_client.get_farms()
+        assert route.call_count == 3
+
+        # close() clears cache
+        await fast_client.close()
+        fast_client.rid = "test_rid"
+        await fast_client.get_farms()
+        assert route.call_count == 4
+
+
+@pytest.mark.asyncio
+async def test_client_get_farms_does_not_cache_invalid_response(fast_client):
+    """Test that responses without updateblock dict are not cached."""
+    fast_client.rid = "test_rid"
+
+    with respx.mock:
+        route = respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
+            side_effect=[
+                httpx.Response(200, json={"datablock": [0]}),
+                httpx.Response(200, json={"updateblock": {"farms": {}}}),
+            ]
+        )
+
+        res1 = await fast_client.get_farms()
+        assert "updateblock" not in res1
+        assert route.call_count == 1
+
+        res2 = await fast_client.get_farms()
+        assert "updateblock" in res2
+        assert route.call_count == 2

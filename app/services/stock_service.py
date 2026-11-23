@@ -38,7 +38,7 @@ class StockService:
             self.update(initial_data)
         else:
             logger.info("Rufe initialen Farm- und Lagerbestand ab (getfarms)...")
-            res = await self.client.api_call("farm", {"mode": "getfarms", "farm": 1, "position": 0})
+            res = await self.client.get_farms()
             self.update(res)
 
     def init_with_catalog(
@@ -351,9 +351,7 @@ class StockService:
                 if bought_market > 0 or (product.category == "v" and to_buy < needed_amount):
                     # Trigger farm status to fetch updated stock
                     try:
-                        res = await self.client.api_call(
-                            "farm", {"mode": "getfarms", "farm": 1, "position": 0}
-                        )
+                        res = await self.client.get_farms(force_refresh=True)
                         self.update(res)
                     except (MFFException, httpx.HTTPError) as e:
                         logger.warning(f"Konnte Lager nach Zukauf nicht aktualisieren: {e}")

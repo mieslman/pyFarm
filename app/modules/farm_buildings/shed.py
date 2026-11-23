@@ -108,7 +108,16 @@ class Shed:
                 "farm",
                 {"mode": "inner_crop", "farm": self.farm_id, "position": self.position},
             )
-            await self.update(body)
+            datablock = body.get("datablock") if isinstance(body, dict) else None
+            if isinstance(datablock, list) and len(datablock) >= 2 and isinstance(datablock[1], dict):
+                await self.update(body)
+            elif datablock == 1 or (
+                isinstance(datablock, list) and len(datablock) > 0 and datablock[0] == 1
+            ):
+                # inner_crop succeeded without returning a full inner_init barn payload
+                self.barn.remain_seconds = 0
+            else:
+                await self.update(body)
             return True
 
         return False

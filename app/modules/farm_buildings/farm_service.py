@@ -9,6 +9,7 @@ from app.modules.agriculture.strategies import PlantStrategySolver
 from app.modules.agriculture.vehicle import VehicleService
 from app.modules.farm_buildings.factory import Factory
 from app.modules.farm_buildings.fuelstation import Fuelstation
+from app.modules.farm_buildings.schedule_cache import ProductionScheduleCache, ScheduledBuilding
 from app.modules.farm_buildings.shed import Shed
 from app.modules.spicehouse.service import SpicehouseService
 from app.modules.sushibar.service import SushiBarService
@@ -23,9 +24,11 @@ class FarmService:
         self,
         client: MFFGameClient,
         config: FarmStrategyConfig | None = None,
+        schedule_cache: ProductionScheduleCache | None = None,
     ):
         self.client = client
         self.config = config or settings.agriculture
+        self.schedule_cache = schedule_cache
         self.fields: list[Field] = []
         self.sheds: list[Shed] = []
         self.factories: list[Factory] = []
@@ -35,6 +38,102 @@ class FarmService:
         self.vehicle_service: VehicleService = VehicleService(client, config=settings.vehicles)
         self.raw_farms: dict[int, dict[int, Any]] = {}
 
+    def _restore_field_state(self, field: Field, entry: ScheduledBuilding) -> None:
+        if isinstance(entry.state, list):
+            elapsed = ProductionScheduleCache.elapsed_seconds(entry)
+            field.tiles = [
+                tile.model_copy(update={"remain_seconds": max(0, tile.remain_seconds - elapsed)})
+                for tile in entry.state
+            ]
+
+    def _record_field_schedule(self, field: Field) -> None:
+        if not self.schedule_cache:
+            return
+        needs_water = field.auto_water and field.needs_watering
+        if (
+            field.is_fully_planted
+            and not field.has_ready_crops
+            and not needs_water
+            and field.tiles
+            and all(t.remain_seconds > 0 for t in field.tiles)
+        ):
+            min_remain = min(t.remain_seconds for t in field.tiles)
+            self.schedule_cache.record(
+                "field",
+                field.farm_id,
+                field.position,
+                min_remain,
+                state=[t.model_copy() for t in field.tiles],
+            )
+        else:
+            self.schedule_cache.invalidate("field", field.farm_id, field.position)
+
+    def _restore_shed_state(self, shed: Shed, entry: ScheduledBuilding) -> None:
+        if entry.state is not None:
+            elapsed = ProductionScheduleCache.elapsed_seconds(entry)
+            shed.barn = entry.state.model_copy(
+                update={"remain_seconds": max(0, entry.state.remain_seconds - elapsed)}
+            )
+
+    def _record_shed_schedule(self, shed: Shed) -> None:
+        if not self.schedule_cache:
+            return
+        if (
+            shed.barn is not None
+            and shed.barn.animals_count > 0
+            and not shed.is_ready
+            and shed.barn.remain_seconds > 0
+        ):
+            self.schedule_cache.record(
+                "shed",
+                shed.farm_id,
+                shed.position,
+                shed.barn.remain_seconds,
+                state=shed.barn.model_copy(),
+            )
+        else:
+            self.schedule_cache.invalidate("shed", shed.farm_id, shed.position)
+
+    def _restore_factory_state(self, factory: Factory, entry: ScheduledBuilding) -> None:
+        if isinstance(entry.state, dict):
+            elapsed = ProductionScheduleCache.elapsed_seconds(entry)
+            factory.level = entry.state.get("level", factory.level)
+            factory.recipes = dict(entry.state.get("recipes", {}))
+            cached_slots = entry.state.get("slots", {})
+            factory.slots = {
+                slot_id: (
+                    slot.model_copy(
+                        update={"remain_seconds": max(0, slot.remain_seconds - elapsed)}
+                    )
+                    if slot.remain_seconds is not None
+                    else slot.model_copy()
+                )
+                for slot_id, slot in cached_slots.items()
+            }
+
+    def _record_factory_schedule(self, factory: Factory) -> None:
+        if not self.schedule_cache:
+            return
+        unlocked = [s for s in factory.slots.values() if not s.is_blocked]
+        if unlocked and all(
+            s.is_active and s.remain_seconds is not None and s.remain_seconds > 0
+            for s in unlocked
+        ):
+            min_remain = min(s.remain_seconds for s in unlocked if s.remain_seconds is not None)
+            self.schedule_cache.record(
+                "factory",
+                factory.farm_id,
+                factory.position,
+                min_remain,
+                state={
+                    "level": factory.level,
+                    "slots": {k: v.model_copy() for k, v in factory.slots.items()},
+                    "recipes": dict(factory.recipes),
+                },
+            )
+        else:
+            self.schedule_cache.invalidate("factory", factory.farm_id, factory.position)
+
     async def update_farms(
         self,
         body: dict[str, Any] | None = None,
@@ -42,9 +141,7 @@ class FarmService:
     ):
         """Discover buildings on all farms via getfarms and initialize Field, Shed, Fuelstation and SushiBar handlers."""
         if not body:
-            body = await self.client.api_call(
-                "farm", {"mode": "getfarms", "farm": 1, "position": 0}
-            )
+            body = await self.client.get_farms()
 
         updateblock = body.get("updateblock", {})
         farms_block = updateblock.get("farms", {})
@@ -221,9 +318,24 @@ class FarmService:
         # 1. Äcker bewirtschaften
         sp_farm = settings.seasonpass.preferred_field_farm
         sp_pos = settings.seasonpass.preferred_field_pos
+        skipped_fields = 0
 
         for field in self.fields:
             try:
+                if self.schedule_cache:
+                    cached_field = self.schedule_cache.should_skip(
+                        "field", field.farm_id, field.position
+                    )
+                    if cached_field is not None:
+                        self._restore_field_state(field, cached_field)
+                        skipped_fields += 1
+                        logger.debug(
+                            f"Feld {field.farm_id}/{field.position} ({field.name}): Übersprungen "
+                            f"(läuft noch ~{ProductionScheduleCache.estimated_remain_seconds(cached_field)}s, "
+                            f"nächste Prüfung in {ProductionScheduleCache.remaining_skip_seconds(cached_field)}s)."
+                        )
+                        continue
+
                 # If this field is the dedicated SeasonPass field and a SeasonPass crop is active:
                 if (
                     settings.seasonpass.enabled
@@ -240,6 +352,7 @@ class FarmService:
                             f"Priorisiere '{sp_prod.name}' (PID {seasonpass_crop_pid})!"
                         )
                         await field.serve(sp_prod, fallback_candidates=[])
+                        self._record_field_schedule(field)
                         continue
 
                 fixed_pid = self.config.farm_crops.get(field.farm_id)
@@ -258,15 +371,32 @@ class FarmService:
                 primary = plant_candidates[0] if plant_candidates else None
                 fallbacks = plant_candidates[1:] if len(plant_candidates) > 1 else []
                 await field.serve(primary, fallback_candidates=fallbacks)
+                self._record_field_schedule(field)
             except Exception as e:
                 logger.opt(exception=True).error(
                     f"FarmService: Fehler bei Feld {field.farm_id}/{field.position}: {e}"
                 )
 
         # 2. Tierställe versorgen
+        skipped_sheds = 0
         for shed in self.sheds:
             try:
+                if self.schedule_cache:
+                    cached_shed = self.schedule_cache.should_skip(
+                        "shed", shed.farm_id, shed.position
+                    )
+                    if cached_shed is not None:
+                        self._restore_shed_state(shed, cached_shed)
+                        skipped_sheds += 1
+                        logger.debug(
+                            f"Stall {shed.farm_id}/{shed.position} ({shed.name}): Übersprungen "
+                            f"(läuft noch ~{ProductionScheduleCache.estimated_remain_seconds(cached_shed)}s, "
+                            f"nächste Prüfung in {ProductionScheduleCache.remaining_skip_seconds(cached_shed)}s)."
+                        )
+                        continue
+
                 await shed.serve(stock_service)
+                self._record_shed_schedule(shed)
             except Exception as e:
                 logger.opt(exception=True).error(
                     f"FarmService: Fehler bei Stall {shed.farm_id}/{shed.position}: {e}"
@@ -295,18 +425,40 @@ class FarmService:
                 )
 
         # 5. Veredelungsfabriken versorgen
+        skipped_factories = 0
         for factory in self.factories:
             try:
+                if self.schedule_cache:
+                    cached_factory = self.schedule_cache.should_skip(
+                        "factory", factory.farm_id, factory.position
+                    )
+                    if cached_factory is not None:
+                        self._restore_factory_state(factory, cached_factory)
+                        skipped_factories += 1
+                        logger.debug(
+                            f"Fabrik {factory.name} {factory.farm_id}/{factory.position}: Übersprungen "
+                            f"(läuft noch ~{ProductionScheduleCache.estimated_remain_seconds(cached_factory)}s, "
+                            f"nächste Prüfung in {ProductionScheduleCache.remaining_skip_seconds(cached_factory)}s)."
+                        )
+                        continue
+
                 await factory.serve(
                     stock_service=stock_service,
                     quest_status_main=quest_status_main,
                     quest_requirements=quest_requirements,
                     catalog=catalog,
                 )
+                self._record_factory_schedule(factory)
             except Exception as e:
                 logger.opt(exception=True).error(
                     f"FarmService: Fehler bei Fabrik {factory.name} {factory.farm_id}/{factory.position}: {e}"
                 )
+
+        if skipped_fields or skipped_sheds or skipped_factories:
+            logger.info(
+                f"FarmService: Laufende Produktionen übersprungen: "
+                f"{skipped_fields} Äcker, {skipped_sheds} Ställe, {skipped_factories} Fabriken."
+            )
 
         # 6. Gewürzhaus versorgen (Farm 10)
         for spicehouse in self.spicehouses:
@@ -376,4 +528,5 @@ class FarmService:
             except Exception as e:
                 logger.opt(exception=True).error(f"FarmService: Fehler bei Fahrzeuglogistik: {e}")
 
+        self.client.invalidate_farms_cache()
         logger.info("========== FarmService: Zyklus beendet ==========")

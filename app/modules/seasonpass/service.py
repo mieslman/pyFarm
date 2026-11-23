@@ -88,6 +88,8 @@ class SeasonPassService:
         self,
         stock_service: StockService | None = None,
         farm_service: Any | None = None,
+        *,
+        skip_init: bool = False,
     ) -> dict[str, Any]:
         """Execute one complete seasonpass serving cycle."""
         if not self.config.enabled:
@@ -95,7 +97,8 @@ class SeasonPassService:
             return {"enabled": False}
 
         logger.info("========== Seasonpass: Starte Aufgabenzyklus ==========")
-        await self.init_remote()
+        if not (skip_init and self.snapshot is not None):
+            await self.init_remote()
 
         results: dict[str, Any] = {
             "enabled": True,

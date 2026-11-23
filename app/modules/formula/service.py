@@ -216,9 +216,7 @@ class FormulaDealerService:
 
         if not powerups_data:
             try:
-                res = await self.client.api_call(
-                    "farm", {"mode": "getfarms", "farm": 1, "position": 0}
-                )
+                res = await self.client.get_farms()
                 powerups_data = res.get("updateblock", {}).get("farms", {}).get("powerups", {})
             except UpstreamAPIError as e:
                 logger.warning(f"FormulaDealer: Konnte Powerup-Status nicht abrufen: {e}")

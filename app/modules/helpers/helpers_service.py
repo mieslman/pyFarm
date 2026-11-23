@@ -60,9 +60,7 @@ class HelpersService:
 
         if menue_data is None:
             try:
-                res = await self.client.api_call(
-                    "farm", {"mode": "getfarms", "farm": 1, "position": 0}
-                )
+                res = await self.client.get_farms()
                 menue_data = res.get("updateblock", {}).get("menue", {})
             except UpstreamAPIError as e:
                 logger.warning(f"Helpers: Konnte Menü-Status für Braver Ben nicht abrufen: {e}")
@@ -92,9 +90,7 @@ class HelpersService:
 
         if menue_data is None:
             try:
-                res = await self.client.api_call(
-                    "farm", {"mode": "getfarms", "farm": 1, "position": 0}
-                )
+                res = await self.client.get_farms()
                 menue_data = res.get("updateblock", {}).get("menue", {})
             except UpstreamAPIError as e:
                 logger.warning(f"Helpers: Konnte Menü-Status für Goldesel nicht abrufen: {e}")
@@ -180,6 +176,7 @@ class HelpersService:
                     "city", {"mode": "windmillcrop", "city": 2, "slot": slot_id}
                 )
                 if crop_res.get("datablock", [None])[0] == 1:
+                    self.client.invalidate_farms_cache()
                     # Re-fetch windmill status
                     data = await self.client.api_call("city", {"mode": "windmillinit", "city": 2})
                     datablock = data.get("datablock", [])
@@ -248,9 +245,7 @@ class HelpersService:
 
         if menue_data is None:
             try:
-                res = await self.client.api_call(
-                    "farm", {"mode": "getfarms", "farm": 1, "position": 0}
-                )
+                res = await self.client.get_farms()
                 menue_data = res.get("updateblock", {}).get("menue", {})
             except UpstreamAPIError as e:
                 logger.warning(f"Helpers: Konnte Menü-Status für Loginbonus nicht abrufen: {e}")
@@ -366,9 +361,7 @@ class HelpersService:
         # Fetch menue state for farm dog, donkey, and login bonus
         farms_data = None
         try:
-            farms_data = await self.client.api_call(
-                "farm", {"mode": "getfarms", "farm": 1, "position": 0}
-            )
+            farms_data = await self.client.get_farms()
             menue = farms_data.get("updateblock", {}).get("menue", {})
             self.stock_service.update(farms_data)
         except UpstreamAPIError as e:

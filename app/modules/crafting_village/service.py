@@ -1390,9 +1390,18 @@ class CraftingVillageService:
             stonemason_stats = await self.serve_stonemason(stock_service=stock_service)
 
         summary = self.get_summary()
+        sm_summary = ""
+        if stonemason_stats and stonemason_stats.get("status") == "ok":
+            sm_summary = (
+                f" | Steinmetz: Fertig: {stonemason_stats.get('finished', 0)}, "
+                f"Zugewiesen: {stonemason_stats.get('assigned', 0)}, "
+                f"Werkzeuge gekauft: {stonemason_stats.get('bought_tools', 0)}, "
+                f"Gemeißelt: {stonemason_stats.get('chiseled', 0)}"
+            )
         logger.info(
-            f"========== Handwerkerdorf: Zyklus beendet (Geerntet: {harvested_count}, "
-            f"Aufgeladen: {refilled_count}, Gekauft: {bought_tools_count}, Gestartet: {started_count}) =========="
+            f"========== Handwerkerdorf: Zyklus beendet (Mine: Geerntet: {harvested_count}, "
+            f"Aufgeladen: {refilled_count}, Gekauft: {bought_tools_count}, Gestartet: {started_count}"
+            f"{sm_summary}) =========="
         )
         return {
             "status": "ok",

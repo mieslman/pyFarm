@@ -96,7 +96,7 @@ class FarmiTaskHandler(BaseTaskHandler):
             return False
 
         try:
-            res = await self.client.api_call("farm", {"mode": "getfarms", "farm": 1, "position": 0})
+            res = await self.client.get_farms()
             updateblock = res.get("updateblock", {})
             farmis_block = updateblock.get("farmis", [])
             offers = (

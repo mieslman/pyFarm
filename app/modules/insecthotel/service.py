@@ -199,14 +199,17 @@ class InsectHotelService:
             logger.debug("InsectHotelService: Automatische Futterfach-Rotation ist deaktiviert.")
             return {"rotated": 0, "swapped": []}
 
-        target_pids = plan_target_pids(
-            snapshot=self.snapshot,
-            max_slots=len(self.snapshot.stock_slots),
-            strategy=settings.insecthotel.strategy,
-            priority_species=settings.insecthotel.priority_species,
-            min_safety_happiness=settings.insecthotel.min_safety_happiness,
-        )
-        self.snapshot.target_pids = target_pids
+        if self.snapshot.target_pids and not force:
+            target_pids = list(self.snapshot.target_pids)
+        else:
+            target_pids = plan_target_pids(
+                snapshot=self.snapshot,
+                max_slots=len(self.snapshot.stock_slots),
+                strategy=settings.insecthotel.strategy,
+                priority_species=settings.insecthotel.priority_species,
+                min_safety_happiness=settings.insecthotel.min_safety_happiness,
+            )
+            self.snapshot.target_pids = target_pids
 
         current_slots = self.snapshot.stock_slots
         assigned_pids = {

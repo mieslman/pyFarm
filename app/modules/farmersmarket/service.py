@@ -61,7 +61,7 @@ class FarmersMarketService:
 
         # 1. Fetch current status
         try:
-            res = await self.client.api_call("farm", {"mode": "getfarms", "farm": 1, "position": 0})
+            res = await self.client.get_farms()
             fm_data = res.get("updateblock", {}).get("farmersmarket", {})
         except Exception as e:
             logger.warning(f"FarmersMarketService: Fehler beim Laden der Marktdaten: {e}")

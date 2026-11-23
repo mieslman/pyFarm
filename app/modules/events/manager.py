@@ -135,6 +135,10 @@ class EventManager:
                 elif event_clean == "olympia":
                     res = await self.olympia.serve()
                     results["olympia"] = res
+                elif event_clean == "merchant_event":
+                    logger.debug(
+                        f"EventManager: Passives Event '{event}' hat keinen Automations-Handler (übersprungen)."
+                    )
                 else:
                     logger.warning(f"EventManager: Kein Handler für Event '{event}' registriert.")
             except Exception as e:

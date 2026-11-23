@@ -27,7 +27,7 @@ async def get_farmersmarket_status(_: dict[str, Any] = Depends(get_current_user)
             client = worker_scheduler.last_stock_service.client
             stock_svc = worker_scheduler.last_stock_service
             fm_svc = FarmersMarketService(client, stock_svc, settings.farmersmarket)
-            res = await client.api_call("farm", {"mode": "getfarms", "farm": 1, "position": 0})
+            res = await client.get_farms()
             fm_data = res.get("updateblock", {}).get("farmersmarket", {})
             if fm_data:
                 fm_svc.nursery.update(fm_data)

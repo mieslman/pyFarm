@@ -12,6 +12,7 @@ from app.core.exceptions import CircuitBreakerOpenError
 from app.modules.crafting_village import CraftingVillageService
 from app.modules.events import EventManager
 from app.modules.farm_buildings.farm_service import FarmService
+from app.modules.farm_buildings.schedule_cache import ProductionScheduleCache
 from app.modules.farmersmarket.service import FarmersMarketService
 from app.modules.foodworld.service import FoodworldService
 from app.modules.forestry.forestry_service import ForestryService
@@ -62,6 +63,7 @@ class WorkerScheduler:
         self.last_vehicle_service: Any | None = None
         self.last_quest_requirements: dict[int, int] = {}
         self.last_cycle_results: dict[str, Any] = {}
+        self.production_schedule: ProductionScheduleCache = ProductionScheduleCache()
 
     async def broadcast_status(self):
         """Broadcast current scheduler state and countdown over WebSocket."""
@@ -172,13 +174,16 @@ class WorkerScheduler:
                 await asyncio.sleep(random.uniform(0.5, 1.2))
 
                 # 4. Farm buildings: Äcker, Ställe, Biosprit-Anlage, Sushi-Bar
+                sp_service: SeasonPassService | None = None
                 if (
                     settings.agriculture.enabled
                     or settings.fuelstation.enabled
                     or settings.sushibar.enabled
                     or settings.spicehouse.enabled
                 ):
-                    farm_service = FarmService(client)
+                    farm_service = FarmService(
+                        client, schedule_cache=self.production_schedule
+                    )
                     quest_status_main = (
                         quest_service.queststatus.get("main", {})
                         if quest_service and quest_service.queststatus
@@ -186,13 +191,22 @@ class WorkerScheduler:
                     )
                     catalog_dict = stock_service.products if stock_service else None
 
-                    # Check for active SeasonPass crop task
+                    # Check for active SeasonPass crop task (reused in step 9 to avoid duplicate seasonpass_init)
                     seasonpass_crop_pid: int | None = None
                     if settings.seasonpass.enabled:
                         try:
-                            sp_temp = SeasonPassService(client, config=settings.seasonpass)
-                            await sp_temp.init_remote()
-                            seasonpass_crop_pid = sp_temp.get_pending_crop_pid()
+                            sp_service = SeasonPassService(
+                                client=client,
+                                config=SeasonPassConfig(
+                                    enabled=settings.seasonpass.enabled,
+                                    auto_claim_rewards=settings.seasonpass.auto_claim_rewards,
+                                    preferred_field_farm=settings.seasonpass.preferred_field_farm,
+                                    preferred_field_pos=settings.seasonpass.preferred_field_pos,
+                                    preferred_forestry_pos=settings.seasonpass.preferred_forestry_pos,
+                                ),
+                            )
+                            await sp_service.init_remote()
+                            seasonpass_crop_pid = sp_service.get_pending_crop_pid()
                             if seasonpass_crop_pid:
                                 logger.info(
                                     f"WorkerScheduler: Aktive Seasonpass-Pflanzenaufgabe erkannt: PID {seasonpass_crop_pid}"
@@ -244,6 +258,8 @@ class WorkerScheduler:
                         helpers_service = HelpersService(client, stock_service)
                         helpers_res = await helpers_service.serve()
                         results["helpers"] = helpers_res
+                        if helpers_res.get("farm_dog"):
+                            self.production_schedule.clear()
                     except Exception as e:
                         logger.warning(f"WorkerScheduler: Fehler bei täglichen Helfern: {e}")
 
@@ -259,6 +275,8 @@ class WorkerScheduler:
                         )
                         fd_res = await fd_service.run_cycle()
                         results["formula_dealer"] = fd_res
+                        if fd_res.get("powerups_activated"):
+                            self.production_schedule.clear()
                     except Exception as e:
                         logger.warning(f"WorkerScheduler: Fehler beim FormulaDealer: {e}")
 
@@ -295,19 +313,25 @@ class WorkerScheduler:
                 # 9. Seasonpass (Saisonale Reise)
                 if settings.seasonpass.enabled:
                     try:
-                        sp_service = SeasonPassService(
-                            client=client,
-                            config=SeasonPassConfig(
-                                enabled=settings.seasonpass.enabled,
-                                auto_claim_rewards=settings.seasonpass.auto_claim_rewards,
-                                preferred_field_farm=settings.seasonpass.preferred_field_farm,
-                                preferred_field_pos=settings.seasonpass.preferred_field_pos,
-                                preferred_forestry_pos=settings.seasonpass.preferred_forestry_pos,
-                            ),
+                        if sp_service is None:
+                            sp_service = SeasonPassService(
+                                client=client,
+                                config=SeasonPassConfig(
+                                    enabled=settings.seasonpass.enabled,
+                                    auto_claim_rewards=settings.seasonpass.auto_claim_rewards,
+                                    preferred_field_farm=settings.seasonpass.preferred_field_farm,
+                                    preferred_field_pos=settings.seasonpass.preferred_field_pos,
+                                    preferred_forestry_pos=settings.seasonpass.preferred_forestry_pos,
+                                ),
+                            )
+                        has_pending_tasks = bool(
+                            sp_service.snapshot
+                            and any(not t.is_completed for t in sp_service.snapshot.pending_tasks)
                         )
                         sp_res = await sp_service.serve(
                             stock_service=stock_service,
                             farm_service=self.last_farm_service,
+                            skip_init=not has_pending_tasks,
                         )
                         self.last_seasonpass_service = sp_service
                         results["seasonpass"] = sp_res

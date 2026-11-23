@@ -3,7 +3,12 @@ import pytest
 import respx
 
 from app.config import StockConfig
-from app.services.catalog import build_catalog, parse_js_dict
+from app.services.catalog import (
+    build_catalog,
+    clear_catalog_cache,
+    load_remote_catalog,
+    parse_js_dict,
+)
 from app.services.market_service import MarketService
 from app.services.seed_dealer_service import SeedDealerService
 from app.services.stock_service import StockService
@@ -222,3 +227,131 @@ async def test_grasp_products_aborts_on_low_credit(fast_client):
 
     success = await service.grasp_products([{"pid": 17, "amount": 100}])
     assert success is False
+
+
+@pytest.mark.asyncio
+async def test_market_service_get_offers_caches_marketinit(fast_client):
+    """Test that get_offers caches marketinit across multiple PID lookups within TTL."""
+    market = MarketService(fast_client, cache_ttl=60.0)
+    fast_client.rid = "test_rid"
+
+    with respx.mock:
+        route = respx.get(url__startswith="https://s1.myfreefarm.de/ajax/city.php").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "datablock": [
+                        1,
+                        {
+                            "offers": [
+                                {"id": "101", "p": "17", "a": "200", "pr": "0.38"},
+                                {"id": "102", "p": "17", "a": "100", "pr": "0.32"},
+                                {"id": "103", "p": "1", "a": "500", "pr": "0.45"},
+                            ]
+                        },
+                    ]
+                },
+            )
+        )
+
+        # First call fetches from API
+        offers_17 = await market.get_offers(pid=17)
+        assert len(offers_17) == 2
+        assert offers_17[0].offer_id == 102
+        assert route.call_count == 1
+
+        # Subsequent calls for different PIDs or all offers reuse the cache
+        offers_1 = await market.get_offers(pid=1)
+        assert len(offers_1) == 1
+        assert offers_1[0].offer_id == 103
+
+        offers_missing = await market.get_offers(pid=999)
+        assert offers_missing == []
+
+        all_offers = await market.get_offers()
+        assert len(all_offers) == 3
+        assert route.call_count == 1
+
+        # Explicit bypass fetches again
+        await market.get_offers(pid=17, use_cache=False)
+        assert route.call_count == 2
+
+        # Explicit invalidation forces next call to fetch again
+        market.invalidate_cache()
+        await market.get_offers(pid=17)
+        assert route.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_market_service_cache_invalidated_after_buy(fast_client):
+    """Test that buying from the marketplace invalidates the cached offers."""
+    market = MarketService(fast_client, cache_ttl=60.0)
+    fast_client.rid = "test_rid"
+
+    with respx.mock:
+        route = respx.get(url__startswith="https://s1.myfreefarm.de/ajax/city.php").mock(
+            side_effect=[
+                # 1. Initial marketinit inside buy()
+                httpx.Response(
+                    200,
+                    json={
+                        "datablock": [
+                            1,
+                            {"offers": [{"id": "201", "p": "17", "a": "50", "pr": "0.30"}]},
+                        ]
+                    },
+                ),
+                # 2. marketbuyoffer succeeds
+                httpx.Response(200, json={"datablock": [1]}),
+                # 3. Fresh marketinit after buy invalidated cache
+                httpx.Response(200, json={"datablock": [1, {"offers": []}]}),
+            ]
+        )
+
+        bought = await market.buy(pid=17, amount=50, max_price=0.35)
+        assert bought == 50
+
+        # Cache must be invalidated so next lookup sees empty market
+        offers_after = await market.get_offers(pid=17)
+        assert offers_after == []
+        assert route.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_load_remote_catalog_caches_by_versioned_url(fast_client):
+    """Test that load_remote_catalog caches per jsconstants URL and returns isolated copies."""
+    clear_catalog_cache()
+    try:
+        with respx.mock:
+            route_v1 = respx.get("http://s1.myfreefarm.de/js/jsconstants_241014.js").mock(
+                return_value=httpx.Response(200, text=SAMPLE_JS_CONSTANTS)
+            )
+            route_v2 = respx.get("http://s1.myfreefarm.de/js/jsconstants_260127.js").mock(
+                return_value=httpx.Response(200, text=SAMPLE_JS_CONSTANTS)
+            )
+
+            # 1. First load fetches jsconstants_241014.js
+            cat1 = await load_remote_catalog(fast_client, SAMPLE_HTML)
+            assert len(cat1) == 4
+            assert route_v1.call_count == 1
+
+            # Mutate stock on cat1 to verify cache isolation
+            cat1[17].amount = 999
+
+            # 2. Second load reuses cache and returns clean Product copies
+            cat2 = await load_remote_catalog(fast_client, SAMPLE_HTML)
+            assert route_v1.call_count == 1
+            assert cat2[17].amount == 0
+            assert cat2[17].name == "Karotte"
+
+            # 3. Updated versioned URL triggers fresh fetch
+            html_v2 = SAMPLE_HTML.replace("jsconstants_241014.js", "jsconstants_260127.js")
+            cat3 = await load_remote_catalog(fast_client, html_v2)
+            assert len(cat3) == 4
+            assert route_v2.call_count == 1
+
+            # 4. use_cache=False bypasses cache
+            await load_remote_catalog(fast_client, SAMPLE_HTML, use_cache=False)
+            assert route_v1.call_count == 2
+    finally:
+        clear_catalog_cache()

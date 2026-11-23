@@ -224,6 +224,9 @@ class FoodworldService:
                 logger.warning(f"Foodworld-Marktexport: Fehler beim Einstellen von PID {pid}: {e}")
                 break
 
+        if exported_total > 0 and isinstance(self.market_service, MarketService):
+            self.market_service.invalidate_cache()
+
         return exported_total
 
     def get_summary(self) -> FoodworldSummary:
