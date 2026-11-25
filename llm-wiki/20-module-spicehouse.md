@@ -199,3 +199,7 @@ Um eine Überproduktion schnellwachsender Einstiegsgewürze (wie Pfeffer und Zim
    * Unter allen Rohgewürzen mit Überschuss (`> min_crop_reserve`) wird prioritär dasjenige getrocknet, dessen weiterverarbeiteter Bestand (`Getrocknet + Gemahlen`) am niedrigsten ist (Tie-Breaker: größter Roh-Überschuss).
 3. **Gewürzmühlen (`SpiceMillService.produce`):**
    * Unter allen getrockneten Gewürzen mit Überschuss (`> min_dried_reserve`) mahlen freie Mühlen prioritär dasjenige Produkt, von dem am wenigsten **gemahlenes Endprodukt** (`Farm 10 + Farm 1 + laufende Mühlen`) vorhanden ist. Bei mehreren freien Slots wird der virtuelle Bestand nach jeder Slot-Belegung fortgeschrieben.
+4. **Zyklus-Reihenfolge (`SpicehouseService.serve`):**
+   * **Schritt 1 (Ernten):** Trockenofen und Gewürzmühlen werden zuerst abgeerntet, sodass alle fertigen Produkte sofort im Farm-10-Lager verfügbar sind.
+   * **Schritt 2 (Kunden bedienen):** Erfüllbare Gewürzhaus-Kunden werden *vor* der Neubefüllung von Ofen und Mühlen bedient, damit Roh- und Trockenüberschüsse oberhalb der 500er-Reserve nicht vorab wegverarbeitet werden.
+   * **Schritt 3 (Produzieren):** Verbleibende Überschüsse werden anschließend in den Trockenofen und die Gewürzmühlen eingelegt.

@@ -72,6 +72,7 @@ class SpiceCustomerService:
 
             # Check if all products are satisfied in Farm 10 rack respecting safety reserves
             can_satisfy = True
+            missing_details: list[str] = []
             for pid, needed_amt in customer.data.items():
                 avail = stock_service.get_farm_amount(self.farm_id, pid)
                 if pid in SPICE_RAW_TO_DRIED:
@@ -86,11 +87,23 @@ class SpiceCustomerService:
                 usable = max(0, avail - reserve)
                 if usable < needed_amt:
                     can_satisfy = False
-                    break
+                    prod = stock_service.get_product(pid)
+                    p_name = prod.name if prod else f"PID {pid}"
+                    missing_details.append(
+                        f"{p_name} (nutzbar {usable}/{needed_amt}, Bestand {avail}, Reserve {reserve})"
+                    )
+
+            if not can_satisfy:
+                logger.debug(
+                    f"Gewürzhaus: Kunde an Slot {slot_nr} wartet (Belohnung: "
+                    f"{customer.reward_money:.0f} kT, {customer.reward_spicehouse_points} Streuer) – "
+                    f"fehlend: {', '.join(missing_details)}"
+                )
+                continue
 
             if can_satisfy:
                 logger.info(
-                    f"Gewürzhaus: Bediente Kunde an Slot {slot_nr} "
+                    f"Gewürzhaus: Bediene Kunde an Slot {slot_nr} "
                     f"(Belohnung: {customer.reward_money:.2f} kT, {customer.reward_spicehouse_points} Streuer)..."
                 )
                 try:
@@ -99,17 +112,36 @@ class SpiceCustomerService:
                         {"mode": "spicehouse_accept_customer", "slot": slot_nr},
                     )
                     datablock = res.get("datablock")
+                    updateblock = (
+                        res.get("updateblock") if isinstance(res.get("updateblock"), dict) else {}
+                    )
                     success = (
                         datablock == 1
                         or datablock == [1]
                         or (isinstance(datablock, list) and 1 in datablock)
+                        or (
+                            isinstance(datablock, dict)
+                            and (
+                                datablock.get("status") == 1
+                                or "spicehouse_points" in datablock
+                                or "money" in datablock
+                                or any(str(k).isdigit() for k in datablock)
+                            )
+                        )
                     )
                     if success:
                         logger.info(f"Gewürzhaus: Kunde an Slot {slot_nr} erfolgreich bedient.")
-                        for pid, needed_amt in customer.data.items():
-                            stock_service.deduct_stock(pid, needed_amt, farm_id=self.farm_id)
+                        if isinstance(updateblock, dict) and "stock" in updateblock:
+                            stock_service.update(res)
+                        else:
+                            for pid, needed_amt in customer.data.items():
+                                stock_service.deduct_stock(pid, needed_amt, farm_id=self.farm_id)
                         del self.customers[slot_nr]
                         served_count += 1
+                    else:
+                        logger.warning(
+                            f"Gewürzhaus: Server lehnte Kundenbedienung an Slot {slot_nr} ab (datablock={datablock})."
+                        )
                 except Exception as e:
                     logger.warning(f"Gewürzhaus: Fehler beim Bedienen von Kunde {slot_nr}: {e}")
 

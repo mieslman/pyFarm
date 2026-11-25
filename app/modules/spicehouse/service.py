@@ -129,9 +129,23 @@ class SpicehouseService:
         if quest_demands:
             logger.debug(f"Gewürzhaus: Aktive Quest-6-Bedarfe: {quest_demands}")
 
-        # 1. Trockenofen
+        # 1. Zuerst alle fertigen Produktionen ernten (Bestand auf Farm 10 auffüllen)
         if self.config.auto_oven:
             await self.oven.harvest(stock_service=stock_service)
+        if self.config.auto_mill:
+            await self.mill.harvest(stock_service=stock_service)
+
+        # 2. Kunden bedienen, BEVOR Ofen und Mühlen Roh-/Trockenüberschüsse bis auf die Reserve verbrauchen
+        if self.config.auto_customer:
+            await self.customer.collect(
+                stock_service=stock_service,
+                min_crop_reserve=self.config.min_crop_reserve,
+                min_dried_reserve=self.config.min_dried_reserve,
+                min_ground_reserve=self.config.min_ground_reserve,
+            )
+
+        # 3. Verbleibende Überschüsse in Ofen und Mühlen neu einlegen
+        if self.config.auto_oven:
             await self.oven.produce(
                 stock_service=stock_service,
                 quest_solver=self.solver,
@@ -140,23 +154,12 @@ class SpicehouseService:
                 min_dried_reserve=self.config.min_dried_reserve,
             )
 
-        # 2. Gewürzmühlen
         if self.config.auto_mill:
-            await self.mill.harvest(stock_service=stock_service)
             await self.mill.produce(
                 stock_service=stock_service,
                 quest_solver=self.solver,
                 quest_demands=quest_demands,
                 min_dried_reserve=self.config.min_dried_reserve,
-            )
-
-        # 3. Kunden
-        if self.config.auto_customer:
-            await self.customer.collect(
-                stock_service=stock_service,
-                min_crop_reserve=self.config.min_crop_reserve,
-                min_dried_reserve=self.config.min_dried_reserve,
-                min_ground_reserve=self.config.min_ground_reserve,
             )
 
         logger.info("========== Gewürzhaus: Zyklus abgeschlossen ==========")

@@ -835,3 +835,102 @@ async def test_oven_harvest_dict_and_immediate_refill_and_mill_cycle():
         assert mill.slots[1].pid == 1115
         assert mill.slots[1].amount == 50
         assert stock_svc.farm_stocks[10][1115] == 510
+
+
+@pytest.mark.asyncio
+async def test_serve_order_customers_before_oven_and_mill_produce():
+    """Verify SpicehouseService.serve() harvests first, serves customers BEFORE oven/mill consume surpluses."""
+    from app.modules.spicehouse.service import SpicehouseService
+
+    client = MFFGameClient(server=1, username="test", password="pwd")
+    client.rid = "test_rid"
+    sh = SpicehouseService(client, farm_id=10)
+
+    stock_svc = StockService(client)
+    # Raw Piment (1105): 600 (100 surplus) -> Customer needs 94!
+    # Dried Nelke (1114): 550 (50 surplus) -> Customer needs 46!
+    # If oven/mill ran before customer, they would consume 1105 and 1114 down to 500 and starve the customer.
+    stock_svc.farm_stocks = {10: {1105: 600, 1114: 550}, 1: {}}
+    stock_svc.products = {
+        1105: Product(pid=1105, name="Piment", amount=600),
+        1114: Product(pid=1114, name="Nelke getrocknet", amount=550),
+    }
+
+    with respx.mock:
+        respx.get(
+            url__startswith="https://s1.myfreefarm.de/ajax/farm.php",
+            params__contains={"mode": "spicehouse_init"},
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "updateblock": {
+                        "spicehouse": {
+                            "data": {
+                                "level": 10,
+                                "points": 1000,
+                                "oven": 0,
+                                "oven_slots": {"1": {"level": 6}},
+                                "mill_slots": {
+                                    "1": {"level": 6, "pid": 0, "amount": 0, "output": 0}
+                                },
+                                "customers": {
+                                    "1": {
+                                        "id": "254180",
+                                        "data": {"1105": 94, "1114": 46},
+                                        "reward": {
+                                            "spicehouse_points": 1000,
+                                            "money": 25200,
+                                            "points": 36800,
+                                        },
+                                    }
+                                },
+                            },
+                            "config": {
+                                "oven_levels": {"6": {"capacity": 60}},
+                                "mill_levels": {"6": {"capacity": 50}},
+                            },
+                        }
+                    },
+                },
+            )
+        )
+        respx.get(
+            url__startswith="https://s1.myfreefarm.de/ajax/farm.php",
+            params__contains={"mode": "spicehouse_accept_customer", "slot": "1"},
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "datablock": {"spicehouse_points": 1000, "money": 25200},
+                    "updateblock": {},
+                },
+            )
+        )
+        respx.get(
+            url__startswith="https://s1.myfreefarm.de/ajax/farm.php",
+            params__contains={"mode": "spicehouse_start_oven"},
+        ).mock(
+            return_value=httpx.Response(
+                200, json={"status": "ok", "datablock": 1, "updateblock": {}}
+            )
+        )
+        respx.get(
+            url__startswith="https://s1.myfreefarm.de/ajax/farm.php",
+            params__contains={"mode": "spicehouse_set_millslot"},
+        ).mock(
+            return_value=httpx.Response(
+                200, json={"status": "ok", "datablock": 1, "updateblock": {}}
+            )
+        )
+
+        await sh.serve(stock_service=stock_svc)
+
+        # Customer 1 must have been served BEFORE oven/mill consumed the surplus!
+        assert 1 not in sh.customer.customers
+        # Remaining 6x Piment (600 - 94 = 506 -> 6 surplus) loaded into oven, leaving 500
+        assert stock_svc.farm_stocks[10][1105] == 500
+        # Remaining 4x Nelke getrocknet (550 - 46 = 504 -> 4 surplus) loaded into mill, leaving 500
+        assert stock_svc.farm_stocks[10][1114] == 500
