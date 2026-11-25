@@ -4,7 +4,11 @@ from typing import Any
 from loguru import logger
 
 from app.core.client import MFFGameClient
-from app.modules.spicehouse.models import SPICE_RAW_TO_DRIED, OvenSlotInfo
+from app.modules.spicehouse.models import (
+    SPICE_DRIED_TO_GROUND,
+    SPICE_RAW_TO_DRIED,
+    OvenSlotInfo,
+)
 from app.modules.spicehouse.solver import SpiceQuestSolver
 from app.services.stock_service import StockService
 
@@ -114,18 +118,35 @@ class SpiceOvenService:
         )
         quest_pids_order = [pid for pid, _ in quest_prio_items]
 
-        # 2. Priorität 2: Größte Lagermengen
+        # 2. Priorität 2: Gleichverteilung (Least-Stock-First)
+        # Bevorzuge Rohgewürze über der Mindestreserve, deren weiterverarbeiteter Bestand
+        # (getrocknet + gemahlen) am niedrigsten ist. Bei Gleichstand größter Roh-Überschuss zuerst.
         valid_raw_pids = list(SPICE_RAW_TO_DRIED.keys())
-        stock_surpluses: list[tuple[int, int]] = []
+        has_farm1_stocks = bool(
+            getattr(stock_service, "farm_stocks", None) and 1 in stock_service.farm_stocks
+        )
+        stock_candidates: list[tuple[int, int, int, int]] = []
         for pid in valid_raw_pids:
             cur_amt = stock_service.get_farm_amount(self.farm_id, pid)
             surplus = max(0, cur_amt - min_crop_reserve)
             if surplus > 0:
-                stock_surpluses.append((pid, surplus))
+                dried_pid = SPICE_RAW_TO_DRIED[pid]
+                ground_pid = SPICE_DRIED_TO_GROUND.get(dried_pid)
+                dried_stock = stock_service.get_farm_amount(self.farm_id, dried_pid)
+                ground_f10 = (
+                    stock_service.get_farm_amount(self.farm_id, ground_pid) if ground_pid else 0
+                )
+                ground_f1 = (
+                    stock_service.farm_stocks[1].get(ground_pid, 0)
+                    if (has_farm1_stocks and ground_pid)
+                    else 0
+                )
+                downstream_total = dried_stock + ground_f10 + ground_f1
+                stock_candidates.append((pid, downstream_total, dried_stock, surplus))
 
-        # Sort descending by surplus amount
-        stock_surpluses.sort(key=lambda x: x[1], reverse=True)
-        fallback_pids_order = [pid for pid, _ in stock_surpluses if pid not in quest_pids_order]
+        # Sort ascending by downstream stock (dried + ground), then dried stock, tie-break by largest raw surplus
+        stock_candidates.sort(key=lambda x: (x[1], x[2], -x[3]))
+        fallback_pids_order = [pid for pid, _, _, _ in stock_candidates if pid not in quest_pids_order]
 
         ordered_candidates = quest_pids_order + fallback_pids_order
         if not ordered_candidates:

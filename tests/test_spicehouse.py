@@ -587,3 +587,162 @@ async def test_customer_respects_all_spice_reserves():
         assert stock_svc.products[1100].amount == 510  # Unchanged
         assert stock_svc.products[1110].amount == 505  # 520 - 15 = 505
         assert stock_svc.products[1120].amount == 505  # Unchanged
+
+
+@pytest.mark.asyncio
+async def test_mill_balancing_lowest_ground_stock():
+    """Verify mills prioritize dried spices whose ground stock is lowest (Least-Stock-First)."""
+    client = MFFGameClient(server=1, username="test", password="pwd")
+    client.rid = "test_rid"
+    mill = SpiceMillService(client, farm_id=10)
+    solver = SpiceQuestSolver(farm_id=10)
+
+    mill.slots = {
+        1: MillSlotInfo(slot=1, capacity=50, remain=0, pid=None),
+        2: MillSlotInfo(slot=2, capacity=50, remain=0, pid=None),
+        3: MillSlotInfo(slot=3, capacity=50, remain=0, pid=None),
+    }
+
+    stock_svc = StockService(client)
+    # Pfeffer getrocknet (1110) has huge surplus (500), but Pfeffer gemahlen (1120) is already at 7947!
+    # Piment getrocknet (1115) has 100 surplus, Piment gemahlen (1125) is only 162.
+    # Kardamom getrocknet (1113) has 100 surplus, Kardamom gemahlen (1123) is 480.
+    stock_svc.farm_stocks = {
+        10: {
+            1110: 1000,
+            1113: 600,
+            1115: 600,
+            1120: 7947,
+            1123: 480,
+            1125: 162,
+        },
+        1: {},
+    }
+    stock_svc.products = {
+        1110: Product(pid=1110, name="Pfeffer getrocknet", amount=1000),
+        1113: Product(pid=1113, name="Kardamom getrocknet", amount=600),
+        1115: Product(pid=1115, name="Piment getrocknet", amount=600),
+        1120: Product(pid=1120, name="Pfeffer gemahlen", amount=7947),
+        1123: Product(pid=1123, name="Kardamom gemahlen", amount=480),
+        1125: Product(pid=1125, name="Piment gemahlen", amount=162),
+    }
+
+    with respx.mock:
+        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
+            return_value=httpx.Response(
+                200, json={"status": "ok", "datablock": 1, "updateblock": {}}
+            )
+        )
+
+        started = await mill.produce(
+            stock_service=stock_svc,
+            quest_solver=solver,
+            quest_demands={},
+            min_dried_reserve=500,
+        )
+        assert started == 3
+        # Slot 1 & 2 should grind Piment (1115: 162 -> 212 -> 262, surplus exhausted)
+        # Slot 3 should grind Kardamom (1113: 480 -> 530); Pfeffer (7947) is skipped!
+        assert mill.slots[1].pid == 1115
+        assert mill.slots[2].pid == 1115
+        assert mill.slots[3].pid == 1113
+        assert stock_svc.farm_stocks[10][1110] == 1000
+
+
+def test_oven_balancing_lowest_downstream_stock():
+    """Verify oven fallback prioritizes raw spices with lowest downstream (dried + ground) stock."""
+    client = MFFGameClient(server=1, username="test", password="pwd")
+    oven = SpiceOvenService(client, farm_id=10)
+    solver = SpiceQuestSolver(farm_id=10)
+
+    oven.lines = {
+        1: OvenSlotInfo(line=1, capacity=50),
+        2: OvenSlotInfo(line=2, capacity=50),
+    }
+
+    stock_svc = StockService(client)
+    # Pfeffer raw (1100): 1500 (surplus 1000), downstream = 500 + 7947 = 8447
+    # Piment raw (1105): 560 (surplus 60), downstream = 0 + 162 = 162
+    # Nelke raw (1104): 600 (surplus 100), downstream = 129 + 576 = 705
+    stock_svc.farm_stocks = {
+        10: {
+            1100: 1500,
+            1104: 600,
+            1105: 560,
+            1110: 500,
+            1114: 129,
+            1115: 0,
+            1120: 7947,
+            1124: 576,
+            1125: 162,
+        },
+        1: {},
+    }
+
+    plan = oven.plan_oven_loading(
+        stock_service=stock_svc,
+        quest_solver=solver,
+        quest_demands={},
+        min_crop_reserve=500,
+        min_dried_reserve=500,
+    )
+    # Line 1 must take 50x Piment (1105); Line 2 takes remaining 10x Piment + 40x Nelke (1104)
+    assert plan["1"]["1"] == {"pid": 1105, "amount": 50}
+    assert plan["2"]["1"] == {"pid": 1105, "amount": 10}
+    assert plan["2"]["2"] == {"pid": 1104, "amount": 40}
+
+
+def test_farm10_agriculture_spice_balancing():
+    """Verify Farm 10 PlantStrategySolver balances full spice chain (raw + dried + ground)."""
+    from app.modules.agriculture.strategies import PlantStrategySolver
+
+    client = MFFGameClient(server=1, username="test", password="pwd")
+    stock_svc = StockService(client)
+    stock_svc.products = {
+        1100: Product(pid=1100, name="Pfeffer", category="spice", amount=0),
+        1101: Product(pid=1101, name="Zimt", category="spice", amount=0),
+        1103: Product(pid=1103, name="Kardamom", category="spice", amount=0),
+        1105: Product(pid=1105, name="Piment", category="spice", amount=0),
+        1106: Product(pid=1106, name="Sternanis", category="spice", amount=0),
+    }
+
+    # Case 1: Zimt raw is below reserve (440 < 500) -> reserve protection picks Zimt first!
+    stock_svc.farm_stocks = {
+        10: {
+            1100: 680,
+            1101: 440,
+            1103: 500,
+            1105: 500,
+            1106: 0,  # 0 seeds -> must be skipped
+            1110: 500,
+            1111: 510,
+            1113: 0,
+            1115: 0,
+            1120: 7947,
+            1121: 3695,
+            1123: 480,
+            1125: 162,
+        },
+        1: {},
+    }
+    candidates = PlantStrategySolver.resolve_candidates(
+        strategy_name="plantQuest",
+        stock_service=stock_svc,
+        category="spice",
+        min_products=500,
+        quest_requirements={4: 350000},  # Non-spice quest
+        farm_id=10,
+    )
+    assert [p.pid for p in candidates] == [1101, 1105, 1103, 1100]
+
+    # Case 2: All seeded spices are >= 500 raw -> lowest full-chain stock (Piment: 662) wins!
+    stock_svc.farm_stocks[10][1101] = 500
+    candidates_balanced = PlantStrategySolver.resolve_candidates(
+        strategy_name="plantQuest",
+        stock_service=stock_svc,
+        category="spice",
+        min_products=500,
+        quest_requirements={4: 350000},
+        farm_id=10,
+    )
+    assert [p.pid for p in candidates_balanced] == [1105, 1103, 1101, 1100]

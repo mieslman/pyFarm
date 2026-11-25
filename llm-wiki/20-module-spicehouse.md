@@ -185,3 +185,17 @@ Um zu verhindern, dass die Veredelungskette trockenläuft oder Quests/Farmis die
 * Anpassbar über das Dashboard UI (Settings-Card Gewürzhaus) sowie die REST-API:
   * `GET /api/v1/spicehouse/settings`
   * `PUT /api/v1/spicehouse/settings` (inkl. `min_crop_reserve`, `min_dried_reserve`, `min_ground_reserve`)
+
+---
+
+## 9. Gleichverteilungs-Balancing (Least-Stock-First)
+
+Um eine Überproduktion schnellwachsender Einstiegsgewürze (wie Pfeffer und Zimt) zu vermeiden und eine ausgewogene Varianz für Handel, Gewürzhaus-Kunden und Questreihe 6 sicherzustellen, arbeiten alle drei Stufen im Fallback-Modus (sofern keine akuten Quest-6-Direktbedarfe vorliegen) nach dem **Least-Stock-First-Prinzip**:
+
+1. **Ackerbau auf Farm 10 (`PlantStrategySolver.get_farm10_balanced_spice_candidates`):**
+   * *Priorität 1 (Reserveschutz):* Rohgewürze mit lokalem Saatgut, deren Farm-10-Bestand unter `min_products` (500) liegt, werden zuerst aufgefüllt.
+   * *Priorität 2 (Ketten-Balancing):* Sind alle Rohgewürze bei ≥ 500, wird das Rohgewürz mit dem **niedrigsten Gesamtbestand über alle drei Stufen** (`Roh + Getrocknet + Gemahlen`) angepflanzt.
+2. **Trockenofen (`SpiceOvenService.plan_oven_loading`):**
+   * Unter allen Rohgewürzen mit Überschuss (`> min_crop_reserve`) wird prioritär dasjenige getrocknet, dessen weiterverarbeiteter Bestand (`Getrocknet + Gemahlen`) am niedrigsten ist (Tie-Breaker: größter Roh-Überschuss).
+3. **Gewürzmühlen (`SpiceMillService.produce`):**
+   * Unter allen getrockneten Gewürzen mit Überschuss (`> min_dried_reserve`) mahlen freie Mühlen prioritär dasjenige Produkt, von dem am wenigsten **gemahlenes Endprodukt** (`Farm 10 + Farm 1 + laufende Mühlen`) vorhanden ist. Bei mehreren freien Slots wird der virtuelle Bestand nach jeder Slot-Belegung fortgeschrieben.

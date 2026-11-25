@@ -1,6 +1,7 @@
 from loguru import logger
 
 from app.models.product import Product
+from app.modules.spicehouse.models import SPICE_DRIED_TO_GROUND, SPICE_RAW_TO_DRIED
 from app.services.stock_service import StockService
 
 
@@ -114,6 +115,59 @@ class PlantStrategySolver:
         return quest_candidates
 
     @staticmethod
+    def get_farm10_balanced_spice_candidates(
+        stock_service: StockService,
+        min_products: int = 500,
+        farm_id: int = 10,
+        exclude_pids: set[int] | None = None,
+    ) -> list[Product]:
+        """Balance spice crops on Farm 10 using Least-Stock-First across the full chain
+        (raw + dried + ground).
+
+        Priority 1: Protect local raw spice reserve (< min_products).
+        Priority 2: Plant the spice whose total chain stock (raw + dried + ground) is lowest.
+        """
+        excluded = exclude_pids or set()
+        candidates = [
+            p
+            for p in stock_service.products.values()
+            if p.category == "spice" and p.pid not in excluded
+        ]
+
+        has_farm_stocks = bool(
+            getattr(stock_service, "farm_stocks", None)
+            or getattr(stock_service, "farm_temp_stocks", None)
+        )
+        with_seeds = [p for p in candidates if stock_service.get_farm_amount(farm_id, p.pid) > 0]
+        if with_seeds:
+            candidates = with_seeds
+        elif has_farm_stocks:
+            return []
+
+        has_farm1_stocks = bool(
+            getattr(stock_service, "farm_stocks", None) and 1 in stock_service.farm_stocks
+        )
+
+        def _spice_sort_key(p: Product) -> tuple[int, int, int, int]:
+            raw_stock = stock_service.get_farm_amount(farm_id, p.pid)
+            dried_pid = SPICE_RAW_TO_DRIED.get(p.pid)
+            ground_pid = SPICE_DRIED_TO_GROUND.get(dried_pid) if dried_pid else None
+            dried_stock = stock_service.get_farm_amount(farm_id, dried_pid) if dried_pid else 0
+            ground_f10 = stock_service.get_farm_amount(farm_id, ground_pid) if ground_pid else 0
+            ground_f1 = (
+                stock_service.farm_stocks[1].get(ground_pid, 0)
+                if (has_farm1_stocks and ground_pid)
+                else 0
+            )
+            ground_stock = ground_f10 + ground_f1
+            chain_total = raw_stock + dried_stock + ground_stock
+            # Reserve protection first (< min_products), then lowest total chain stock
+            return (0 if raw_stock < min_products else 1, chain_total, ground_stock, raw_stock)
+
+        candidates.sort(key=_spice_sort_key)
+        return candidates
+
+    @staticmethod
     def resolve_candidates(
         strategy_name: str,
         stock_service: StockService,
@@ -207,6 +261,64 @@ class PlantStrategySolver:
                     f"Gewählte Pflanze '{best.name}' (PID {best.pid})"
                 )
                 return water_results
+
+        # Specific handler for Farm 10 (spice farm): balance full spice chain (raw + dried + ground)
+        if farm_id == 10 or category == "spice":
+            eff_farm_id = farm_id if farm_id is not None else 10
+            # Check direct raw spice quest requirements first (using local Farm 10 stock)
+            if "quest" in strategy and quest_requirements:
+                direct_spice_quests: list[Product] = []
+                for pid, req_amt in quest_requirements.items():
+                    if pid in excluded:
+                        continue
+                    prod = stock_service.get_product(pid)
+                    if (
+                        prod
+                        and prod.category == "spice"
+                        and stock_service.get_farm_amount(eff_farm_id, pid) > 0
+                        and stock_service.get_farm_amount(eff_farm_id, pid)
+                        < (req_amt + min_products)
+                    ):
+                        direct_spice_quests.append(prod)
+                if direct_spice_quests:
+                    direct_spice_quests.sort(
+                        key=lambda p: -(
+                            (quest_requirements.get(p.pid, 0) + min_products)
+                            - stock_service.get_farm_amount(eff_farm_id, p.pid)
+                        )
+                    )
+                    best = direct_spice_quests[0]
+                    logger.info(
+                        f"Strategie '{strategy_name}' (Farm {eff_farm_id} / Quest-Gewürz): "
+                        f"Gewählte Pflanze '{best.name}' (PID {best.pid})"
+                    )
+                    return direct_spice_quests
+
+            balanced_spices = PlantStrategySolver.get_farm10_balanced_spice_candidates(
+                stock_service=stock_service,
+                min_products=min_products,
+                farm_id=eff_farm_id,
+                exclude_pids=excluded,
+            )
+            if balanced_spices:
+                best = balanced_spices[0]
+                raw_amt = stock_service.get_farm_amount(eff_farm_id, best.pid)
+                dried_pid = SPICE_RAW_TO_DRIED.get(best.pid)
+                ground_pid = SPICE_DRIED_TO_GROUND.get(dried_pid) if dried_pid else None
+                dried_amt = stock_service.get_farm_amount(eff_farm_id, dried_pid) if dried_pid else 0
+                ground_amt = (
+                    stock_service.get_farm_amount(eff_farm_id, ground_pid) if ground_pid else 0
+                )
+                logger.info(
+                    f"Strategie '{strategy_name}' (Farm {eff_farm_id} / Balancing): "
+                    f"Gewählte Pflanze '{best.name}' (PID {best.pid}, "
+                    f"Roh: {raw_amt}, Getrocknet: {dried_amt}, Gemahlen: {ground_amt})"
+                )
+                return balanced_spices
+            logger.info(
+                f"Farm {eff_farm_id}: Kein Saatgut für Kategorie 'spice' im lokalen Farmregal vorhanden."
+            )
+            return []
 
         if "quest" in strategy and quest_requirements:
             candidates = PlantStrategySolver.get_plant_quest_candidates(

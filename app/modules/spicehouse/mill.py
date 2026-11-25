@@ -199,7 +199,8 @@ class SpiceMillService:
     ) -> int:
         """Fill and start idle mills according to priority rules:
         1. Prioritize dried spices needed for active Questreihe 6.
-        2. Otherwise, grind the dried spices with the largest stock on Farm 10 (> min_dried_reserve).
+        2. Otherwise, balance ground spices (Least-Stock-First): grind dried spices (> min_dried_reserve)
+           whose resulting ground spice has the lowest total stock.
         """
         # Find idle slots (never rent slot 4 with coins; use it only if already rented)
         idle_slots = [s for s in self.slots.values() if s.is_idle and s.is_available]
@@ -212,31 +213,41 @@ class SpiceMillService:
         )
         quest_pids_order = [pid for pid, _ in quest_prio_items]
 
-        # 2. Priorität 2: Größte Bestände an getrockneten Gewürzen auf Farm 10
+        # 2. Priorität 2: Gleichverteilung gemahlener Produkte (Least-Stock-First)
         valid_dried_pids = list(SPICE_DRIED_TO_GROUND.keys())
-        stock_items: list[tuple[int, int]] = []
+        has_farm1_stocks = bool(
+            getattr(stock_service, "farm_stocks", None) and 1 in stock_service.farm_stocks
+        )
+
+        # Account for dried spices currently being ground in active slots
+        in_progress_by_dried: dict[int, int] = {}
+        for s in self.slots.values():
+            if not s.is_idle and s.pid in SPICE_DRIED_TO_GROUND and s.amount > 0:
+                in_progress_by_dried[s.pid] = in_progress_by_dried.get(s.pid, 0) + s.amount
+
+        fallback_candidates: list[int] = []
+        virtual_ground_stock: dict[int, int] = {}
+        remaining_stock: dict[int, int] = {}
+
         for pid in valid_dried_pids:
             cur_amt = stock_service.get_farm_amount(self.farm_id, pid)
             surplus = max(0, cur_amt - min_dried_reserve)
             if surplus > 0:
-                stock_items.append((pid, surplus))
+                remaining_stock[pid] = surplus
+                ground_pid = SPICE_DRIED_TO_GROUND[pid]
+                ground_f10 = stock_service.get_farm_amount(self.farm_id, ground_pid)
+                ground_f1 = stock_service.farm_stocks[1].get(ground_pid, 0) if has_farm1_stocks else 0
+                virtual_ground_stock[pid] = (
+                    ground_f10 + ground_f1 + in_progress_by_dried.get(pid, 0)
+                )
+                if pid not in quest_pids_order:
+                    fallback_candidates.append(pid)
 
-        # Sort descending by quantity
-        stock_items.sort(key=lambda x: x[1], reverse=True)
-        fallback_pids_order = [pid for pid, _ in stock_items if pid not in quest_pids_order]
-
-        ordered_candidates = quest_pids_order + fallback_pids_order
-        if not ordered_candidates:
+        if not quest_pids_order and not fallback_candidates:
             logger.debug(
                 f"Gewürzhaus: Keine getrockneten Gewürze über der Mindestreserve ({min_dried_reserve}) auf Farm {self.farm_id} zum Mahlen vorhanden."
             )
             return 0
-
-        # Local tracking of remaining stock above reserve
-        remaining_stock = {
-            pid: max(0, stock_service.get_farm_amount(self.farm_id, pid) - min_dried_reserve)
-            for pid in ordered_candidates
-        }
 
         started_count = 0
         for slot in idle_slots:
@@ -244,12 +255,25 @@ class SpiceMillService:
             chosen_pid: int | None = None
             amount_to_load = 0
 
-            for pid in ordered_candidates:
+            # First check Quest 6 priorities in order
+            for pid in quest_pids_order:
                 avail = remaining_stock.get(pid, 0)
                 if avail > 0:
                     chosen_pid = pid
                     amount_to_load = min(slot.capacity, avail)
                     break
+
+            # Fallback: pick dried spice with lowest virtual ground stock (tie-break by largest surplus)
+            if chosen_pid is None and fallback_candidates:
+                avail_fallbacks = [
+                    pid for pid in fallback_candidates if remaining_stock.get(pid, 0) > 0
+                ]
+                if avail_fallbacks:
+                    avail_fallbacks.sort(
+                        key=lambda p: (virtual_ground_stock.get(p, 0), -remaining_stock.get(p, 0))
+                    )
+                    chosen_pid = avail_fallbacks[0]
+                    amount_to_load = min(slot.capacity, remaining_stock[chosen_pid])
 
             if chosen_pid and amount_to_load > 0:
                 prod = stock_service.get_product(chosen_pid)
@@ -309,6 +333,9 @@ class SpiceMillService:
                         stock_service.deduct_stock(chosen_pid, amount_to_load, farm_id=self.farm_id)
                         stock_service.update(res)
                         remaining_stock[chosen_pid] -= amount_to_load
+                        virtual_ground_stock[chosen_pid] = (
+                            virtual_ground_stock.get(chosen_pid, 0) + amount_to_load
+                        )
                         duration_unit = SPICE_MILL_DURATIONS.get(chosen_pid, 600)
                         slot.pid = chosen_pid
                         slot.amount = amount_to_load
