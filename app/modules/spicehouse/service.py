@@ -131,7 +131,7 @@ class SpicehouseService:
 
         # 1. Trockenofen
         if self.config.auto_oven:
-            await self.oven.harvest()
+            await self.oven.harvest(stock_service=stock_service)
             await self.oven.produce(
                 stock_service=stock_service,
                 quest_solver=self.solver,

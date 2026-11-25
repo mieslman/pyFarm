@@ -746,3 +746,92 @@ def test_farm10_agriculture_spice_balancing():
         farm_id=10,
     )
     assert [p.pid for p in candidates_balanced] == [1105, 1103, 1101, 1100]
+
+
+@pytest.mark.asyncio
+async def test_oven_harvest_dict_and_immediate_refill_and_mill_cycle():
+    """Verify oven harvest handles dict datablock, updates dried stock, and immediately refills oven + mills."""
+    client = MFFGameClient(server=1, username="test", password="pwd")
+    client.rid = "test_rid"
+    oven = SpiceOvenService(client, farm_id=10)
+    mill = SpiceMillService(client, farm_id=10)
+    solver = SpiceQuestSolver(farm_id=10)
+
+    oven.lines = {1: OvenSlotInfo(line=1, capacity=60)}
+    oven.oven_remain = 0
+    oven.oven_is_ready = True
+    oven.oven_is_idle = False
+
+    mill.slots = {1: MillSlotInfo(slot=1, level=6, capacity=50, pid=None, amount=0, output=0, remain=0)}
+
+    stock_svc = StockService(client)
+    # Raw Piment (1105): 600 (surplus 100), Dried Piment (1115): 500 (at reserve -> 0 surplus before harvest!)
+    stock_svc.farm_stocks = {10: {1105: 600, 1115: 500, 1125: 100}, 1: {}}
+    stock_svc.products = {
+        1105: Product(pid=1105, name="Piment", amount=600),
+        1115: Product(pid=1115, name="Piment getrocknet", amount=500),
+        1125: Product(pid=1125, name="Piment gemahlen", amount=100),
+    }
+
+    with respx.mock:
+        # Upstream spicehouse_open_oven returns a dict datablock with harvested dried spices
+        respx.get(
+            url__startswith="https://s1.myfreefarm.de/ajax/farm.php",
+            params__contains={"mode": "spicehouse_open_oven"},
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "datablock": {"1115": 60, "spicehouse_points": 100},
+                    "updateblock": {},
+                },
+            )
+        )
+        respx.get(
+            url__startswith="https://s1.myfreefarm.de/ajax/farm.php",
+            params__contains={"mode": "spicehouse_start_oven"},
+        ).mock(
+            return_value=httpx.Response(
+                200, json={"status": "ok", "datablock": 1, "updateblock": {}}
+            )
+        )
+        respx.get(
+            url__startswith="https://s1.myfreefarm.de/ajax/farm.php",
+            params__contains={"mode": "spicehouse_set_millslot"},
+        ).mock(
+            return_value=httpx.Response(
+                200, json={"status": "ok", "datablock": 1, "updateblock": {}}
+            )
+        )
+
+        # 1. Harvest oven -> must succeed, set idle=True, and add 60x 1115 to Farm 10 stock (500 -> 560)
+        harvested = await oven.harvest(stock_service=stock_svc)
+        assert harvested is True
+        assert oven.oven_is_idle is True
+        assert oven.oven_is_ready is False
+        assert stock_svc.farm_stocks[10][1115] == 560
+
+        # 2. Immediately reload oven in the same cycle
+        restarted = await oven.produce(
+            stock_service=stock_svc,
+            quest_solver=solver,
+            quest_demands={},
+            min_crop_reserve=500,
+            min_dried_reserve=500,
+        )
+        assert restarted is True
+        assert oven.oven_is_idle is False
+        assert stock_svc.farm_stocks[10][1105] == 540
+
+        # 3. Immediately start mill with the freshly dried Piment (560 - 500 = 60 surplus -> loads 50)
+        mills_started = await mill.produce(
+            stock_service=stock_svc,
+            quest_solver=solver,
+            quest_demands={},
+            min_dried_reserve=500,
+        )
+        assert mills_started == 1
+        assert mill.slots[1].pid == 1115
+        assert mill.slots[1].amount == 50
+        assert stock_svc.farm_stocks[10][1115] == 510

@@ -67,7 +67,7 @@ class SpiceOvenService:
                         remain=remain_rent,
                     )
 
-    async def harvest(self) -> bool:
+    async def harvest(self, stock_service: StockService | None = None) -> bool:
         """Collect dried spices from the oven when drying is completed."""
         if not self.oven_is_ready:
             return False
@@ -76,18 +76,59 @@ class SpiceOvenService:
         try:
             res = await self.client.api_call("farm", {"mode": "spicehouse_open_oven"})
             datablock = res.get("datablock")
+            updateblock = res.get("updateblock") if isinstance(res.get("updateblock"), dict) else {}
+            sh_update = updateblock.get("spicehouse") if isinstance(updateblock, dict) else None
+            oven_cleared_in_update = (
+                isinstance(sh_update, dict)
+                and "oven" in sh_update
+                and sh_update.get("oven") in (0, None, False)
+            )
+
             success = (
                 datablock == 1
                 or datablock == [1]
                 or (isinstance(datablock, list) and 1 in datablock)
+                or (
+                    isinstance(datablock, dict)
+                    and (
+                        datablock.get("status") == 1
+                        or "spicehouse_points" in datablock
+                        or any(str(k).isdigit() for k in datablock)
+                    )
+                )
+                or (res.get("status") == "ok" and oven_cleared_in_update)
             )
             if success:
                 logger.info(
                     "Gewürzhaus: Trockenofen erfolgreich geleert (+100 Gewürzstreuer-Punkte)."
                 )
+                if stock_service:
+                    if isinstance(updateblock, dict) and "stock" in updateblock:
+                        stock_service.update(res)
+                    elif isinstance(datablock, dict):
+                        for k, v in datablock.items():
+                            if str(k).isdigit():
+                                try:
+                                    h_pid = int(k)
+                                    h_amt = int(v)
+                                    if self.farm_id not in stock_service.farm_stocks:
+                                        stock_service.farm_stocks[self.farm_id] = {}
+                                    stock_service.farm_stocks[self.farm_id][h_pid] = (
+                                        stock_service.farm_stocks[self.farm_id].get(h_pid, 0)
+                                        + h_amt
+                                    )
+                                    if h_pid in stock_service.products:
+                                        stock_service.products[h_pid].amount += h_amt
+                                except (ValueError, TypeError):
+                                    pass
                 self.oven_is_ready = False
                 self.oven_is_idle = True
+                self.oven_remain = 0
                 return True
+            else:
+                logger.warning(
+                    f"Gewürzhaus: Unerwartete Antwort beim Leeren des Trockenofens (datablock={datablock})."
+                )
         except Exception as e:
             logger.warning(f"Gewürzhaus: Fehler beim Leeren des Trockenofens: {e}")
 
