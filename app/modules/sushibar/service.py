@@ -178,6 +178,8 @@ class SushiBarService:
                 reserve_full_field=self.config.reserve_full_field,
                 fallback_to_balanced=self.config.fallback_to_balanced,
                 coin_protection=self.config.coin_protection,
+                farmis=self.farmis.farmis,
+                balanced_max_stock=self.config.balanced_max_stock,
                 update_callback=refresh_callback,
             )
             if started > 0:

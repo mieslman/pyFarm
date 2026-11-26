@@ -305,6 +305,39 @@ class FarmService:
                     catalog=catalog,
                     min_products=self.config.min_products,
                 )
+
+                # Prepend urgent Sushi-Bar water-plant shortages (e.g. Wasserspinat for Omelett-Rolle)
+                if (
+                    sb
+                    and sb.config.enabled
+                    and recipes
+                    and (
+                        sb.config.production_strategy == "balanced"
+                        or sb.config.fallback_to_balanced
+                    )
+                ):
+                    growing_farm8_pids = {
+                        tile.pid
+                        for f in self.fields
+                        if f.farm_id == 8
+                        for tile in f.tiles
+                        if tile.pid and not tile.is_ready
+                    }
+                    sushi_shortages = solver.get_sushibar_water_shortages(
+                        sushibar_level=sb.level,
+                        recipes=recipes,
+                        stock_service=stock_service,
+                        catalog=catalog,
+                        farmis=sb.farmis.farmis,
+                        balanced_max_stock=sb.config.balanced_max_stock,
+                        exclude_pids=growing_farm8_pids,
+                    )
+                    if sushi_shortages:
+                        seen_pids = {c[0] for c in sushi_shortages}
+                        quest5_water_candidates = list(sushi_shortages) + [
+                            c for c in (quest5_water_candidates or []) if c[0] not in seen_pids
+                        ]
+
                 if quest5_water_candidates:
                     logger.info(
                         f"FarmService: {len(quest5_water_candidates)} Quest-5-Bedarfe für Farm 8 identifiziert "

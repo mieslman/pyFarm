@@ -622,3 +622,208 @@ async def test_quest5_water_requirements_logistics_vs_planting():
     # Sushi dish 978 (Brunnenkressensalat) for Quest 72 must also be in logistics candidates!
     assert 978 in logistics_pids
     assert any(c[0] == 978 and c[2] == 72 for c in logistics_candidates)
+
+
+@pytest.mark.asyncio
+async def test_farmi_demand_prioritization_and_balanced_cap():
+    """Verify that seated Farmi category deficits take priority over lowest-stock balanced items
+    and that balanced_max_stock prevents overproduction of high-stock dishes."""
+    client = MFFGameClient(server=1, username="test", password="pwd")
+    stock_svc = StockService(client)
+
+    recipes = {
+        973: SushiRecipe(
+            pid=973, name="Omelett-Rolle", level=2, category="sushi", amount=3, needs={}
+        ),
+        974: SushiRecipe(
+            pid=974, name="Mie Kangkung", level=1, category="soup", amount=3, needs={}
+        ),
+        982: SushiRecipe(
+            pid=982,
+            name="Lotoswurzel in Honigglasur",
+            level=5,
+            category="dessert",
+            amount=3,
+            needs={},
+        ),
+    }
+
+    solver = SushiQuestSolver(client, farm_id=8)
+    solver._quests5_cache = {}  # No pending Quest 5 requirements
+
+    # Farm 8 stocks: Mie Kangkung (soup) has 0, Omelett-Rolle (sushi) has 2, Lotoswurzel (dessert) has 300
+    stock_svc.farm_stocks = {8: {973: 2, 974: 0, 982: 300}}
+
+    # Seated Farmis urgently need 4x sushi (2 in stock -> deficit 2), no soup needed!
+    farmis = [
+        SushiFarmi(id="1", slot=1, need={"sushi": 2, "soup": 1}, have={"soup": 1}),
+        SushiFarmi(id="2", slot=2, need={"sushi": 2}, have={}),
+    ]
+
+    # Case 1: Farmi demand for 'sushi' MUST beat lower-stock 'soup' (Mie Kangkung = 0)
+    recipe, target = await solver.find_best_recipe(
+        current_quest_id=100,
+        sushibar_level=14,
+        recipes=recipes,
+        stock_service=stock_svc,
+        strategy="quest5",
+        fallback_to_balanced=True,
+        farmis=farmis,
+        balanced_max_stock=150,
+    )
+    assert recipe is not None
+    assert recipe.pid == 973  # Omelett-Rolle prioritized for Farmis!
+    assert target is None
+
+    # Case 2: Once sushi is blocked by missing ingredients and soup is >= cap,
+    # Lotoswurzel (300 >= 150 cap) MUST NOT be overproduced -> returns None!
+    recipes_blocked = {
+        973: SushiRecipe(
+            pid=973,
+            name="Omelett-Rolle",
+            level=2,
+            category="sushi",
+            amount=3,
+            needs={952: 7},  # Missing Wasserspinat
+        ),
+        982: SushiRecipe(
+            pid=982,
+            name="Lotoswurzel in Honigglasur",
+            level=5,
+            category="dessert",
+            amount=3,
+            needs={},
+        ),
+    }
+    stock_svc.farm_stocks = {8: {952: 0, 973: 0, 982: 300}}
+    recipe_capped, _ = await solver.find_best_recipe(
+        current_quest_id=100,
+        sushibar_level=14,
+        recipes=recipes_blocked,
+        stock_service=stock_svc,
+        strategy="quest5",
+        fallback_to_balanced=True,
+        farmis=farmis,
+        balanced_max_stock=150,
+    )
+    assert recipe_capped is None
+
+
+@pytest.mark.asyncio
+async def test_kitchen_distributes_slots_via_in_production():
+    """Verify that kitchen.produce tracks in_production amounts across free slots
+    so multiple slots are distributed across recipes instead of cooking 3x the same dish."""
+    client = MFFGameClient(server=1, username="test", password="pwd")
+    client.rid = "test_rid"
+    kitchen = SushiKitchenService(client)
+    kitchen.slots = [
+        SushiProductionSlot(slot=1, pid=None, block=0),
+        SushiProductionSlot(slot=2, pid=None, block=0),
+        SushiProductionSlot(slot=3, pid=None, block=0),
+    ]
+
+    stock_svc = StockService(client)
+    stock_svc.farm_stocks = {8: {973: 0, 974: 1, 979: 2}}
+
+    recipes = {
+        973: SushiRecipe(
+            pid=973, name="Omelett-Rolle", level=2, category="sushi", amount=3, needs={}
+        ),
+        974: SushiRecipe(
+            pid=974, name="Mie Kangkung", level=1, category="soup", amount=3, needs={}
+        ),
+        979: SushiRecipe(
+            pid=979, name="Tumis Kangkung", level=1, category="salad", amount=3, needs={}
+        ),
+    }
+
+    solver = SushiQuestSolver(client, farm_id=8)
+    solver._quests5_cache = {}
+
+    started_pids: list[int] = []
+
+    def capture_request(request: httpx.Request) -> httpx.Response:
+        pid_param = request.url.params.get("pid")
+        if pid_param:
+            started_pids.append(int(pid_param))
+        return httpx.Response(200, json={"status": "ok", "updateblock": {}})
+
+    with respx.mock:
+        respx.get(url__startswith="https://s1.myfreefarm.de/ajax/farm.php").mock(
+            side_effect=capture_request
+        )
+        started = await kitchen.produce(
+            stock_service=stock_svc,
+            quest_solver=solver,
+            sushibar_level=14,
+            recipes=recipes,
+            current_quest_id=100,
+            strategy="quest5",
+            fallback_to_balanced=True,
+            balanced_max_stock=150,
+        )
+
+    assert started == 3
+    # Slot 1 picks 973 (0 -> 3), Slot 2 picks 974 (1 -> 4), Slot 3 picks 979 (2 -> 5)
+    assert started_pids == [973, 974, 979]
+
+
+def test_sushibar_water_shortages_prioritizes_blocked_farmi_ingredient():
+    """Verify that get_sushibar_water_shortages detects Wasserspinat shortage blocking Omelett-Rolle
+    and skips ingredients already growing on another Farm 8 field."""
+    client = MFFGameClient(server=1, username="test", password="pwd")
+    stock_svc = StockService(client)
+
+    catalog = {
+        951: Product(pid=951, name="Lotos", category="water", size_x=2, size_y=1),
+        952: Product(pid=952, name="Wasserspinat", category="water", size_x=2, size_y=1),
+        950: Product(pid=950, name="Reis", category="water", size_x=2, size_y=1),
+    }
+    stock_svc.products = catalog
+    # Wasserspinat 65 (reserve 60 -> usable 5 < 7 needed), Lotos 2000, Reis 1700
+    stock_svc.farm_stocks = {8: {950: 1700, 951: 2000, 952: 65, 973: 0, 982: 714}}
+
+    recipes = {
+        973: SushiRecipe(
+            pid=973,
+            name="Omelett-Rolle",
+            level=2,
+            category="sushi",
+            amount=3,
+            needs={950: 7, 952: 7},
+        ),
+        982: SushiRecipe(
+            pid=982,
+            name="Lotoswurzel in Honigglasur",
+            level=5,
+            category="dessert",
+            amount=3,
+            needs={951: 14},
+        ),
+    }
+    farmis = [SushiFarmi(id="1", slot=1, need={"sushi": 2}, have={})]
+
+    solver = SushiQuestSolver(client, farm_id=8)
+    shortages = solver.get_sushibar_water_shortages(
+        sushibar_level=14,
+        recipes=recipes,
+        stock_service=stock_svc,
+        catalog=catalog,
+        farmis=farmis,
+        balanced_max_stock=150,
+    )
+    assert len(shortages) == 1
+    assert shortages[0][0] == 952  # Wasserspinat
+    assert shortages[0][1] == 195  # 200 buffer - 5 usable
+
+    # If Wasserspinat is already growing on a Farm 8 field, skip it so other fields serve Quest 5
+    shortages_growing = solver.get_sushibar_water_shortages(
+        sushibar_level=14,
+        recipes=recipes,
+        stock_service=stock_svc,
+        catalog=catalog,
+        farmis=farmis,
+        balanced_max_stock=150,
+        exclude_pids={952},
+    )
+    assert shortages_growing == []

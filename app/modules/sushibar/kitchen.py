@@ -3,7 +3,7 @@ from typing import Any
 from loguru import logger
 
 from app.core.client import MFFGameClient
-from app.modules.sushibar.models import SushiProductionSlot, SushiRecipe
+from app.modules.sushibar.models import SushiFarmi, SushiProductionSlot, SushiRecipe
 from app.modules.sushibar.solver import SushiQuestSolver
 from app.services.stock_service import StockService
 
@@ -126,6 +126,8 @@ class SushiKitchenService:
         reserve_full_field: bool = True,
         fallback_to_balanced: bool = False,
         coin_protection: bool = True,
+        farmis: list[SushiFarmi] | None = None,
+        balanced_max_stock: int = 150,
         update_callback: Any | None = None,
     ) -> int:
         """Start new recipes in all free unlocked slots."""
@@ -133,6 +135,12 @@ class SushiKitchenService:
         free_slots = [s for s in self.slots if s.is_empty]
         if not free_slots:
             return 0
+
+        # Track dishes already cooking in active slots to distribute production evenly across slots
+        in_production: dict[int, int] = {}
+        for s in self.slots:
+            if s.is_active and not s.is_ready and s.pid is not None:
+                in_production[s.pid] = in_production.get(s.pid, 0) + max(1, s.amount)
 
         for slot in free_slots:
             recipe, target = await quest_solver.find_best_recipe(
@@ -145,11 +153,14 @@ class SushiKitchenService:
                 preferred_pids=preferred_pids,
                 reserve_full_field=reserve_full_field,
                 fallback_to_balanced=fallback_to_balanced,
+                farmis=farmis,
+                in_production=in_production,
+                balanced_max_stock=balanced_max_stock,
             )
 
             if not recipe:
                 logger.debug(
-                    "Sushi-Bar: Kein kochbares Rezept gefunden (Zutaten oder Level fehlen)."
+                    "Sushi-Bar: Kein kochbares Rezept gefunden (Zutaten, Level oder Bestandsdeckel erreicht)."
                 )
                 break
 
@@ -177,6 +188,7 @@ class SushiKitchenService:
                     },
                 )
                 started_count += 1
+                in_production[recipe.pid] = in_production.get(recipe.pid, 0) + max(1, recipe.amount)
                 # Deduct ingredients locally from stock
                 for ingr_pid, amount in recipe.needs.items():
                     stock_service.deduct_stock(ingr_pid, amount, farm_id=8)

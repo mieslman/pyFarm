@@ -76,6 +76,10 @@ Im Spiel existieren 16 Rezepte, von denen exakt 8 Rezepte reale Spielmünzen (Co
 - Ab dieser Questnummer sucht er chronologisch nach geforderten kT-Sushi-Rezepten (z. B. Quest 72: Brunnenkressensalat 978, Quest 74: Taro-Dampfnudeln 984 & Brunnenkressensuppe 977, Quest 81: Taro-Dampfnudeln 984, Quest 88: Brunnenkressensalat 978 usw.).
 - **Kumulative Bedarfsermittlung:** Der Lagerbestand wird virtuell über alle anstehenden Quests hinweg fortgeführt. Ist ein Rezept für die nächste Quest bereits abgedeckt, wird der verbleibende Restbestand an nachfolgende Quests übergeben. So wird z. B. Taro-Dampfnudeln für Quest 81 weiter gekocht, selbst wenn der Anfangsbestand für Quest 74 bereits ausreichte.
 - **Fehlproduktions-Schutz (`fallback_to_balanced`):** Wenn die Strategie `quest5` aktiv ist, wird standardmäßig (`fallback_to_balanced = False`) kein Fallback auf questfremde kT-Rezepte (wie Omelett-Rolle) ausgeführt, um ein Verbrauchen wertvoller Zutaten und Blockieren von Kochslots zu verhindern. Sollten keine Quest-5-Rezepte zubereitet werden können (z. B. fehlende Zutaten oder Sushibar-Level zu niedrig), pausiert die Produktion, bis Zutaten nachwachsen oder ein Levelaufstieg erfolgt.
+- **Bedarfsoptimierung im Balanced-/Fallback-Modus:** Ist `strategy == "balanced"` oder `fallback_to_balanced = True` aktiv, greift eine dreistufige Optimierung:
+  1. **Akuter Farmi-Bedarf:** Kategorien (`sushi`, `soup`, `salad`, `dessert`), bei denen der aktuelle Bedarf der sitzenden Farmis den lokalen Bestand auf Farm 8 inkl. laufender Kochslots übersteigt, werden vorrangig gekocht.
+  2. **Überproduktions-Deckel (`balanced_max_stock`, Default `150`):** Rezepte, deren Bestand auf Farm 8 inkl. laufender Produktion bereits den Deckel erreicht oder überschreitet, werden im Balanced-Modus übersprungen, sodass bei Zutatenmangel eines Gerichts nicht endlos ein anderes überproduziert wird.
+  3. **Gleichverteilung über Kochslots (`in_production`):** Laufende sowie im selben Zyklus gestartete Kochslots werden virtuell auf den Bestand angerechnet, sodass freie Slots auf unterschiedliche Gerichte verteilt werden statt mehrfach dasselbe Gericht zu starten.
 
 ### 3.3 Feld-Bepflanzungsreserve
 - Die Zutaten für Sushi stammen primär aus dem Ackerbau auf Farm 8 (Reis 950, Lotos 951, Wasserspinat 952, Taro 953, Wasserpfeffer 954, Wasserkastanie 955, Brunnenkresse 957).
@@ -86,10 +90,11 @@ Im Spiel existieren 16 Rezepte, von denen exakt 8 Rezepte reale Spielmünzen (Co
 ### 3.4 Inaktives Förderband (Laufband)
 - Die automatische Bestückung des Laufbands ist standardmäßig deaktiviert (`auto_train = False`).
 
-### 3.5 Verknüpfung mit Ackerbau auf Farm 8 (Quest 5 Bedarfs-Solver)
-- Die Wasserfelder (Äcker) auf Farm 8 unterstützen direkt die Erfüllung von Questreihe 5 (`plantQuest`-Strategie):
-  1. **Direkte Quest 5 Anforderungen:** Wasserpflanzen (PIDs 950–957), die in anstehenden Quests (ab aktuellem Quest-ID) gefordert werden.
-  2. **Sushi-Zutaten-Bedarf:** Wasserpflanzen, die als Zutat für anstehende Quest 5 Sushi-Gerichte (PIDs 970–985) fehlen.
+### 3.5 Verknüpfung mit Ackerbau auf Farm 8 (Quest 5 & Sushi-Zutaten Bedarfs-Solver)
+- Die Wasserfelder (Äcker) auf Farm 8 unterstützen sowohl den laufenden Sushibar-Betrieb als auch die Erfüllung von Questreihe 5 (`plantQuest`-Strategie):
+  1. **Akute Sushi-Bar Zutaten-Engpässe (`get_sushibar_water_shortages`):** Bei aktivem Balanced-/Fallback-Modus werden knappe Wasserpflanzen (PIDs 950–957, nutzbarer Bestand über Feldreserve `< 200`), die Gerichte für sitzende Farmis oder unterhalb von `balanced_max_stock` blockieren (z. B. Wasserspinat für Omelett-Rolle), **vor** langfristigen Quest-5-Anforderungen eingereiht. Bereits auf einem Farm-8-Feld wachsende Pflanzen werden dabei übersprungen, sodass maximal ein Feld für den Nachschub abgezweigt wird.
+  2. **Direkte Quest 5 Anforderungen:** Wasserpflanzen (PIDs 950–957), die in anstehenden Quests (ab aktuellem Quest-ID) gefordert werden.
+  3. **Quest-5-Sushi-Zutaten-Bedarf:** Wasserpflanzen, die als Zutat für anstehende Quest 5 Sushi-Gerichte (PIDs 970–985) fehlen.
 - **Priorität & Saatgut-Sicherheit:**
   - Streng chronologische Sortierung nach Quest-Reihenfolge.
   - Nur Pflanzen mit vorhandenem Saatgut auf Farm 8 (`stock_service.get_farm_amount(8, pid) > 0`) werden ausgewählt. Fehlt das Saatgut für das höchstpriorisierte Ziel, rückt das nächste an.

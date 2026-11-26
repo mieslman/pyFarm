@@ -4,7 +4,7 @@ from typing import Any
 from loguru import logger
 
 from app.core.client import MFFGameClient
-from app.modules.sushibar.models import SushiQuestTarget, SushiRecipe
+from app.modules.sushibar.models import SushiFarmi, SushiQuestTarget, SushiRecipe
 from app.services.stock_service import StockService
 
 
@@ -122,15 +122,23 @@ class SushiQuestSolver:
         preferred_pids: list[int] | None = None,
         reserve_full_field: bool = True,
         fallback_to_balanced: bool = False,
+        farmis: list[SushiFarmi] | None = None,
+        in_production: dict[int, int] | None = None,
+        balanced_max_stock: int = 150,
     ) -> tuple[SushiRecipe | None, SushiQuestTarget | None]:
-        """Find the next recipe to cook based on Questreihe 5 demand, fallback to balanced/preferred."""
+        """Find the next recipe to cook based on Questreihe 5, seated Farmi demand, or balanced stock."""
+        prod_map = in_production or {}
+
         # 1. Questreihe 5 Strategy
         if strategy == "quest5":
             quests_catalog = await self.load_quests5_catalog()
             if quests_catalog:
                 sorted_quests = sorted([q for q in quests_catalog if q >= current_quest_id])
-                # Track available stock cumulatively across upcoming quests
-                virtual_stock = {pid: stock_service.get_total_stock(pid) for pid in recipes}
+                # Track available stock cumulatively across upcoming quests (including active kitchen slots)
+                virtual_stock = {
+                    pid: stock_service.get_total_stock(pid) + prod_map.get(pid, 0)
+                    for pid in recipes
+                }
                 first_target: SushiQuestTarget | None = None
 
                 for q_id in sorted_quests:
@@ -213,21 +221,86 @@ class SushiQuestSolver:
             if not fallback_to_balanced:
                 return None, None
 
-        # 3. Balanced Fallback (cook available kT recipe with lowest warehouse stock)
+        # 3. Balanced / Farmi-Demand Fallback
         # Only active if strategy is balanced or fallback_to_balanced is enabled
         if strategy == "balanced" or fallback_to_balanced:
+            # 3a. Prioritize categories actively needed by seated Farmis
+            if farmis:
+                cat_deficit: dict[str, int] = {}
+                for f in farmis:
+                    for cat, needed_amt in f.need.items():
+                        missing = needed_amt - f.have.get(cat, 0)
+                        if missing > 0:
+                            cat_deficit[cat] = cat_deficit.get(cat, 0) + missing
+
+                if cat_deficit:
+                    cat_available: dict[str, int] = {}
+                    for pid, recipe in recipes.items():
+                        if recipe.is_coin_recipe:
+                            continue
+                        avail = stock_service.get_farm_amount(self.farm_id, pid) + prod_map.get(
+                            pid, 0
+                        )
+                        cat_available[recipe.category] = (
+                            cat_available.get(recipe.category, 0) + avail
+                        )
+
+                    urgent_cats: list[tuple[int, str]] = [
+                        (deficit - cat_available.get(cat, 0), cat)
+                        for cat, deficit in cat_deficit.items()
+                        if cat_available.get(cat, 0) < deficit
+                    ]
+                    urgent_cats.sort(key=lambda x: -x[0])
+
+                    for short_by, cat in urgent_cats:
+                        cat_candidates: list[tuple[int, SushiRecipe]] = []
+                        for pid, recipe in recipes.items():
+                            if (
+                                recipe.is_coin_recipe
+                                or recipe.level > sushibar_level
+                                or recipe.category != cat
+                            ):
+                                continue
+                            if self.check_ingredients(
+                                recipe,
+                                stock_service,
+                                catalog,
+                                reserve_full_field,
+                                farm_id=self.farm_id,
+                            ):
+                                eff_stock = stock_service.get_farm_amount(
+                                    self.farm_id, pid
+                                ) + prod_map.get(pid, 0)
+                                cat_candidates.append((eff_stock, recipe))
+
+                        if cat_candidates:
+                            cat_candidates.sort(key=lambda x: x[0])
+                            chosen = cat_candidates[0][1]
+                            logger.info(
+                                f"Sushi-Bar: Priorisiere {chosen.name} (PID {chosen.pid}) "
+                                f"für akuten Farmi-Bedarf in Kategorie '{cat}' (Defizit: {short_by})."
+                            )
+                            return chosen, None
+
+            # 3b. Balanced Fallback (cook available kT recipe with lowest Farm-8 stock below cap)
             available_recipes: list[tuple[int, SushiRecipe]] = []
             for pid, recipe in recipes.items():
                 if recipe.is_coin_recipe or recipe.level > sushibar_level:
                     continue
+                eff_stock = stock_service.get_farm_amount(self.farm_id, pid) + prod_map.get(pid, 0)
+                if balanced_max_stock > 0 and eff_stock >= balanced_max_stock:
+                    logger.debug(
+                        f"Sushi-Bar: Überspringe {recipe.name} im Balanced-Modus "
+                        f"(Bestand+Produktion {eff_stock} >= Deckel {balanced_max_stock})."
+                    )
+                    continue
                 if self.check_ingredients(
                     recipe, stock_service, catalog, reserve_full_field, farm_id=self.farm_id
                 ):
-                    stock = stock_service.get_total_stock(pid)
-                    available_recipes.append((stock, recipe))
+                    available_recipes.append((eff_stock, recipe))
 
             if available_recipes:
-                # Sort by lowest stock first
+                # Sort by lowest effective stock first
                 available_recipes.sort(key=lambda x: x[0])
                 return available_recipes[0][1], None
 
@@ -383,3 +456,109 @@ class SushiQuestSolver:
                                     seen_pids.add(ingr_pid)
 
         return candidates
+
+    def get_sushibar_water_shortages(
+        self,
+        sushibar_level: int,
+        recipes: dict[int, SushiRecipe],
+        stock_service: StockService,
+        catalog: dict[int, Any] | None = None,
+        farmis: list[SushiFarmi] | None = None,
+        balanced_max_stock: int = 150,
+        ingredient_buffer: int = 200,
+        exclude_pids: set[int] | None = None,
+    ) -> list[tuple[int, int, int, str]]:
+        """Identify water-plant ingredient shortages on Farm 8 for active Sushi-Bar recipes.
+
+        Prioritizes water crops (PIDs 950-957) that currently block or starve recipes
+        needed by seated Farmis or below ``balanced_max_stock``.
+        Crops in ``exclude_pids`` (e.g. already growing on a Farm 8 field) are skipped
+        so at most one field is dedicated to replenishing a given ingredient at a time.
+        """
+        if not recipes:
+            return []
+
+        excluded = exclude_pids or set()
+
+        # Determine categories acutely needed by seated Farmis
+        urgent_cats: set[str] = set()
+        if farmis:
+            cat_deficit: dict[str, int] = {}
+            for f in farmis:
+                for cat, needed_amt in f.need.items():
+                    missing = needed_amt - f.have.get(cat, 0)
+                    if missing > 0:
+                        cat_deficit[cat] = cat_deficit.get(cat, 0) + missing
+
+            cat_available: dict[str, int] = {}
+            for pid, recipe in recipes.items():
+                if recipe.is_coin_recipe:
+                    continue
+                cat_available[recipe.category] = cat_available.get(
+                    recipe.category, 0
+                ) + stock_service.get_farm_amount(self.farm_id, pid)
+
+            for cat, deficit in cat_deficit.items():
+                if cat_available.get(cat, 0) < deficit:
+                    urgent_cats.add(cat)
+
+        # Collect best priority per water ingredient PID: (tier, usable, pid, deficit, reason)
+        best_by_pid: dict[int, tuple[int, int, int, int, str]] = {}
+
+        for pid, recipe in recipes.items():
+            if recipe.is_coin_recipe or recipe.level > sushibar_level:
+                continue
+
+            dish_stock = stock_service.get_farm_amount(self.farm_id, pid)
+            is_urgent_farmi = recipe.category in urgent_cats
+            needs_replenish = is_urgent_farmi or (
+                balanced_max_stock <= 0 or dish_stock < balanced_max_stock
+            )
+            if not needs_replenish:
+                continue
+
+            for ingr_pid, per_craft in recipe.needs.items():
+                if ingr_pid in excluded:
+                    continue
+                is_water = 950 <= ingr_pid <= 957 or (
+                    catalog
+                    and ingr_pid in catalog
+                    and getattr(catalog[ingr_pid], "category", "") == "water"
+                )
+                if not is_water:
+                    continue
+
+                current_water = stock_service.get_farm_amount(self.farm_id, ingr_pid)
+                prod = catalog.get(ingr_pid) if catalog else stock_service.get_product(ingr_pid)
+                sx = getattr(prod, "size_x", 1) or 1
+                sy = getattr(prod, "size_y", 1) or 1
+                field_reserve = 120 // (sx * sy)
+                usable = max(0, current_water - field_reserve)
+
+                target_usable = max(per_craft, ingredient_buffer)
+                if usable >= target_usable:
+                    continue
+
+                is_blocked = usable < per_craft
+                if is_urgent_farmi and is_blocked:
+                    tier = 0
+                elif is_blocked:
+                    tier = 1
+                elif is_urgent_farmi:
+                    tier = 2
+                else:
+                    tier = 3
+
+                deficit = target_usable - usable
+                dish_name = recipe.name or f"PID {pid}"
+                reason = (
+                    f"Sushi-Bar Zutaten-Engpass für {dish_name} "
+                    f"(Bestand {current_water}, Reserve {field_reserve})"
+                )
+                entry = (tier, usable, ingr_pid, deficit, reason)
+                prev = best_by_pid.get(ingr_pid)
+                if prev is None or (entry[0], entry[1]) < (prev[0], prev[1]):
+                    best_by_pid[ingr_pid] = entry
+
+        ranked = sorted(best_by_pid.values(), key=lambda x: (x[0], x[1]))
+        return [(pid, deficit, 0, reason) for _, _, pid, deficit, reason in ranked]

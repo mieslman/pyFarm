@@ -160,6 +160,7 @@ class SushibarConfig(BaseModel):
         False  # Bei Quest-5-Strategie kein Fallback auf andere Rezepte (verhindert Fehlproduktion)
     )
     preferred_pids: list[int] = Field(default_factory=list)
+    balanced_max_stock: int = 150  # Maximalbestand auf Farm 8 für Balanced-Fallback (verhindert Überproduktion)
     reserve_full_field: bool = True  # Mindestreserve: 120 // (size_x * size_y)
     coin_protection: bool = True  # Strikter Schutz: Keine Coin-Rezepte, kein Coin-Speedup
 
